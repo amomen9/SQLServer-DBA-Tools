@@ -2,4 +2,4 @@
 T-SQL Scripts
 
 
-Please do whatever you wish with these files!!! :D
+License: Please do whatever you wish with these files!!! :D
