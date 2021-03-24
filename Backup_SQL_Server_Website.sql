@@ -38,7 +38,6 @@ Attention:
 	the compression or extraction process to complete and then disable xp_cmdshell. It launches a parallel script implicitly
 	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for a very short
 	time. It was less than 0.3 second on my computer.
-	4. System requirements of backup script differs from the restore script
 
 For the restore operation, please use Restore_Website.sql script.
 
