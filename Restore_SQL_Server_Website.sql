@@ -25,9 +25,9 @@ SQL Server Compatibility: This script is designed to comply with SQL Server 2008
 This script utilizes 7zip, so install 7-zip first, which is an open source and multiplatform compression software.
 Sample 7zip commands
 	for compression:
-	7z a -tzip -mx9 -mmt4 -y -bd -ssw -stl  -p1234 "D:\Website Backup\21.03.10_0500\wlrdb_File Backup_21.03.10_0500.zip" "C:\inetpub\wwwroot\*"
+	7z a -tzip -mx9 -mmt4 -y -bd -ssw -stl  -p1234 "D:\Website Backup\21.03.10_0500\DBNAME_File Backup_21.03.10_0500.zip" "C:\inetpub\wwwroot\*"
 	for extraction:
-	7z x –aoa –spe -p1234 -o"C:\inetpub\wwwroot" "D:\Website Backup\21.03.10_0500\wlrdb_File Backup_21.03.10_0500.zip"
+	7z x -aoa -spe -p1234 -o"C:\inetpub\wwwroot" "D:\Website Backup\21.03.10_0500\DBNAME_File Backup_21.03.10_0500.zip"
 For information regarding 7zip commands and switches please refer to 7zip's manual.
 
 Attention: 	
@@ -46,7 +46,10 @@ Attention:
 	7. As leaving xp_cmdshell enabled has security risks, especially for the backup jobs which are meant to be scheduled
 	to be triggered at special times, and compressing or decompressing files is time-consuming, this script does not wait for
 	the compression or extraction process to complete and then disable xp_cmdshell. It launches a parallel script implicitly
-	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for several microseconds.
+	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for a very short
+	time. It was less than 0.3 second on my computer.
+	8. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
+	the current session, before restoring the database. The database will be returned to MULTI_USER at the end.
 
 For the backup operation, please use Backup_Website.sql script.
 
@@ -56,17 +59,18 @@ For the backup operation, please use Backup_Website.sql script.
 use master
 go
 
---------------- Customizable Variables: 
-Declare @Source_Backup_Database_Name nvarchar(128) = N'wlrdb'	-- Use the name of the website's db you wish to restore
-Declare @Destination_Database_Name nvarchar(128) = @Source_Backup_Database_Name
-																-- You can specify the destination database name here. 
-Declare @Destination_Database_Datafiles_Location nvarchar(200) = ''			
+--------------- Customizable Variables:
+Declare @Source_Backup_Database_Name nvarchar(128) = N'AdventureWorks2019'	-- Use the name of the website's db you wish to restore
+Declare @Destination_Database_Name nvarchar(128) = N'AdventureWorks2019'
+																-- You can specify the destination database name here. If the destination database name is equal to the source database name,
+																-- the database will be restored on its own
+Declare @Destination_Database_Datafiles_Location nvarchar(200) = 'D:\New Data'			
 																-- This script creates the folders if they do not exist automatically.
 																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
 Declare @Destination_Website_Files_Location nvarchar(200) = ''	-- This script creates the folders if they do not exist automatically.
 																-- This variable must be in the form of for example 'C:\xampp\htdocs'
 Declare @Backup_Directory nvarchar(150) = ''					-- Null or empty string for this variable implies restore of the last available backup
-																-- Otherwise it must be in form of for example D:\Website Backup\wlrdb_21.03.10_0500																
+																-- Otherwise it must be in form of for example D:\Website Backup\DBNAME_21.03.10_0500																
 Declare @Files_Restore bit = 1									-- Restores the files if and only if it is set to 1
 Declare @Database_Restore bit = 1								-- Restores the database if and only if it is set to 1
 Declare @Backup_root nvarchar(120) = N'D:\Website Backup'		-- Root location for backup files. Ignore this variable if you have set @Backup_Location
@@ -82,8 +86,8 @@ Declare @Temp_Working_Directory nvarchar(100) = N'C:\Temp'		-- Make sure SQL Ser
 
 --------------- Other Variables: !!!! Warning: Please do not modify these variables !!!!
 Declare @Back_DateandTime nvarchar(20) = replace(convert(date, GetDate()),'-','.') + '_' + substring(replace(convert(nvarchar(10),convert(time, GetDate())), ':', ''),1,4) 
-Declare @TailofLOG_Back_Name nvarchar(50) = 'TailofLOG_' + @Source_Backup_Database_Name+'_Backup_'+@Back_DateandTime+'.trn'
-Declare @DB_Restore_Script nvarchar(500) = ''
+Declare @TailofLOG_Back_Name nvarchar(100) = 'TailofLOG_' + @Source_Backup_Database_Name+'_Backup_'+@Back_DateandTime+'.trn'
+Declare @DB_Restore_Script nvarchar(max) = ''
 Declare @TailofLOG_Back_Script nvarchar(500)
 Declare @CommandtoExecute nvarchar(1000)
 Declare @DirTree Table (subdirectory nvarchar(255), depth INT, [file] INT)
@@ -93,12 +97,15 @@ Declare @Database_State bit = 0						-- Defines if the database is in restoring 
 Declare @Backup_Availability bit = 0				-- Checks if a backup exists for the source database name '@Source_Backup_Database_Name'
 
 -- Begin Body:
+
+SET NOCOUNT ON
+
 if (isNULL(@Backup_Directory,'') = '')
 BEGIN
 	insert into @DirTree
 	EXEC xp_dirtree @Backup_root ,1 ,1
 	set @Backup_Directory = @Backup_root +'\'+ 
-		(select top 1 subdirectory from @DirTree where [file] = 0 order by subdirectory desc)
+		(select top 1 subdirectory from @DirTree where [file] = 0 and subdirectory like (@Source_Backup_Database_Name + '%') order by subdirectory desc)
 	
 	delete from @DirTree
 
@@ -218,7 +225,7 @@ BEGIN
 
 			if OBJECT_ID('tempdb..#temp2') is not null
 				drop table #temp2
-			select 'MOVE N''' + LogicalName + ''' TO N''' + @Destination_Database_Datafiles_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ',  ' as [Single Move Statement]
+			select 'MOVE N''' + LogicalName + ''' TO N''' + @Destination_Database_Datafiles_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ''',  ' as [Single Move Statement]
 			into #temp2
 			from #Backup_Files_List
 
@@ -228,7 +235,7 @@ BEGIN
 			select @DB_Restore_Script = @DB_Restore_Script + 'NOUNLOAD,  STATS = 20'
 			
 		END	
-			print(@DB_Restore_SCript)
+			
 			EXEC (@DB_Restore_Script)
 			print('End Database Restore') 
 
@@ -270,8 +277,9 @@ BEGIN
 		RECONFIGURE;  
 
 		
-		set @CommandtoExecute = 'sqlcmd -Q "/* To disable the feature.  */ EXECUTE sp_configure ''xp_cmdshell'', 0; /* To update the currently configured value for this feature.  */ RECONFIGURE; /* To deny advanced options to be changed.  */ EXECUTE sp_configure ''show advanced options'', 0; /* To update the currently configured value for advanced options.  */ RECONFIGURE; " -o C:\Temp\MyOutput.txt & "' + @7zip_install_location + N'7z" x -aoa -spe -p' + @Archive_File_Password + ' -o"' + @Website_root + '" "' + LEFT(@Backup_Location ,(LEN(@Backup_Location)-4)) + '.zip" & whoami'
+		set @CommandtoExecute = 'sqlcmd -Q "/* To disable the feature.  */ EXECUTE sp_configure ''xp_cmdshell'', 0; /* To update the currently configured value for this feature.  */	RECONFIGURE; /* To deny advanced options to be changed.  */ EXECUTE sp_configure ''show advanced options'', 0; 	/* To update the currently configured value for advanced options.  */ RECONFIGURE; " -o C:\Temp\MyOutput.txt & "' + @7zip_install_location + N'7z" x -aoa -spe -p' + @Archive_File_Password + ' -o"' +	@Website_root + '" "' + LEFT(@Backup_Location ,(LEN(@Backup_Location)-4)) + '.zip" & whoami'
 		set @CommandtoExecute = REPLACE(@CommandtoExecute,'Full Backup','File Backup')
+		
 		print ('Begin file restore')
 		if OBJECT_ID('tempdb..#temp3') is not null
 			drop table #temp3
@@ -281,9 +289,10 @@ BEGIN
 
 		
 		Declare @cmdshell_output nvarchar(max) = ''
-		select @cmdshell_output = @cmdshell_output + ' ' + isNULL([output],'')
+		select @cmdshell_output = @cmdshell_output + ' ' + isNULL([output],'') + char(10)
 		from #temp3
 		
+		print (@cmdshell_output)		-- Attention! 'print' truncates strings bigger than 4000 nvarchar characters
 		
 		if (CHARINDEX('Wrong password', @cmdshell_output) > 0)
 		BEGIN
