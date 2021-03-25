@@ -1,9 +1,9 @@
 
 -- =============================================
--- Author:		<momen-a>
+-- Author:				<momen-a>
 -- Contact & Report:	<amomen@gmail.com>
--- Create date:		<2021.03.12>
--- Description:		<Restore Website Backup>
+-- Create date:			<2021.03.12>
+-- Description:			<Restore Website Backup>
 -- =============================================
 
 /*
@@ -60,8 +60,8 @@ use master
 go
 
 --------------- Customizable Variables:
-Declare @Source_Backup_Database_Name nvarchar(128) = N'AdventureWorks2019'	-- Use the name of the website's db you wish to restore
-Declare @Destination_Database_Name nvarchar(128) = N'AdventureWorks2019'
+Declare @Source_Backup_Database_Name nvarchar(128) = N'sadasdasd'	-- Use the name of the website's db you wish to restore
+Declare @Destination_Database_Name nvarchar(128) = N'jfdksfkj'
 																-- You can specify the destination database name here. If the destination database name is equal to the source database name,
 																-- the database will be restored on its own
 Declare @Destination_Database_Datafiles_Location nvarchar(200) = 'D:\New Data'			
@@ -95,17 +95,22 @@ Declare @Backup_Location nvarchar(255)
 Declare @DB_Backup_Name nvarchar(70)
 Declare @Database_State bit = 0						-- Defines if the database is in restoring mode or not. 0 means ONLINE
 Declare @Backup_Availability bit = 0				-- Checks if a backup exists for the source database name '@Source_Backup_Database_Name'
+Declare @test bit = NULL
 
 -- Begin Body:
 
 SET NOCOUNT ON
 
-if (isNULL(@Backup_Directory,'') = '')
+
+set @Backup_Directory = isNULL(@Backup_Directory,'')
+
+if (@Backup_Directory = '')
 BEGIN
 	insert into @DirTree
 	EXEC xp_dirtree @Backup_root ,1 ,1
-	set @Backup_Directory = @Backup_root +'\'+ 
-		(select top 1 subdirectory from @DirTree where [file] = 0 and subdirectory like (@Source_Backup_Database_Name + '%') order by subdirectory desc)
+	set @DB_Backup_Name = (select top 1 subdirectory from @DirTree where [file] = 0 and subdirectory like (@Source_Backup_Database_Name + '%') order by subdirectory desc)
+	set @Backup_Directory = @Backup_root +'\'+ @DB_Backup_Name
+		
 	
 	delete from @DirTree
 
@@ -115,220 +120,221 @@ END
 	EXEC xp_dirtree @Backup_Directory, 1, 1
 	select @DB_Backup_Name = subdirectory from @DirTree where subdirectory like '%.bak'
 	set @Backup_Location = @Backup_Directory + '\' + @DB_Backup_Name
-	IF ((select count(*) from @DirTree) = 0)
+	IF ((@DB_Backup_Name is null))
 		RAISERROR('Fatal error: no backup found for the source database.',16,1)
 	ELSE
 		set @Backup_Availability = 1
 
+
 IF ((@Files_Restore = 0 and @Database_Restore = 0))
 	RAISERROR('You have chosen not to restore anything!!!!',16,1)
-
-
-IF((@Files_Restore != 0 or @Database_Restore != 0) and @Backup_Availability = 1)
-BEGIN
-
-	----------------------------------------------- Restoring Database:
-
-	IF( @Database_Restore = 1 )
+ELSE
+	IF(@Backup_Availability = 1)
 	BEGIN
-		
-		
-		IF( @Source_Backup_Database_Name = @Destination_Database_Name ) -- restore database on its own
+
+		----------------------------------------------- Restoring Database:
+
+		IF( @Database_Restore = 1 )
 		BEGIN
-			
-			------------------------------ check if the database has SIMPLE or PseudoSIMPLE recovery model:
-			declare @temp1 nvarchar(max)  
-			declare @dbinfo table (ParentObject nvarchar(100), Object nvarchar(100), Field nvarchar(100), [VALUE] nvarchar(100))
-			insert @dbinfo
-			EXEC ('dbcc dbinfo (['+ @Source_Backup_Database_Name +']) with tableresults')
-			
-			declare @isPseudoSimple_or_Simple bit = 0
-			IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) <= 10.5 -- Equal to or earlier than SQL 2008 R2
+		
+		
+			IF( @Source_Backup_Database_Name = @Destination_Database_Name ) -- restore database on its own
 			BEGIN
-				if ((select top 1 [VALUE] from @dbinfo where [Object] = 'dbi_dbbackupLSN' order by ParentObject) = '0')
-					set @isPseudoSimple_or_Simple = 1
-			END ELSE																	-- Later than SQL 2008 R2
-				if ((select top 1 [VALUE] from @dbinfo where Field = 'dbi_dbbackupLSN' order by ParentObject) = '0:0:0 (0x00000000:00000000:0000)')
-					set @isPseudoSimple_or_Simple = 1
-
-			-----------------------------
 			
-			set @DB_Restore_Script = @DB_Restore_Script + 'ALTER DATABASE [' + @Source_Backup_Database_Name + '] SET SINGLE_USER WITH ROLLBACK IMMEDIATE
-			'
+				------------------------------ check if the database has SIMPLE or PseudoSIMPLE recovery model:
+				declare @temp1 nvarchar(max)  
+				declare @dbinfo table (ParentObject nvarchar(100), Object nvarchar(100), Field nvarchar(100), [VALUE] nvarchar(100))
+				insert @dbinfo
+				EXEC ('dbcc dbinfo (['+ @Source_Backup_Database_Name +']) with tableresults')
+			
+				declare @isPseudoSimple_or_Simple bit = 0
+				IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) <= 10.5 -- Equal to or earlier than SQL 2008 R2
+				BEGIN
+					if ((select top 1 [VALUE] from @dbinfo where [Object] = 'dbi_dbbackupLSN' order by ParentObject) = '0')
+						set @isPseudoSimple_or_Simple = 1
+				END ELSE																	-- Later than SQL 2008 R2
+					if ((select top 1 [VALUE] from @dbinfo where Field = 'dbi_dbbackupLSN' order by ParentObject) = '0:0:0 (0x00000000:00000000:0000)')
+						set @isPseudoSimple_or_Simple = 1
 
-			if (@isPseudoSimple_or_Simple != 1) -- check if the database has not SIMPLE or PseudoSIMPLE recovery model
-				set @DB_Restore_Script = @DB_Restore_Script + 'BACKUP LOG ' + @Source_Backup_Database_Name + ' TO DISK = ''' + @Backup_root + '\' + @TailofLOG_Back_Name + ''' WITH NOFORMAT, NOINIT,  NAME = ''' + @TailofLOG_Back_Name + ''', NOSKIP, NOREWIND, NOUNLOAD,  NORECOVERY 
+				-----------------------------
+			
+				set @DB_Restore_Script = @DB_Restore_Script + 'ALTER DATABASE [' + @Source_Backup_Database_Name + '] SET SINGLE_USER WITH ROLLBACK IMMEDIATE
 				'
 
-			set @DB_Restore_Script = @DB_Restore_Script + 'RESTORE DATABASE ' + @Source_Backup_Database_Name + ' FROM  DISK = ''' + @Backup_Location + ''' WITH  FILE = 1,  NOUNLOAD'
-			if (@Keep_Database_in_Restoring_State = 1)
-			BEGIN
-				set @DB_Restore_Script = @DB_Restore_Script + ',  NORECOVERY'
-				set @Database_State = 1
-			END
+				if (@isPseudoSimple_or_Simple != 1) -- check if the database has not SIMPLE or PseudoSIMPLE recovery model
+					set @DB_Restore_Script = @DB_Restore_Script + 'BACKUP LOG ' + @Source_Backup_Database_Name + ' TO DISK = ''' + @Backup_root + '\' + @TailofLOG_Back_Name + ''' WITH NOFORMAT, NOINIT,  NAME = ''' + @TailofLOG_Back_Name + ''', NOSKIP, NOREWIND, NOUNLOAD,  NORECOVERY 
+					'
 
-		END ELSE
-		BEGIN														-- Restore database to a new name
+				set @DB_Restore_Script = @DB_Restore_Script + 'RESTORE DATABASE ' + @Source_Backup_Database_Name + ' FROM  DISK = ''' + @Backup_Location + ''' WITH  FILE = 1,  NOUNLOAD'
+				if (@Keep_Database_in_Restoring_State = 1)
+				BEGIN
+					set @DB_Restore_Script = @DB_Restore_Script + ',  NORECOVERY'
+					set @Database_State = 1
+				END
+
+			END ELSE
+			BEGIN														-- Restore database to a new name
 
 						
-			--------------------- Extract list of File Groups and Files
-			if OBJECT_ID('tempdb..#Backup_Files_List') is not null
-				drop table #Backup_Files_List
+				--------------------- Extract list of File Groups and Files
+				if OBJECT_ID('tempdb..#Backup_Files_List') is not null
+					drop table #Backup_Files_List
 
-			CREATE TABLE #Backup_Files_List (     
-				 LogicalName    nvarchar(128)
-				,PhysicalName   nvarchar(260)
-				,[Type] char(1)
-				,FileGroupName  nvarchar(128) NULL
-				,Size   numeric(20,0)
-				,MaxSize    numeric(20,0)
-				,FileID bigint
-				,CreateLSN  numeric(25,0)
-				,DropLSN    numeric(25,0) NULL
-				,UniqueID   uniqueidentifier
-				,ReadOnlyLSN    numeric(25,0) NULL
-				,ReadWriteLSN   numeric(25,0) NULL
-				,BackupSizeInBytes  bigint
-				,SourceBlockSize    int
-				,FileGroupID    int
-				,LogGroupGUID   uniqueidentifier NULL
-				,DifferentialBaseLSN    numeric(25,0) NULL
-				,DifferentialBaseGUID   uniqueidentifier NULL
-				,IsReadOnly bit
-				,IsPresent  bit
-			)
-			IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) > 9 -- Equal to or greater than SQL 2005 
-			BEGIN
-				ALTER TABLE #Backup_Files_List ADD TDEThumbprint  varbinary(32) NULL
-			END
-			IF cast(cast(SERVERPROPERTY('ProductVersion') as char(2)) as float) > 12 -- Equal to or greater than 2014
-			BEGIN
-				ALTER TABLE #Backup_Files_List ADD SnapshotURL    nvarchar(360) NULL
-			END
-			Declare @Backup_Path nvarchar(150) = @Backup_Location
-			Declare @sql nvarchar(max) = 'RESTORE FILELISTONLY FROM DISK = @Backup_Path'
-			INSERT INTO #Backup_Files_List
-			EXEC master.sys.sp_executesql @sql , N'@Backup_Path nvarchar(150)', @Backup_Path
-			---------------------------------------------------------------------------------------------------
-
-			set @DB_Restore_Script = @DB_Restore_Script + N'RESTORE DATABASE [' + @Destination_Database_Name + '] FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1,  
-			'
-			
-			if OBJECT_ID('tempdb..#temp') is not null
-				drop table #temp
-			create Table #temp ([move] nvarchar(500))
-			
-			if (ISNULL(@Destination_Database_Datafiles_Location,'') = '')
-				raiserror('You have not chosen a destination path ''@Destination_Database_Datafiles_Location'' for your new database data files.',16,1)
-			else
-				exec xp_create_subdir @Destination_Database_Datafiles_Location
-
-			if OBJECT_ID('tempdb..#temp2') is not null
-				drop table #temp2
-			select 'MOVE N''' + LogicalName + ''' TO N''' + @Destination_Database_Datafiles_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ''',  ' as [Single Move Statement]
-			into #temp2
-			from #Backup_Files_List
-
-			select @DB_Restore_Script = @DB_Restore_Script + [Single Move Statement]
-			from #temp2
-
-			select @DB_Restore_Script = @DB_Restore_Script + 'NOUNLOAD,  STATS = 20'
-			
-		END	
-			
-			EXEC (@DB_Restore_Script)
-			print('End Database Restore') 
-
-	END
-
-
-	----------------------------------------------- Restoring Files:
-
-	/* 
-		The if condition checks if the SQL Server host is windows, for on Linux xp_cmdshell is not available. To check the host's os
-		you can use "select host_platform from sys.dm_os_host_info) = 'Windows'" statement but sys.dm_os_host_info is incompatible with
-		SQL Server 2016 and earlier. To support these versions I used the global variable @@version instead.
-	*/
-	Declare @Linux_Position int
-	SELECT @Linux_Position = CHARINDEX('Linux', @@VERSION)
-
-	IF (@Linux_Position != 0 and @Files_Restore = 1)
-		raiserror('You cannot restore website files on Linux host!', 16, 1)
-	ELSE
-		IF(@Files_Restore = 1)
-		BEGIN
-		
-		EXECUTE xp_create_subdir @Temp_Working_Directory /* This directory keeps the log of disabling xp_cmdshell and
-			'show advanced options' in the form of "MyOutput.txt".
-		*/
-		
-		USE master
-
-		-- To allow advanced options to be changed.  
-		EXECUTE sp_configure 'show advanced options', 1;  
-  
-		-- To update the currently configured value for advanced options.  
-		RECONFIGURE;  
-  
-		-- To enable the feature.  
-		EXECUTE sp_configure 'xp_cmdshell', 1;  
-
-		-- To update the currently configured value for this feature.  
-		RECONFIGURE;  
-
-		
-		set @CommandtoExecute = 'sqlcmd -Q "/* To disable the feature.  */ EXECUTE sp_configure ''xp_cmdshell'', 0; /* To update the currently configured value for this feature.  */	RECONFIGURE; /* To deny advanced options to be changed.  */ EXECUTE sp_configure ''show advanced options'', 0; 	/* To update the currently configured value for advanced options.  */ RECONFIGURE; " -o C:\Temp\MyOutput.txt & "' + @7zip_install_location + N'7z" x -aoa -spe -p' + @Archive_File_Password + ' -o"' +	@Website_root + '" "' + LEFT(@Backup_Location ,(LEN(@Backup_Location)-4)) + '.zip" & whoami'
-		set @CommandtoExecute = REPLACE(@CommandtoExecute,'Full Backup','File Backup')
-		
-		print ('Begin file restore')
-		if OBJECT_ID('tempdb..#temp3') is not null
-			drop table #temp3
-		create table #temp3 ([output] nvarchar(500))
-		insert #temp3
-		EXECUTE master..xp_cmdshell @CommandtoExecute
-
-		
-		Declare @cmdshell_output nvarchar(max) = ''
-		select @cmdshell_output = @cmdshell_output + ' ' + isNULL([output],'') + char(10)
-		from #temp3
-		
-		print (@cmdshell_output)		-- Attention! 'print' truncates strings bigger than 4000 nvarchar characters
-		
-		if (CHARINDEX('Wrong password', @cmdshell_output) > 0)
-		BEGIN
-			raiserror('The archive password was not provided correctly and the website files were not restored.',16,1)
-		END ELSE
-		BEGIN
-			if (CHARINDEX('No files to process', @cmdshell_output) > 0)
-				raiserror('No files were restored to the website directory.',16,1)
-			else
-				if (CHARINDEX('Everything is Ok', @cmdshell_output) = 0)
+				CREATE TABLE #Backup_Files_List (     
+					 LogicalName    nvarchar(128)
+					,PhysicalName   nvarchar(260)
+					,[Type] char(1)
+					,FileGroupName  nvarchar(128) NULL
+					,Size   numeric(20,0)
+					,MaxSize    numeric(20,0)
+					,FileID bigint
+					,CreateLSN  numeric(25,0)
+					,DropLSN    numeric(25,0) NULL
+					,UniqueID   uniqueidentifier
+					,ReadOnlyLSN    numeric(25,0) NULL
+					,ReadWriteLSN   numeric(25,0) NULL
+					,BackupSizeInBytes  bigint
+					,SourceBlockSize    int
+					,FileGroupID    int
+					,LogGroupGUID   uniqueidentifier NULL
+					,DifferentialBaseLSN    numeric(25,0) NULL
+					,DifferentialBaseGUID   uniqueidentifier NULL
+					,IsReadOnly bit
+					,IsPresent  bit
+				)
+				IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) > 9 -- Equal to or greater than SQL 2005 
 				BEGIN
-					declare @7zip_Error nvarchar(max) = 'Some error ocurred during archive extraction. More information on this error from 7-zip: ' + @cmdshell_output
-					raiserror(@7zip_Error,16,1)
+					ALTER TABLE #Backup_Files_List ADD TDEThumbprint  varbinary(32) NULL
 				END
+				IF cast(cast(SERVERPROPERTY('ProductVersion') as char(2)) as float) > 12 -- Equal to or greater than 2014
+				BEGIN
+					ALTER TABLE #Backup_Files_List ADD SnapshotURL    nvarchar(360) NULL
+				END
+				Declare @Backup_Path nvarchar(150) = @Backup_Location
+				Declare @sql nvarchar(max) = 'RESTORE FILELISTONLY FROM DISK = @Backup_Path'
+				INSERT INTO #Backup_Files_List
+				EXEC master.sys.sp_executesql @sql , N'@Backup_Path nvarchar(150)', @Backup_Path
+				---------------------------------------------------------------------------------------------------
+
+				set @DB_Restore_Script = @DB_Restore_Script + N'RESTORE DATABASE [' + @Destination_Database_Name + '] FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1,  
+				'
+			
+				if OBJECT_ID('tempdb..#temp') is not null
+					drop table #temp
+				create Table #temp ([move] nvarchar(500))
+			
+				if (ISNULL(@Destination_Database_Datafiles_Location,'') = '')
+					raiserror('You have not chosen a destination path ''@Destination_Database_Datafiles_Location'' for your new database data files.',16,1)
+				else
+					exec xp_create_subdir @Destination_Database_Datafiles_Location
+
+				if OBJECT_ID('tempdb..#temp2') is not null
+					drop table #temp2
+				select 'MOVE N''' + LogicalName + ''' TO N''' + @Destination_Database_Datafiles_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ''',  ' as [Single Move Statement]
+				into #temp2
+				from #Backup_Files_List
+
+				select @DB_Restore_Script = @DB_Restore_Script + [Single Move Statement]
+				from #temp2
+
+				select @DB_Restore_Script = @DB_Restore_Script + 'NOUNLOAD,  STATS = 20'
+			
+			END	
+				print(@DB_Restore_Script)
+				print(@Backup_Path)
+				EXEC (@DB_Restore_Script)
+				print('End Database Restore') 
+
 		END
 
-		/*	The following configurations are already set by xp_cmdshell and they must not be executed again:
 
-			-- To disable the feature.  
-			EXECUTE sp_configure 'xp_cmdshell', 0;  
-	  
+		----------------------------------------------- Restoring Files:
+
+		/* 
+			The if condition checks if the SQL Server host is windows, for on Linux xp_cmdshell is not available. To check the host's os
+			you can use "select host_platform from sys.dm_os_host_info) = 'Windows'" statement but sys.dm_os_host_info is incompatible with
+			SQL Server 2016 and earlier. To support these versions I used the global variable @@version instead.
+		*/
+		Declare @Linux_Position int
+		SELECT @Linux_Position = CHARINDEX('Linux', @@VERSION)
+
+		IF (@Linux_Position != 0 and @Files_Restore = 1)
+			raiserror('You cannot restore website files on Linux host!', 16, 1)
+		ELSE
+			IF(@Files_Restore = 1)
+			BEGIN
+		
+			EXECUTE xp_create_subdir @Temp_Working_Directory /* This directory keeps the log of disabling xp_cmdshell and
+				'show advanced options' in the form of "MyOutput.txt".
+			*/
+		
+			USE master
+
+			-- To allow advanced options to be changed.  
+			EXECUTE sp_configure 'show advanced options', 1;  
+  
+			-- To update the currently configured value for advanced options.  
+			RECONFIGURE;  
+  
+			-- To enable the feature.  
+			EXECUTE sp_configure 'xp_cmdshell', 1;  
+
 			-- To update the currently configured value for this feature.  
 			RECONFIGURE;  
-	  
-			-- To deny advanced options to be changed.  
-			EXECUTE sp_configure 'show advanced options', 0;  
-	  
-			-- To update the currently configured value for advanced options.  
-			RECONFIGURE; 
-		*/
 
-	END
+		
+			set @CommandtoExecute = 'sqlcmd -Q "/* To disable the feature.  */ EXECUTE sp_configure ''xp_cmdshell'', 0; /* To update the currently configured value for this feature.  */	RECONFIGURE; /* To deny advanced options to be changed.  */ EXECUTE sp_configure ''show advanced options'', 0; 	/* To update the currently configured value for advanced options.  */ RECONFIGURE; " -o C:\Temp\MyOutput.txt & "' + @7zip_install_location + N'7z" x -aoa -spe -p' + @Archive_File_Password + ' -o"' +	@Website_root + '" "' + LEFT(@Backup_Location ,(LEN(@Backup_Location)-4)) + '.zip" & whoami'
+			set @CommandtoExecute = REPLACE(@CommandtoExecute,'Full Backup','File Backup')
+		
+			print ('Begin file restore')
+			if OBJECT_ID('tempdb..#temp3') is not null
+				drop table #temp3
+			create table #temp3 ([output] nvarchar(500))
+			insert #temp3
+			EXECUTE master..xp_cmdshell @CommandtoExecute
+
+		
+			Declare @cmdshell_output nvarchar(max) = ''
+			select @cmdshell_output = @cmdshell_output + ' ' + isNULL([output],'') + char(10)
+			from #temp3
+		
+			print (@cmdshell_output)		-- Attention! 'print' truncates strings bigger than 4000 nvarchar characters
+		
+			if (CHARINDEX('Wrong password', @cmdshell_output) > 0)
+			BEGIN
+				raiserror('The archive password was not provided correctly and the website files were not restored.',16,1)
+			END ELSE
+			BEGIN
+				if (CHARINDEX('No files to process', @cmdshell_output) > 0)
+					raiserror('No files were restored to the website directory.',16,1)
+				else
+					if (CHARINDEX('Everything is Ok', @cmdshell_output) = 0)
+					BEGIN
+						declare @7zip_Error nvarchar(max) = 'Some error ocurred during archive extraction. More information on this error from 7-zip: ' + @cmdshell_output
+						raiserror(@7zip_Error,16,1)
+					END
+			END
+
+			/*	The following configurations are already set by xp_cmdshell and they must not be executed again:
+
+				-- To disable the feature.  
+				EXECUTE sp_configure 'xp_cmdshell', 0;  
+	  
+				-- To update the currently configured value for this feature.  
+				RECONFIGURE;  
+	  
+				-- To deny advanced options to be changed.  
+				EXECUTE sp_configure 'show advanced options', 0;  
+	  
+				-- To update the currently configured value for advanced options.  
+				RECONFIGURE; 
+			*/
+
+		END
   
   
-END ELSE
-	print ('Nothing restored!')
+	END ELSE
+		print ('Nothing restored!')
 
 
 if @Database_State = 1
