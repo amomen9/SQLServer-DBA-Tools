@@ -11,10 +11,10 @@ please give me an email at amomen@gmail.com
 #### Backup Website:
 
 This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
-scheduled job to run at specific schedules. The DB backup file name will be in DBName_Date_Time + .bak format.
+scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
 The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. 
 
-System requirements:
+###### System requirements:
 SQL Server Compatibility: This script is designed to comply with SQL Server 2008 R2 and later. Earlier versions are not tested.
 This script utilizes 7zip version 19.0, so install 7-zip first, which is an open source and multiplatform compression software.
 Sample 7zip commands
@@ -30,7 +30,8 @@ only one output file for database backup. For security reasons, the script enabl
 and disables it again immediately once the procedure is finished executing. Using website files' archive password is
 recommended and this script does not offer an option not to set a password.															
 
-Attention: 
+###### Attention: 
+
 	1. This script does not backup home folder on Non-Windows host operating systems, as xp_cmdshell is only
 	available on windows by SQL Server 2019
 	2. Please do not put anything else inside the backup directory manually or automatically, as it may interfere with
@@ -57,7 +58,7 @@ of Website files is normally time-consuming, the database will be kept in restor
 is completed. For security reasons, the script enables the extended stored procedure xp_cmdshell
 and disables it again immediately once the procedure is finished executing.
 
-System requirements:
+###### System requirements:
 SQL Server Compatibility: This script is designed to comply with SQL Server 2008 R2 and later. Earlier versions are not tested.
 This script utilizes 7zip, so install 7-zip first, which is an open source and multiplatform compression software.
 Sample 7zip commands
@@ -67,7 +68,8 @@ Sample 7zip commands
 	7z x -aoa -spe -p1234 -o"C:\inetpub\wwwroot" "D:\Website Backup\21.03.10_0500\DBNAME_File Backup_21.03.10_0500.zip"
 For information regarding 7zip commands and switches please refer to 7zip's manual.
 
-Attention: 	
+###### Attention: 	
+
 	1. Please do not put anything else inside the backup directory or any of its subdirectories manually or automatically, 
 	as it may interfere with this script's functionality and completely wreck the operation. The backup root '@Backup_root'
 	must be exclusively dedicated to Backup_Website.sql and this script.
