@@ -8,27 +8,8 @@
 
 /*
 
-Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
-This script restores the backups performed by the Backup_Website.sql script. You can also specify the destination
-database. If you don't specify the destination database, the database will be restored on its own. This script
-probes inside the backup folder and extracts and restores the latest backup. If the database is to be restored
-on its own, a tail of log backup will be taken first, if the database does not have SIMPLE or Pseudosimple
-recovery model. For the files restore, it overwrites all the files in the destination. By default, the last 
-backup set will be restored, by probing into the backups directory and ignoring the history records of SQL Server
-msdb database. But you can specify the backup location manually. The names are case-insensitive. As the restore
-of Website files is normally time-consuming, the database will be kept in restoring state until the whole script
-is completed. For security reasons, the script enables the extended stored procedure xp_cmdshell
-and disables it again immediately once the procedure is finished executing.
-
-System requirements:
-SQL Server Compatibility: This script is designed to comply with SQL Server 2008 R2 and later. Earlier versions are not tested.
-This script utilizes 7zip, so install 7-zip first, which is an open source and multiplatform compression software.
-Sample 7zip commands
-	for compression:
-	7z a -tzip -mx9 -mmt4 -y -bd -ssw -stl  -p1234 "D:\Website Backup\21.03.10_0500\DBNAME_File Backup_21.03.10_0500.zip" "C:\inetpub\wwwroot\*"
-	for extraction:
-	7z x -aoa -spe -p1234 -o"C:\inetpub\wwwroot" "D:\Website Backup\21.03.10_0500\DBNAME_File Backup_21.03.10_0500.zip"
-For information regarding 7zip commands and switches please refer to 7zip's manual.
+Before using this script, please read the guide on README.md for Backup_SQL_Server_Website.sql script thoroughly.
+This script restores the backups performed by the Backup_SQL_Server_Website.sql script.
 
 Attention: 	
 	1. Please do not put anything else inside the backup directory or any of its subdirectories manually or automatically, 
@@ -51,8 +32,7 @@ Attention:
 	8. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
 	the current session, before restoring the database. The database will be returned to MULTI_USER at the end.
 
-For the backup operation, please use Backup_Website.sql script.
-
+For the backup operation, please use Backup_SQL_Server_Website.sql script.
 
 */
 
