@@ -8,7 +8,7 @@ please give me an email at amomen@gmail.com
 
 ## Contained Scripts
 
-#### Backup Website:
+#### 1. Backup Website:
 
 This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
 scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
@@ -44,7 +44,7 @@ recommended and this script does not offer an option not to set a password.
 
 For the restore operation, please use Restore_SQL_Server_Website.sql script.
 
-#### Restore Website:
+#### 2. Restore Website:
 
 Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
 This script restores the backups performed by the Backup_Website.sql script. You can also specify the destination
