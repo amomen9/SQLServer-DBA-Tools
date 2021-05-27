@@ -2,7 +2,7 @@
 T-SQL Scripts
 
 
-License: Please do whatever you wish with these files!!! :D
+License: Please do whatever you wish with these files!!! :D Just please include the Author tag.
 If you wish to contribute to the codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com
 
