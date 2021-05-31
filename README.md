@@ -1,4 +1,4 @@
-# SQLServer
+# \#SQLServer
 T-SQL Scripts
 
 
@@ -12,12 +12,15 @@ please refer to the README.md file included in its folder.
 
 #### 1. Backup Website (Within T-SQL_Backup&Restore folder):
 
-  This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
-  scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
-  The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. 
+```
+This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
+scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
+The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. 
+```
 
 #### 2. Restore Website (Within T-SQL_Backup&Restore folder):
 
+```
   Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
   This script restores the backups performed by the Backup_Website.sql script. You can also specify the destination
   database. If you don't specify the destination database, the database will be restored on its own. This script
@@ -29,4 +32,4 @@ please refer to the README.md file included in its folder.
   of Website files is normally time-consuming, the database will be kept in restoring state until the whole script
   is completed. For security reasons, the script enables the extended stored procedure xp_cmdshell
   and disables it again immediately once the procedure is finished executing.
-
+```
