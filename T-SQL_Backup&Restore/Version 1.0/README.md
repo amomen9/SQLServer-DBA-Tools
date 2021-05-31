@@ -41,7 +41,7 @@ recommended and this script does not offer an option not to set a password.
 	available on windows by SQL Server 2019
 	2. Please do not put anything else inside the backup directory manually or automatically, as it may interfere with
 	restore script's functionality and completely wreck the operation.
-	3. As leaving xp_cmdshell enabled has security risks, especially for the backup jobs which are meant to be scheduled
+	3. As leaving xp_cmdshell enabled may have security risks, especially for the backup jobs which are meant to be scheduled
 	to be triggered at special times, and compressing or decompressing files is time-consuming, this script does not wait for
 	the compression or extraction process to complete and then disable xp_cmdshell. It launches a parallel script implicitly
 	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for a very short
