@@ -1,10 +1,15 @@
-# SQLServer
+# \#SQLServer
 T-SQL Scripts
 
 
-License: Please do whatever you wish with these files!!! :D Just please include the Author tag.
+License: Please do whatever you wish with these files!!! :smile::laughing: Just please include the Author tag.
 If you wish to contribute to the codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com
+
+#### Changes in version 1.0:
+```
+The scripts turned into stored procedures.
+```
 
 ## Contained Scripts
 
@@ -42,7 +47,7 @@ recommended and this script does not offer an option not to set a password.
 	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for a very short
 	time. It was less than 0.3 second on my computer.
 
-For the restore operation, please use Restore_SQL_Server_Website.sql script.
+For the restore operation, please use Restore_SQL_Server_Website_sp.sql script.
 
 #### 2. Restore Website:
 
@@ -90,4 +95,4 @@ For information regarding 7zip commands and switches please refer to 7zip's manu
 	8. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
 	the current session, before restoring the database. The database will be returned to MULTI_USER at the end.
 
-For the backup operation, please use Backup_SQL_Server_Website.sql script.
+For the backup operation, please use Backup_SQL_Server_Website_sp.sql script.
