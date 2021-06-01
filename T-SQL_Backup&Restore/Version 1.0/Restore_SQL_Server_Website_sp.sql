@@ -1,6 +1,6 @@
 
 -- =============================================
--- Author:				<momen-a>
+-- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2021.03.12>
 -- Description:			<Restore Website Backup>
@@ -65,16 +65,16 @@ CREATE OR ALTER PROC Restore_SQL_Server_Website
   @Destination_Database_Name nvarchar(128) = N'AdventureWorks2019',
   																-- You can specify the destination database name here. If the destination database name is equal to the source database name,
   																-- the database will be restored on its own
-  @Destination_Database_Datafiles_Location nvarchar(200) = 'D:\New Data',			
+  @Destination_Database_DataFiles_Location nvarchar(300) = '',			
   																-- This script creates the folders if they do not exist automatically.
   																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
-  																
+  @Destination_Database_LogFile_Location nvarchar(300) = '',
   @Backup_Directory nvarchar(150) = '',					-- Null or empty string for this variable implies restore of the last available backup
   																-- Otherwise it must be in form of for example D:\Website Backup\DBNAME_21.03.10_0500																
   @Files_Restore bit = 1,									-- Restores the files if and only if it is set to 1
   @Database_Restore bit = 1,							-- Restores the database if and only if it is set to 1
   @Backup_root nvarchar(120) = N'D:\Website Backup',		-- Root location for backup files. Ignore this variable if you have set @Backup_Location
-  @Website_root nvarchar(120) = N'C:\inetpub\wwwroot5',		-- Default for Microsoft IIS home folder is "C:\inetpub\wwwroot".
+  @Website_root nvarchar(120) = N'C:\inetpub\wwwroot',		-- Default for Microsoft IIS home folder is "C:\inetpub\wwwroot".
                                                                   -- This variable must be in the form of for example 'C:\xampp\htdocs'
   @7zip_install_location nvarchar(500) = N'C:\Program Files\7-zip\',
   																-- 7-zip install location
@@ -106,7 +106,14 @@ BEGIN
   
   IF RIGHT(@7zip_install_location, 1) <> '\' 
   	SET @7zip_install_location += '\'
-  	
+  
+  IF @Destination_Database_DataFiles_Location = ''
+    SET @Destination_Database_Datafiles_Location = convert(nvarchar(300),SERVERPROPERTY('instancedefaultdatapath'))
+
+  IF @Destination_Database_LogFile_Location = ''
+    SET @Destination_Database_LogFile_Location = convert(nvarchar(300),SERVERPROPERTY('instancedefaultlogpath'))
+  
+  
   
   --------------- Other Variables: !!!! Warning: Please do not modify these variables !!!!
   Declare @Back_DateandTime nvarchar(20) = replace(convert(date, GetDate()),'-','.') + '_' + substring(replace(convert(nvarchar(10),convert(time, GetDate())), ':', ''),1,4) 
@@ -119,7 +126,7 @@ BEGIN
   Declare @DB_Backup_Name nvarchar(70)
   Declare @Database_State bit = 0						-- Defines if the database is in restoring mode or not. 0 means ONLINE
   Declare @Backup_Availability bit = 0				-- Checks if a backup exists for the source database name '@Source_Backup_Database_Name'
-  Declare @test bit = NULL
+  
   
   -- Begin Body:
   
@@ -247,13 +254,18 @@ BEGIN
   				create Table #temp ([move] nvarchar(500))
   			
   				if (ISNULL(@Destination_Database_Datafiles_Location,'') = '')
+				begin
   					raiserror('You have not chosen a destination path ''@Destination_Database_Datafiles_Location'' for your new database data files.',16,1)
-  				else
+  					return 1
+				end
+				else
   					exec xp_create_subdir @Destination_Database_Datafiles_Location
   
   				if OBJECT_ID('tempdb..#temp2') is not null
   					drop table #temp2
-  				select 'MOVE N''' + LogicalName + ''' TO N''' + @Destination_Database_Datafiles_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ''',  ' as [Single Move Statement]
+  				select 'MOVE N''' + LogicalName + ''' TO N''' + (case Type when 'D' then @Destination_Database_DataFiles_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ''',  '
+																		   when 'L' then @Destination_Database_LogFile_Location +RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))) + ''',  '
+																		   end	) as [Single Move Statement]
   				into #temp2
   				from #Backup_Files_List
   
