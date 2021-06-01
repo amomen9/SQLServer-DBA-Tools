@@ -8,7 +8,8 @@ please give me an email at amomen@gmail.com
 
 #### Changes in version 1.0:
 ```
-The scripts turned into stored procedures.
+1. The scripts turned into stored procedures.
+2. Added some features.
 ```
 
 ## Contained Scripts
