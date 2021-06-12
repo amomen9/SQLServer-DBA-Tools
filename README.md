@@ -33,3 +33,20 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   is completed. For security reasons, the script enables the extended stored procedure xp_cmdshell
   and disables it again immediately once the procedure is finished executing.
 ```
+
+#### 3. Execute external tsql
+```
+  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
+  SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
+  subdirectories. Sample sp execution statement is as follows:
+  EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a **_semicolon (;)_**, executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
+                                     ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain
+                                                        --space within double quotations.
+                                     ,@Server = NULL
+                                     ,@AuthenticationType = NULL -- any value which does not include the word 'sql' means Windows Authentication
+                                     ,@UserName = NULL
+                                     ,@Password = NULL
+                                     ,@DefaultDatabase = NULL
+                                     ,@Keep_xp_cmdshell_Enabled = 0
+                                     ,@isDAC = 0	-- run files with Dedicated Admin Connection
+```
