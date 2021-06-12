@@ -39,7 +39,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
   subdirectories. Sample sp execution statement is as follows:
-  EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a **_semicolon (;)_**, executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
+  EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
+  executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
                                      ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain
                                                         --space within double quotations.
                                      ,@Server = NULL
