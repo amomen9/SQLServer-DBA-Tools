@@ -51,3 +51,6 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                      ,@Keep_xp_cmdshell_Enabled = 0
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
 ```
+
+## Upcoming Scripts:
+#### 1. Cardinality Factor calculator sp for a table
