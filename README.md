@@ -52,5 +52,16 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
 ```
 
-## Upcoming Scripts:
-#### 1. Cardinality Factor calculator sp for a table
+#### 4. Cardinality Factor calculator sp for a table
+```
+  This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
+  for every column. This may help the tuning experts choose the better candidate column for indexing.
+  Example:
+  
+    DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
+    INSERT INTO @temp
+    EXECUTE master..CardinalityCalc 'Northwind','saasdsad.orders'
+
+    select * from @temp
+    order by 2 desc
+```
