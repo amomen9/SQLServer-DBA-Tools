@@ -33,7 +33,7 @@ BEGIN
 	  BEGIN
 		 declare @sql nvarchar(max) 
 		 select @sql= STUFF((
-		 select '' union all select ''+ quotename([name], '''''''')+'' as Column_Name, count(distinct '', quotename([name]), '')*100.0/Count(*) as [crowdedness(in %)] ''+
+		 select '' union all select ''+ quotename([name], '''''''')+'' as Column_Name, cast(count(distinct '', quotename([name]), '')*100.0/Count(*) as decimal(10,1)) as [crowdedness(in %)] ''+
 				 ''from ''+ @TableName
 		 FROM '+@DatabaseName+'.sys.all_columns
 		 WHERE object_id = OBJECT_ID(@TableName)
@@ -51,7 +51,7 @@ GO
 /* Example:
 DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
 INSERT INTO @temp
-EXECUTE master..CardinalityCalc 'Northwind','saasdsad.orders'
+EXECUTE master..CardinalityCalc 'Northwind','sales.orders'
 
 select * from @temp
 order by 2 desc
