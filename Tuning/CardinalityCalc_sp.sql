@@ -13,7 +13,7 @@ BEGIN
 	  DECLARE @InputValidity BIT = 1
 		IF '''+@TableName+''' > ''''
 		begin
-		  print(''ok1'')
+		  
 			if parsename('''+@TableName+''',1) not in 
 				(select name from '+@DatabaseName+'.sys.tables where Schema_Name(schema_id) = ISNULL(PARSENAME('''+@TableName+''',2),''dbo'') )
 			begin
@@ -25,7 +25,7 @@ BEGIN
 				else
 					set @TableName = '''+@DatabaseName+'''+''..''+'''+@TableName+'''
 		
-		  print(''ok2'')	
+		  	
 
 		end
 		
@@ -40,18 +40,18 @@ BEGIN
 		 FOR XML PATH('''') ), 1, 10, '''')           
 		 exec(@sql) 
 	  END
-	  ELSE
-			SELECT NULL,NULL
+--	  ELSE
+--			SELECT NULL,NULL
 	'
-	print(@sql1)
+	
 	EXEC (@sql1)
 END
 GO
 
 /* Example:
-DECLARE @temp TABLE(Column_Name SYSNAME null, [Crowdedness (IN %)] FLOAT null)
+DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
 INSERT INTO @temp
-EXECUTE CardinalityCalc 'Northwind','sales.orders'
+EXECUTE master..CardinalityCalc 'Northwind','saasdsad.orders'
 
 select * from @temp
 order by 2 desc
