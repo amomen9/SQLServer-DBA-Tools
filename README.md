@@ -70,9 +70,12 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```
   This stored procedure disables a login and revokes any dependecies on the server for that login. Generally, dropping a login
   in SQL Server is not recommended but there is an option to drop the login at the end of the process. It may also leave orphaned
-  users.
+  database users.
   Example:
   
-    EXEC sp_drop_login_dependencies @LoginName = NULL,
-                                    @DropLogin = 0
+    DECLARE @SID VARBINARY(85)
+    EXEC sp_drop_login_dependencies @LoginName = 'test'
+                               ,@DropLogin = 1
+                               ,@DroppedLoginSID = @SID OUTPUT
+                               
 ```
