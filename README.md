@@ -72,7 +72,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   in SQL Server is not recommended but there is an option to drop the login at the end of the process. It may also leave orphaned
   database users. If the login is windows authentication, you do not have to specify the domain or computer name unless there are
   several identical login names under different domain and computer names. The complete windows authentication login name must be
-  in the format: DomainName\LoginName
+  in the format: DomainName\LoginName (LoginName@DomainName format is not supported)
   Example:
   
     DECLARE @SID VARBINARY(85)
