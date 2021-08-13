@@ -68,7 +68,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 #### 5. Drop login dependencies
 ```
-  This stored procedure disables a login and revokes any dependecies (that prevents the login from being dropped) on the server 
+  This stored procedure disables a login and revokes any dependecies (that prevent the login from being dropped) on the server 
   for that login. Generally, dropping a login in SQL Server is not recommended but there is an option to drop the login at the 
   end of the process. It may also leave orphaned database users. If the login is windows authentication, you do not have to specify
   the domain or computer name unless there are several identical login names under different domain and computer names. The complete
