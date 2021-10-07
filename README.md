@@ -81,3 +81,25 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                ,@DroppedLoginSID = @SID OUTPUT
                                
 ```
+
+#### 6. sp_restore_latest_backups_on_other_server
+```
+  The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
+  restores the latest backups of a server on another server. Can come in handy sometimes. Please note that this SP benefits from
+  Mark Russinovich's PsTools (psexec executable) briefly introduced on Microsoft's website at https://docs.microsoft.com/en-us/sysinternals/downloads/pstools
+  and is mandatory for this script. After downloading PsTools, please place psexec from its archive to the source server's path. You can add it to a folder
+  which is already in path like %systemroot%\system32\. There is no requirement for psexec on the destination server except for availability of the ports tcp\135
+  and tcp\445 which are open by default in Windows Firewall.
+  
+  Example:
+  
+  exec sp_restore_latest_backups_on_other_server
+	@Source = '192.168.241.3',						      -- IPv4, IPv6, or hostname
+	@Destination = '192.168.241.100',				    -- IPv4, IPv6, or hostname
+	@DestinationUser = 'Ali-PC\Ali',				    -- Leave user and pass empty if on a domain, and source's SQL Server service account 
+													                    -- must be an administrator on the target machine, Otherwise specify a username
+													                    -- and password of an administrator of the target machine. Provide the username
+													                    -- in full [Domain or Computer name\username] format. The destination user must
+													                    -- also be a windows login and authorized to restore backups on the target SQL Server
+	@DestinationPass = 'P@$$W0rd'
+```
