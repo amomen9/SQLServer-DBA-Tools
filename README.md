@@ -94,12 +94,12 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   Example:
   
   exec sp_restore_latest_backups_on_other_server
-	@Source = '192.168.241.3',						      -- IPv4, IPv6, or hostname
-	@Destination = '192.168.241.100',				    -- IPv4, IPv6, or hostname
-	@DestinationUser = 'Ali-PC\Ali',				    -- Leave user and pass empty if on a domain, and source's SQL Server service account 
-													                    -- must be an administrator on the target machine, Otherwise specify a username
-													                    -- and password of an administrator of the target machine. Provide the username
-													                    -- in full [Domain or Computer name\username] format. The destination user must
-													                    -- also be a windows login and authorized to restore backups on the target SQL Server
+	@Source = '192.168.241.3',					-- IPv4, IPv6, or hostname
+	@Destination = '192.168.241.100',				-- IPv4, IPv6, or hostname
+	@DestinationUser = 'Ali-PC\Ali',				-- Leave user and pass empty if on a domain, and source's SQL Server service account 
+									-- must be an administrator on the target machine, Otherwise specify a username
+									-- and password of an administrator of the target machine. Provide the username
+									-- in full [Domain or Computer name\username] format. The destination user must
+									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
 ```
