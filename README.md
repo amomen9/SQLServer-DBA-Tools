@@ -2,11 +2,12 @@
 T-SQL Scripts
 
 
-License: Please do whatever you wish with these files!!! :smile::laughing: Just please include the Author tag.
+- License: Please do whatever you wish with these files!!! :smile::laughing: Just please include the Author tag.
 If you wish to contribute to the codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com
 These scripts are for SQL Server's general purposes. For full corresponding instructions for each script,
 please refer to the README.md file included in its folder.
+- Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 
 ## Contained Scripts
 
