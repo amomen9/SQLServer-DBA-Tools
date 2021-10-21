@@ -40,6 +40,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
   subdirectories. Sample sp execution statement is as follows:
+  
+  Example:
+  
   EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
   executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
                                      ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain
@@ -57,6 +60,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
   for every column. This may help the tuning experts choose the better candidate column for indexing.
+  
   Example:
   
     DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
@@ -77,6 +81,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   For transferring the dependencies, security best practices are observed, that means the ownership of databases and user defined server
   roles will be transfered to holder of 0x01 SID (login name 'sa' by default) and the ownership of jobs will be transferred to a new
   login with no specific access.
+  
   Example:
   
     DECLARE @SID VARBINARY(85)
