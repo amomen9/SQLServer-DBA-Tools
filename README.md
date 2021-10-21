@@ -73,8 +73,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   for that login. Generally, dropping a login in SQL Server is not recommended but there is an option to drop the login at the 
   end of the process. It may also leave orphaned database users. If the login is windows authentication, you do not have to specify
   the domain or computer name unless there are several identical login names under different domain and computer names. The complete
-  windows authentication login name must be in the format: DomainName\LoginName (LoginName@DomainName format is not supported) for
-  transferring the dependencies, security best practices are observed, that means the ownership of databases and user defined server
+  windows authentication login name must be in the format: DomainName\LoginName (LoginName@DomainName format is not supported).
+  For transferring the dependencies, security best practices are observed, that means the ownership of databases and user defined server
   roles will be transfered to holder of 0x01 SID (login name 'sa' by default) and the ownership of jobs will be transferred to a new
   login with no specific access.
   Example:
