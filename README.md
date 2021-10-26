@@ -11,7 +11,7 @@ please refer to the README.md file included in its folder.
 
 ## Contained Scripts
 
-#### 1. Backup Website (Within T-SQL_Backup&Restore folder):
+#### 1. Backup Website (Within T-SQL_Backup&Restore repo directory):
 
 ```
 This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
@@ -19,7 +19,7 @@ scheduled job to run at specific schedules. The DB backup file name will be in '
 The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. 
 ```
 
-#### 2. Restore Website (Within T-SQL_Backup&Restore folder):
+#### 2. Restore Website (Within T-SQL_Backup&Restore repo directory):
 
 ```
   Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
