@@ -91,7 +91,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                
 ```
 
-#### 6. sp_restore_latest_backups_on_other_server
+#### 6. sp_restore_latest_backups_on_other_server (using psexec)
 ```
   The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   restores the latest backups of a server on another server. Can come in handy sometimes. Please note that this SP benefits from
