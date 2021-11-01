@@ -9,33 +9,27 @@
 /*
 
 
-This script restores the latest backups contained within a folder and its subfolders. You can also specify the
-destination databases' suffix. If you don't specify the destination database, the database will be restored on 
-its own. This script probes inside the backup folder and extracts and restores the latest backup. If the database
-is to be restored on its own, optionally a tail of log backup will be taken first, if the database does not have 
-SIMPLE or Pseudosimple recovery model. The last backup set will be restored, by probing into the backups directory
-and because it does not have the history records of SQL Server msdb database. (Source of the backups is likely 
-somewhere else) But you can specify the backup location manually. The names are case-insensitive. For security 
-reasons, the script enables the extended stored procedure xp_cmdshell and disables it again immediately once the
-procedure is finished executing.
+This script	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
+	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
+	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
+	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
+	database already exists, a tail of log backup can be taken optionally first.
 
 System requirements:
 SQL Server Compatibility: This script is designed to comply with SQL Server 2008 R2 and later. Earlier versions are not tested.
+However I do not vow that it works for 2008R2, but 2012, 2014, 2016 and 2017 most likely are supported. I have test this on 2019
 
-Attention: 	
-	1. Please do not put anything else inside the backup directory or any of its subdirectories manually or automatically, 
-	as it may interfere with this script's functionality and completely wreck the operation. The backup root '@Backup_root'
-	must be exclusively dedicated to Backup_Website.sql and this script.	
-	2. Please make sure SQL service has required permission to the paths you specify. Otherwise the script will fail. If the output paths do not
+Attention: 		
+	1. Please make sure SQL service has required permission to the paths you specify. Otherwise the script will fail. If the output paths do not
 	exist, the script automatically creates them.
-	3. If you restore the database to a new name and it already exists, some errors might occur. This script does
+	2. If you restore the database to a new name and it already exists, some errors might occur. This script does
 	not handle such a case.
-	4. As leaving xp_cmdshell enabled has security risks, especially for the backup jobs which are meant to be scheduled
+	3. As leaving xp_cmdshell enabled has security risks, especially for the backup jobs which are meant to be scheduled
 	to be triggered at special times, and compressing or decompressing files is time-consuming, this script does not wait for
 	the compression or extraction process to complete and then disable xp_cmdshell. It launches a parallel script implicitly
 	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for a very short
 	time. It was less than 0.3 second on my computer.
-	5. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
+	4. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
 	the current session, before restoring the database. The database will be returned to MULTI_USER at the end.
 
 
@@ -483,12 +477,14 @@ exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
   																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
 							   @Destination_Database_LogFile_Location = '',
 							   @IncludeSubdirectories = 1,
-							   @Backup_root = N'D:\backup',		-- Root location for backup files.
+							   @Backup_root = N'D:\backup',		
+																-- Root location for backup files.
 							   @Keep_Database_in_Restoring_State = 0,						
 																-- If equals to 1, the database will be kept in restoring state
 							   @Take_tail_of_log_backup = 0,
 							   @Temp_Working_Directory = N'C:\Temp',
 																-- Make sure SQL Service has permission to create this folder
-							   @DataFileSeparatorChar = '_'		-- This parameter specifies the punctuation mark used in data files names. For example "_"
+							   @DataFileSeparatorChar = '_'		
+																-- This parameter specifies the punctuation mark used in data files names. For example "_"
 																-- in NW_1.mdf or "$" in NW$1.mdf
 
