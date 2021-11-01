@@ -112,3 +112,17 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
 ```
+
+#### 7. sp_restore_latest_backups
+```
+	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
+  	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
+	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
+	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
+	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
+	database already exists, a tail of log backup can be taken optionally first.
+	
+	Example:
+	
+	
+```
