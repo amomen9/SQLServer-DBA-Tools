@@ -124,5 +124,24 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	
 	Example:
 	
+	exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
+  			-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
+  			-- the database will be restored on its own. Leave empty to do so.
+							   @Destination_Database_DataFiles_Location = '',			
+  			-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
+  			-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
+							   @Destination_Database_LogFile_Location = '',
+							   @IncludeSubdirectories = 1,
+							   @Backup_root = N'D:\backup',
+			-- Root location for backup files.
+							   @Keep_Database_in_Restoring_State = 0,						
+			-- If equals to 1, the database will be kept in restoring state
+							   @Take_tail_of_log_backup = 0,
+							   @Temp_Working_Directory = N'C:\Temp',
+			-- Make sure SQL Service has permission to create this folder
+							   @DataFileSeparatorChar = '_'		
+			-- This parameter specifies the punctuation mark used in data files names. For example "_"
+			-- in NW_1.mdf or "$" in NW$1.mdf
+
 	
 ```
