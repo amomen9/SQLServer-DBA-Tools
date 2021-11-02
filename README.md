@@ -125,7 +125,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	Example:
 	
 	exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
-  			-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
+  			-- You can specify the destination database names' suffix here. If the destination database name already exists and is 
+			-- equal to the backup database name,
   			-- the database will be restored on its own. Leave empty to do so.
 							   @Destination_Database_DataFiles_Location = '',			
   			-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
