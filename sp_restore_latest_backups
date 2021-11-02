@@ -17,7 +17,7 @@ This script	restores the latest backups from backup files accessible to the serv
 
 System requirements:
 SQL Server Compatibility: This script is designed to comply with SQL Server 2008 R2 and later. Earlier versions are not tested.
-However I do not vow that it works for 2008R2, but 2012, 2014, 2016 and 2017 most likely are supported. I have test this on 2019
+However I do not vow that it works for 2008R2, but 2012, 2014, 2016 and 2017 most likely are supported. I have tested this on 2019
 
 Attention: 		
 	1. Please make sure SQL service has required permission to the paths you specify. Otherwise the script will fail. If the output paths do not
