@@ -31,7 +31,10 @@ Attention:
 	time. It was less than 0.3 second on my computer.
 	4. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
 	the current session, before restoring the database. The database will be returned to MULTI_USER at the end.
-
+	5. Warning!! Appending backups to each other is not recommended and this script is not designed to handle such case.
+	6. If the database is to be restored on its own, the script first tries to kill any conncetions to the database
+	using 'ALTER DATABASE' statement. If it is in restoring state or any other state which will not allow ALTER DATABASE
+	statement, SQL Server raises an error which is normal and is not an obstacle.
 
 */
 
@@ -234,7 +237,7 @@ BEGIN
   				EXEC master.sys.sp_executesql @sql , N'@Backup_Path nvarchar(150)', @Backup_Location
 				---------------------------------------------------------------------------------------------------
   
-  				set @DB_Restore_Script = @DB_Restore_Script + N'RESTORE DATABASE [' + @DBName + '] FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1,  
+  				set @DB_Restore_Script = @DB_Restore_Script + N'RESTORE DATABASE [' + @DBName + '] FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1  
   				'
   			
   				if OBJECT_ID('tempdb..#temp') is not null
@@ -257,7 +260,7 @@ BEGIN
 
   				if OBJECT_ID('tempdb..#temp2') is not null
   					drop table #temp2
-  				select 'MOVE N''' + LogicalName + ''' TO N''' + @Destination_Database_DataFiles_Location + '\' + @DBName + right(PhysicalName, (CASE WHEN charindex(@DataFileSeparatorChar, RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName)))) <> 0 then charindex(@DataFileSeparatorChar,reverse(PhysicalName)) ELSE charindex('.',reverse(PhysicalName)) END)) + ''',  '																		                                 
+  				select ', MOVE N''' + LogicalName + ''' TO N''' + case when FileID = 2 then @Destination_Database_LogFile_Location else @Destination_Database_DataFiles_Location end + '\' + @DBName + right(PhysicalName, (CASE WHEN charindex(@DataFileSeparatorChar, RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName)))) <> 0 then charindex(@DataFileSeparatorChar,reverse(PhysicalName)) ELSE charindex('.',reverse(PhysicalName)) END)) + '''  '																		                                 
 																		    as [Single Move Statement]
   				into #temp2
   				from #Backup_Files_List
@@ -266,7 +269,7 @@ BEGIN
   				select @DB_Restore_Script = @DB_Restore_Script + [Single Move Statement]
   				from #temp2
   
-  				select @DB_Restore_Script = @DB_Restore_Script + '  NOUNLOAD,  STATS = 20'
+  				select @DB_Restore_Script = @DB_Restore_Script + ',  NOUNLOAD,  STATS = 20'
   			
   			END	
   				print (@DB_Restore_Script)
@@ -298,10 +301,9 @@ CREATE OR ALTER PROC sp_restore_latest_backups
   																-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
   																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
   @Destination_Database_LogFile_Location nvarchar(300) = '',
-  @IncludeSubdirectories BIT = 1,
-  
   
   @Backup_root nvarchar(120) = N'e:\Backup',					-- Root location for backup files.
+  @IncludeSubdirectories BIT = 1,								-- Choosing whether to include subdirectories or not while the script is searching for backup files.  
   
   @Keep_Database_in_Restoring_State bit = 0,					-- If equals to 1, the database will be kept in restoring state
   @Take_tail_of_log_backup bit = 1,
@@ -445,14 +447,14 @@ BEGIN
 			while @@FETCH_STATUS = 0
 			begin
 				
-
--------------------------------------------------------------------------------------------------------------------------------
+				set @DatabaseName += @Destination_Database_Name_suffix; 
+-------------------------------------------------------------------------------------------------------------------------------				
 				exec sp_complete_restore    @DBName = @DatabaseName,
 											@Backup_Location = @Backup_Path,
-											@Destination_Database_DataFiles_Location = N'' ,	-- If the database exists, this parameter assignment will be ignored
-											@Destination_Database_LogFile_Location = N'',		-- If the database exists, this parameter assignment will be ignored
-											@Take_tail_of_log_backup = 1,
-											@Keep_Database_in_Restoring_State  = 0,				-- If equals to 1, the database will be kept in restoring state until the whole process of restoring
+											@Destination_Database_DataFiles_Location = @Destination_Database_DataFiles_Location ,	-- If the database exists, this parameter assignment will be ignored
+											@Destination_Database_LogFile_Location = @Destination_Database_LogFile_Location,		-- If the database exists, this parameter assignment will be ignored
+											@Take_tail_of_log_backup = @Take_tail_of_log_backup,
+											@Keep_Database_in_Restoring_State  = @Keep_Database_in_Restoring_State,				-- If equals to 1, the database will be kept in restoring state until the whole process of restoring
 											@DataFileSeparatorChar  = '_'						-- This parameter specifies the punctuation mark used in data files names. For example "_"
 -------------------------------------------------------------------------------------------------------------------------------				
 				fetch next from RestoreResults into @DatabaseName, @Backup_Path
@@ -472,13 +474,16 @@ GO
 exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
   																-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   																-- the database will be restored on its own. Leave empty to do so.
-							   @Destination_Database_DataFiles_Location = '',			
+							   @Destination_Database_DataFiles_Location = 'D:\test\testData',			
   																-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
-  																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
-							   @Destination_Database_LogFile_Location = '',
-							   @IncludeSubdirectories = 1,
+  																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
+																-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
+																-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
+																-- has an identical structure as your original server, for example it's a clone of it.
+							   @Destination_Database_LogFile_Location = 'D:\test\testLog',							   
 							   @Backup_root = N'D:\backup',		
 																-- Root location for backup files.
+							   @IncludeSubdirectories = 1,		-- Choose whether to include subdirectories or not while the script is searching for backup files.
 							   @Keep_Database_in_Restoring_State = 0,						
 																-- If equals to 1, the database will be kept in restoring state
 							   @Take_tail_of_log_backup = 0,
@@ -486,5 +491,5 @@ exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
 																-- Make sure SQL Service has permission to create this folder
 							   @DataFileSeparatorChar = '_'		
 																-- This parameter specifies the punctuation mark used in data files names. For example "_"
-																-- in NW_1.mdf or "$" in NW$1.mdf
+																-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 
