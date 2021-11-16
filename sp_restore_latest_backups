@@ -239,36 +239,58 @@ BEGIN
   
   				set @DB_Restore_Script = @DB_Restore_Script + N'RESTORE DATABASE [' + @DBName + '] FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1  
   				'
+
   			
-  				if OBJECT_ID('tempdb..#temp') is not null
-  					drop table #temp
-  				create Table #temp ([move] nvarchar(500))
-  			
-  				if (ISNULL(@Destination_Database_Datafiles_Location,'') = '')
+				if (@Destination_Database_DataFiles_Location <> 'same')
 				begin
-  					set @Destination_Database_Datafiles_Location = convert(nvarchar(1000),(select SERVERPROPERTY('InstanceDefaultDataPath')))
+  					if OBJECT_ID('tempdb..#temp') is not null
+  						drop table #temp
+  					create Table #temp ([move] nvarchar(500))
+  			
+  					if (ISNULL(@Destination_Database_Datafiles_Location,'') = '')
+					begin
+  						set @Destination_Database_Datafiles_Location = convert(nvarchar(1000),(select SERVERPROPERTY('InstanceDefaultDataPath')))
+					end
+					else
+  						exec xp_create_subdir @Destination_Database_DataFiles_Location
+  
+					if (ISNULL(@Destination_Database_Logfile_Location,'') = '')
+					begin
+  						set @Destination_Database_Logfile_Location = convert(nvarchar(1000),(select SERVERPROPERTY('InstanceDefaultLogPath')))
+					end
+					else
+  						exec xp_create_subdir @Destination_Database_LogFile_Location
+
+------------------ Adding move statements:--------------------------	
+  					if OBJECT_ID('tempdb..#temp2') is not null
+  						drop table #temp2
+  					select ', MOVE N''' + LogicalName + ''' TO N''' + case when FileID = 2 then @Destination_Database_LogFile_Location else @Destination_Database_DataFiles_Location end + '\' + @DBName + right(PhysicalName, (CASE WHEN charindex(@DataFileSeparatorChar, RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName)))) <> 0 then charindex(@DataFileSeparatorChar,reverse(PhysicalName)) ELSE charindex('.',reverse(PhysicalName)) END)) + '''  '																		                                 
+																				as [Single Move Statement]
+  					into #temp2
+  					from #Backup_Files_List
+					
+
+  					select @DB_Restore_Script = @DB_Restore_Script + [Single Move Statement]
+  					from #temp2
+--------------------------------------------------------------------  
 				end
 				else
-  					exec xp_create_subdir @Destination_Database_DataFiles_Location
-  
-				if (ISNULL(@Destination_Database_Logfile_Location,'') = '')
 				begin
-  					set @Destination_Database_Logfile_Location = convert(nvarchar(1000),(select SERVERPROPERTY('InstanceDefaultLogPath')))
+					declare mkdir cursor for select PhysicalName from #Backup_Files_List
+					open mkdir
+						declare @DirPath nvarchar(1000)
+						fetch next from mkdir into @DirPath
+						while @@FETCH_STATUS = 0
+						begin
+							select @DirPath = left(@DirPath, (len(@DirPath)-charindex('\',REVERSE(@DirPath))))
+							execute xp_create_subdir @DirPath										
+							fetch next from mkdir into @DirPath
+						end 
+					CLOSE mkdir
+					DEALLOCATE mkdir
+
 				end
-				else
-  					exec xp_create_subdir @Destination_Database_LogFile_Location
 
-  				if OBJECT_ID('tempdb..#temp2') is not null
-  					drop table #temp2
-  				select ', MOVE N''' + LogicalName + ''' TO N''' + case when FileID = 2 then @Destination_Database_LogFile_Location else @Destination_Database_DataFiles_Location end + '\' + @DBName + right(PhysicalName, (CASE WHEN charindex(@DataFileSeparatorChar, RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName)))) <> 0 then charindex(@DataFileSeparatorChar,reverse(PhysicalName)) ELSE charindex('.',reverse(PhysicalName)) END)) + '''  '																		                                 
-																		    as [Single Move Statement]
-  				into #temp2
-  				from #Backup_Files_List
-				
-
-  				select @DB_Restore_Script = @DB_Restore_Script + [Single Move Statement]
-  				from #temp2
-  
   				select @DB_Restore_Script = @DB_Restore_Script + ',  NOUNLOAD,  STATS = 20'
   			
   			END	
@@ -474,12 +496,13 @@ GO
 exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
   																-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   																-- the database will be restored on its own. Leave empty to do so.
-							   @Destination_Database_DataFiles_Location = 'D:\test\testData',			
+							   @Destination_Database_DataFiles_Location = 'same',			
   																-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
   																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
 																-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
 																-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
 																-- has an identical structure as your original server, for example it's a clone of it.
+																-- if this parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
 							   @Destination_Database_LogFile_Location = 'D:\test\testLog',							   
 							   @Backup_root = N'D:\backup',		
 																-- Root location for backup files.
