@@ -7,6 +7,7 @@ If you wish to contribute to the codes or have any suggestions or want to report
 please give me an email at amomen@gmail.com
 These scripts are for SQL Server's general purposes. For full corresponding instructions for each script,
 please refer to the README.md file included in its folder.
+- The scripts are not pretty much optimized where they don't need to be.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 
 ## Contained Scripts
