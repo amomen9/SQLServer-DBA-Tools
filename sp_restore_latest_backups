@@ -13,7 +13,8 @@ This script	restores the latest backups from backup files accessible to the serv
 	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
 	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
-	database already exists, a tail of log backup can be taken optionally first.
+	database already exists, a tail of log backup can be taken optionally first. If the name of the database cannot be obtained from the
+	backup file, the script names the target database as 'CorruptBackup+<a random number>'. Such backup will most likely fail to restore.
 
 System requirements:
 SQL Server Compatibility: This script is designed to comply with SQL Server 2008 R2 and later. Earlier versions are not tested.
@@ -134,34 +135,49 @@ GO
 
 --- This SP is called by the main SP:
 create or alter proc sp_complete_restore 
+	@Drop_Database_if_Exists BIT = 0,
 	@DBName sysname,
 	@Backup_Location nvarchar(1000),
 	@Destination_Database_DataFiles_Location nvarchar(300) = '',			
 	@Destination_Database_LogFile_Location nvarchar(300) = '',
 	@Take_tail_of_log_backup bit = 1,
-	@Keep_Database_in_Restoring_State bit = 0,				-- If equals to 1, the database will be kept in restoring state until the whole process of restoring
-	@DataFileSeparatorChar nvarchar(2) = '_'	-- This parameter specifies the punctuation mark used in data files names. For example "_"
+	@Keep_Database_in_Restoring_State bit = 0,					-- If equals to 1, the database will be kept in restoring state until the whole process of restoring
+	@DataFileSeparatorChar nvarchar(2) = '_',					-- This parameter specifies the punctuation mark used in data files names. For example "_"
+	@Change_Target_RecoveryModel_To NVARCHAR(20) = 'same',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+	@Set_Target_Database_ReadOnly BIT = 0,
+	@Delete_Backup_File BIT = 0							
 	
 AS
 BEGIN
-  
-  Declare @Back_DateandTime nvarchar(20) = (select replace(convert(date, GetDate()),'-','.') + '_' + substring(replace(convert(nvarchar(10),convert(time, GetDate())), ':', ''),1,4) )
-  Declare @DB_Restore_Script nvarchar(max) = ''
-  Declare @Database_State bit = 0						-- Defines if the database is in restoring mode or not. 0 means ONLINE
-  
   set nocount on
+  
+  
+  DECLARE @Back_DateandTime nvarchar(20) = (select replace(convert(date, GetDate()),'-','.') + '_' + substring(replace(convert(nvarchar(10),convert(time, GetDate())), ':', ''),1,4) )
+  Declare @DB_Restore_Script nvarchar(max) = ''
+  declare @DropDatabaseStatement nvarchar(max) = ''
+  
+  IF (@Change_Target_RecoveryModel_To NOT IN ('FULL','BULK-LOGGED','SIMPLE','SAME'))
+  BEGIN
+	RAISERROR('Target recovery model specified is not a recognized SQL Server recovery model.',16,1)
+	RETURN 1
+  END
+  
   ----------------------------------------------- Restoring Database:
     		  		
   			print('-------------------------------------------------------------------------------------------------------')
 			print('')
+
+			-------------------------------------------------------------------
+
   			IF( DB_ID(@DBName) is not null ) -- restore database on its own
   			BEGIN
-  			
+  				
   				------------------------------ check if the database has SIMPLE or PseudoSIMPLE recovery model:
   				declare @temp1 nvarchar(max)  
   				declare @dbinfo table (ParentObject nvarchar(100), Object nvarchar(100), Field nvarchar(100), [VALUE] nvarchar(100))
+				DECLARE @DBCCStatement NVARCHAR(200) = 'dbcc dbinfo ('+ QUOTENAME(@DBName) +') with tableresults, NO_INFOMSGS'
   				insert @dbinfo
-  				EXEC ('dbcc dbinfo (['+ @DBName +']) with tableresults')
+  				EXEC (@DBCCStatement)
   			
   				declare @isPseudoSimple_or_Simple bit = 0
   				IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) <= 10.5 -- Equal to or earlier than SQL 2008 R2
@@ -173,29 +189,43 @@ BEGIN
   						set @isPseudoSimple_or_Simple = 1
   
   				-----------------------------
-  				
-  				set @DB_Restore_Script = @DB_Restore_Script + 'ALTER DATABASE [' + @DBName + '] SET SINGLE_USER WITH ROLLBACK IMMEDIATE
-  				'
-  
+  				IF (SELECT state FROM sys.databases WHERE name = @DBName) = 0	-- state 0 means database is online
+				begin
+						SET @DB_Restore_Script += 'use '+ QUOTENAME(@DBName) + ' ALTER database ' + QUOTENAME(@DBName) + ' set single_user with rollback immediate
+						'						
+						EXECUTE (@DB_Restore_Script)
+						SET @DB_Restore_Script = ''
+				END
   				if (@isPseudoSimple_or_Simple != 1 and @Take_tail_of_log_backup = 1) -- check if the database has not SIMPLE or PseudoSIMPLE recovery model
 				BEGIN
-					Declare @TailofLOG_Back_Name nvarchar(100) = 'TailofLOG_' + @DBName+'_Backup_'+@Back_DateandTime+'.trn'
-  					set @DB_Restore_Script = @DB_Restore_Script + 'BACKUP LOG [' + @DBName + '] TO DISK = ''' + @TailofLOG_Back_Name + ''' WITH FORMAT,  NAME = ''' + @TailofLOG_Back_Name + ''', NOREWIND, NOUNLOAD,  NORECOVERY 
+					DECLARE @Tail_of_Log_Backup_Script NVARCHAR(max)
+					Declare @TailofLOG_Backup_Name nvarchar(100) = 'TailofLOG_' + @DBName+'_Backup_'+@Back_DateandTime+'.trn'
+  					set @Tail_of_Log_Backup_Script = 'BACKUP LOG ' + QUOTENAME(@DBName) + ' TO DISK = ''' + @TailofLOG_Backup_Name + ''' WITH FORMAT,  NAME = ''' + @TailofLOG_Backup_Name + ''', NOREWIND, NOUNLOAD,  NORECOVERY 
   					'
-
+					EXEC (@Tail_of_Log_Backup_Script)
+					
 				END  
-  				set @DB_Restore_Script = @DB_Restore_Script + 'RESTORE DATABASE [' + @DBName + '] FROM  DISK = ''' + @Backup_Location + ''' WITH  FILE = 1, NOUNLOAD, replace'
-  				if (@Keep_Database_in_Restoring_State = 1)
-  				BEGIN
+
+				---- Dropping database if exists, before restoring, on user request ------
+				IF (@Drop_Database_if_Exists = 1)
+				BEGIN										
+					SET @DropDatabaseStatement += 'DROP database ' + @DBName + CHAR(10)					
+					GOTO restoreanew
+
+				END
+				--------------------------------------------------------------------------
+
+  				set @DB_Restore_Script = 'RESTORE DATABASE ' + QUOTENAME(@DBName) + ' FROM  DISK = ''' + @Backup_Location + ''' WITH  FILE = 1, NOUNLOAD, replace'
+  				if (@Keep_Database_in_Restoring_State = 1)  				
   					set @DB_Restore_Script = @DB_Restore_Script + ',  NORECOVERY'
-  					set @Database_State = 0
-  				END
-				else
-					set @Database_State = 1
+  				
+  				
+				
+					
   
   			END ELSE
-  			BEGIN														-- Restore database to a new name
-  
+  			BEGIN														-- Restore database to a new name or restoring a non-existent database 
+				RESTOREANEW:
   						
   				--------------------- Extract list of File Groups and Files
   				if OBJECT_ID('tempdb..#Backup_Files_List') is not null
@@ -236,11 +266,12 @@ BEGIN
   				INSERT INTO #Backup_Files_List
   				EXEC master.sys.sp_executesql @sql , N'@Backup_Path nvarchar(150)', @Backup_Location
 				---------------------------------------------------------------------------------------------------
-  
-  				set @DB_Restore_Script = @DB_Restore_Script + N'RESTORE DATABASE [' + @DBName + '] FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1  
-  				'
+				
 
-  			
+  				set @DB_Restore_Script += @DropDatabaseStatement + N'RESTORE DATABASE ' + QUOTENAME(@DBName) + ' FROM  DISK = N''' + @Backup_Location + ''' WITH  FILE = 1  
+  				'
+				
+--  				PRINT @Destination_Database_DataFiles_Location
 				if (@Destination_Database_DataFiles_Location <> 'same')
 				begin
   					if OBJECT_ID('tempdb..#temp') is not null
@@ -269,14 +300,15 @@ BEGIN
   					into #temp2
   					from #Backup_Files_List
 					
-
+					
   					select @DB_Restore_Script = @DB_Restore_Script + [Single Move Statement]
   					from #temp2
 --------------------------------------------------------------------  
 				end
 				else
-				begin
-					declare mkdir cursor for select PhysicalName from #Backup_Files_List
+				BEGIN
+		--			SELECT * from #Backup_Files_List
+					DECLARE mkdir cursor for select PhysicalName from #Backup_Files_List
 					open mkdir
 						declare @DirPath nvarchar(1000)
 						fetch next from mkdir into @DirPath
@@ -289,21 +321,74 @@ BEGIN
 					CLOSE mkdir
 					DEALLOCATE mkdir
 
-				end
+				END
+                if (@Keep_Database_in_Restoring_State = 1)  				
+  					set @DB_Restore_Script = @DB_Restore_Script + ',  NORECOVERY'
+  					
+  				
 
   				select @DB_Restore_Script = @DB_Restore_Script + ',  NOUNLOAD,  STATS = 20'
   			
   			END	
   				print (@DB_Restore_Script)
   				EXEC (@DB_Restore_Script)
-  				print(char(10)+'End '+ @DBName +' Database Restore') 
-				print('')  
-  			      		
-  			if @Database_State = 1
-			Begin
+				----- Deleting backup file on successful restore on user's request
+				IF (@@error = 0 AND @Delete_Backup_File = 1)
+				BEGIN
+					/*	This 'if' is applicable when you use xp_cmdshell to delete the files
+					IF (SELECT value FROM sys.configurations WHERE name = 'xp_cmdshell') = 0
+					begin
+						RAISERROR('xp_cmdshell is required to be active by the user to delete the backup file.',16,1)
+					end
+					*/
+					
+					DECLARE @ErrorNo int
+					EXEC xp_delete_files @Backup_Location
+					
+					IF(@@ERROR <> 0)
+					BEGIN                    					
+						DECLARE @ErrorMessage NVARCHAR(1000) = 'Deleting backup file '+ @Backup_Location +' failed due to the system above error message.'	
+						PRINT @ErrorMessage
+					END
+					
+                END
 
-  				declare @temp5 nvarchar(150) = 'ALTER DATABASE [' + @DBName + '] SET MULTI_USER'
-  				EXEC (@temp5) 
+  				print(char(10)+'End '+ @DBName +' Database Restore') 
+				print('')
+				
+  			      		
+  			if (SELECT state FROM sys.databases WHERE name = @DBName) = 0
+			BEGIN
+				
+				DECLARE @temp5 nvarchar(2000) = ''
+				IF (@Change_Target_RecoveryModel_To <> 'same')
+					SET @temp5 = 'ALTER DATABASE ' + QUOTENAME(@DBName) + ' SET RECOVERY ' + @Change_Target_RecoveryModel_To + CHAR(10)
+				
+  				set @temp5 += 'ALTER DATABASE ' + QUOTENAME(@DBName) + ' SET MULTI_USER' + CHAR(10)
+				EXEC(@temp5)
+
+				-- If use requests, turning sp's recovery model to simple and shrinking its log file
+				IF (@Change_Target_RecoveryModel_To = 'SIMPLE')
+					SET @temp5 = 'USE ' + QUOTENAME(@DBName) + CHAR(10) + 
+					'declare @FileName sysname = (select name from sys.database_files where file_id=2)' + CHAR(10) +
+					'declare @SQL nvarchar(200) = ''DBCC SHRINKFILE(''+''''''''+@FileName+''''''''+'',0) WITH NO_INFOMSGS''' + CHAR(10) +
+					'exec (@SQL)' + CHAR(10)
+
+				IF (@Set_Target_Database_ReadOnly = 1)
+					SET @temp5 += 'alter database ' + @DBName + ' set READ_ONLY'
+				
+				--DECLARE @suppresser TABLE  (
+				--	DbId smallint,
+				--	FileId int,
+				--	CurrentSize int,
+				--	MinimumSize int,
+				--	UsedPages int,
+				--	EstimatedPages INT
+				--)
+
+				--INSERT @suppresser
+				
+  				EXEC (@temp5)
 			END
 END
 GO
@@ -315,7 +400,10 @@ GO
 
 CREATE OR ALTER PROC sp_restore_latest_backups
 
-  
+  @Drop_Database_if_Exists BIT = 0,
+																-- Turning this feature on, potentially means relocating the data files
+																-- of already existing databases
+
   @Destination_Database_Name_suffix nvarchar(128) = N'',
   																-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   																-- the database will be restored on its own. Leave empty to do so.
@@ -330,9 +418,14 @@ CREATE OR ALTER PROC sp_restore_latest_backups
   @Keep_Database_in_Restoring_State bit = 0,					-- If equals to 1, the database will be kept in restoring state
   @Take_tail_of_log_backup bit = 1,
   @Temp_Working_Directory nvarchar(100) = N'C:\Temp',			-- Make sure SQL Service has permission to create this folder
-  @DataFileSeparatorChar nvarchar(2) = '_'						-- This parameter specifies the punctuation mark used in data files names. For example "_"
+  @DataFileSeparatorChar nvarchar(2) = '_',						-- This parameter specifies the punctuation mark used in data files names. For example "_"
 																-- in NW_1.mdf or "$" in NW$1.mdf
-  		
+  @Change_Target_RecoveryModel_To NVARCHAR(20) = 'same',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+  @Set_Target_Databases_ReadOnly BIT = 0,
+  @Delete_Backup_File BIT = 0,									
+																-- Turn this feature on to delete the backup files that are successfully restored.
+  @Email_Failed_Restores_To NVARCHAR(128) = NULL
+
 AS
 BEGIN
   ---------------------------- Standardization of Customizable Variables:
@@ -369,21 +462,20 @@ BEGIN
   
   
   --------------- Other Variables: !!!! Warning: Please do not modify these variables !!!!
-  
-  
-  
-  Declare @TailofLOG_Back_Script nvarchar(500)
-  Declare @Backup_PathtoExecute nvarchar(1000)
+    
   
   Declare @Backup_Location nvarchar(255)
-  Declare @DB_Backup_Name nvarchar(70)
-  Declare @Database_State bit = 0						-- Defines if the database is in restoring mode or not. 0 means ONLINE
-  Declare @Backup_Availability bit = 0				-- Checks if a backup exists for the source database name '@DBName'
+    
+  Declare @count int = 0				-- Checks if a backup exists for the source database name '@DBName'
   declare @Backup_Path nvarchar(1000)
+  
   
   declare @DatabaseName nvarchar(128), @BackupFinishDate datetime, @BackupTypeDescription nvarchar(128)
   
-  -- Begin Body:
+  DROP TABLE IF EXISTS #t
+  CREATE TABLE #t (dbname NVARCHAR(128), path NVARCHAR(255))
+
+  ---- Begin Body:
   
   SET NOCOUNT ON
   EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE; EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE;
@@ -400,15 +492,15 @@ BEGIN
         insert into #DirContentsRecursive
   			EXEC master..xp_cmdshell @cmdshellInput		
   		  if ((select TOP 1 [file] from #DirContentsRecursive) = 'File Not Found')
-  		  BEGIN
-				declare @message nvarchar(150) = 'The folder you specified either does not exist or no backups exist within that folder or its subdirectories'
+  		  BEGIN				
+				declare @message nvarchar(150) = 'Fatal error: The folder you specified either does not exist or no backups exist within that folder or its subdirectories'
     			raiserror(@message, 16, 1)
 				return 1
     	  END
 		delete from #DirContentsRecursive where [file] is null
 		alter table #DirContentsRecursive add DatabaseName nvarchar(128), BackupFinishDate datetime, BackupTypeDescription nvarchar(128)
 
-
+		
 		declare BackupDetails cursor for select * from #DirContentsRecursive
 		open BackupDetails
 			
@@ -422,7 +514,21 @@ BEGIN
 				update #DirContentsRecursive set DatabaseName = (select top 1 DatabaseName from tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 				update #DirContentsRecursive set BackupFinishDate = (select top 1 BackupFinishDate from tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 				update #DirContentsRecursive set BackupTypeDescription = (select top 1 BackupTypeDescription from tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
-				delete from tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+				IF (SELECT DatabaseName FROM [tempdb].[dbo].[_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9]) IS NULL
+				BEGIN
+					SET @count+=1
+					INSERT INTO #t
+					(
+					    dbname,
+					    path
+					)
+					VALUES
+					(   concat('CorruptBackup_', LEFT(CONVERT(NVARCHAR(50),NEWID()),12)), -- dbname - nvarchar(128)
+					    @Backup_Path  -- path - nvarchar(255)
+					)
+				END
+                
+				DELETE from tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 				fetch next from BackupDetails into @Backup_Path, @DatabaseName , @BackupFinishDate, @BackupTypeDescription				
 			end 
 		CLOSE BackupDetails
@@ -436,11 +542,12 @@ BEGIN
 		FROM #DirContentsRecursive
 		WHERE [BackupTypeDescription] in ('Database','Partial') 
 		)
-		SELECT T.database_name dbname, [file] [path]
-		into #t
+		INSERT INTO #t
+		SELECT T.database_name dbname, [file] [path]		
 		FROM T 
 		WHERE T.Radif = 1
 		ORDER BY 1
+
 						
   END
   else
@@ -451,41 +558,59 @@ BEGIN
   	
   	IF ((select count(*) from #DirContentsRecursive)=0)
 	begin
-  		RAISERROR('Fatal error: no backups found in the specified directory.',16,1)
+  		RAISERROR('Fatal error: The folder you specified either does not exist or no backups exist within that folder or its subdirectories.',16,1)
 		return 1
 	end
-  	ELSE
-  		set @Backup_Availability = 1
   
   
   
-  	IF(@Backup_Availability = 1)
-	BEGIN
+  	
 		
 		declare RestoreResults cursor for select * from #t
 		open RestoreResults
+			-------------------------------------------------------------------------
+			IF OBJECT_ID('tempdb..FaultyBackupskjfjko340fksmlkf_4io3o44of') IS null
+				CREATE TABLE tempdb..FaultyBackupskjfjko340fksmlkf_4io3o44of 
+				(
+					ErrorID int IDENTITY NOT NULL,
+					SourceDatabaseName sysname NOT NULL,
+					DestinationDatabaseName sysname NOT NULL,
+					BackupFilePath NVARCHAR(1000),
+					RestoreStartTime DATETIME NOT NULL,
+					ErrorProcedure sysname NOT NULL,
+					ErrorNo INT,
+					ErrorSeverity TINYINT,
+					ErrorState TINYINT,
+					ErrorLine INT,
+					ErrorMessage VARCHAR(MAX)								
+				)
 
 			fetch next from RestoreResults into @DatabaseName, @Backup_Path			
 			while @@FETCH_STATUS = 0
 			begin
 				
-				set @DatabaseName += @Destination_Database_Name_suffix; 
--------------------------------------------------------------------------------------------------------------------------------				
-				exec sp_complete_restore    @DBName = @DatabaseName,
-											@Backup_Location = @Backup_Path,
-											@Destination_Database_DataFiles_Location = @Destination_Database_DataFiles_Location ,	-- If the database exists, this parameter assignment will be ignored
-											@Destination_Database_LogFile_Location = @Destination_Database_LogFile_Location,		-- If the database exists, this parameter assignment will be ignored
-											@Take_tail_of_log_backup = @Take_tail_of_log_backup,
-											@Keep_Database_in_Restoring_State  = @Keep_Database_in_Restoring_State,				-- If equals to 1, the database will be kept in restoring state until the whole process of restoring
-											@DataFileSeparatorChar  = '_'						-- This parameter specifies the punctuation mark used in data files names. For example "_"
+				DECLARE @SourceDatabaseName sysname = @DatabaseName
+				SET @DatabaseName += @Destination_Database_Name_suffix; 
+-------------------------------------------------------------------------------------------------------------------------------					
+					EXEC sp_complete_restore    @Drop_Database_if_Exists = @Drop_Database_if_Exists,
+												@DBName = @DatabaseName,
+												@Backup_Location = @Backup_Path,
+												@Destination_Database_DataFiles_Location = @Destination_Database_DataFiles_Location ,	-- If the database exists, this parameter assignment will be ignored
+												@Destination_Database_LogFile_Location = @Destination_Database_LogFile_Location,		-- If the database exists, this parameter assignment will be ignored
+												@Take_tail_of_log_backup = @Take_tail_of_log_backup,
+												@Keep_Database_in_Restoring_State  = @Keep_Database_in_Restoring_State,				-- If equals to 1, the database will be kept in restoring state until the whole process of restoring
+												@DataFileSeparatorChar  = '_',														-- This parameter specifies the punctuation mark used in data files names. For example "_"
+												@Change_Target_RecoveryModel_To = @Change_Target_RecoveryModel_To,
+												@Set_Target_Database_ReadOnly = @Set_Target_Databases_ReadOnly,
+												@Delete_Backup_File = @Delete_Backup_File
 -------------------------------------------------------------------------------------------------------------------------------				
 				fetch next from RestoreResults into @DatabaseName, @Backup_Path
 			end 
 		CLOSE RestoreResults
 		DEALLOCATE RestoreResults
-		
-  	
-	END	
+		PRINT('-------------------------------------------------------------------------------------------------------')
+  				
+	
 --	select * from tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 	drop table tempdb.._46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
   EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
@@ -493,7 +618,21 @@ END
 
 GO
 
-exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
+--=============================================================================================================================
+
+exec sp_restore_latest_backups 
+							   @Drop_Database_if_Exists = 0,
+																-- Turning this feature on is not recommended because 'replace' option of the restore command, transactionally drops the
+																-- existing database first and then restores the backup. That means if restore fails, drop also will not commit, a procedure
+																-- which cannot be implemented by the tsql programmer (alter database, drop database, restore database commands cannot be put into a user
+																-- transaction). But if you want a clean restore (Currently I don't know what the difference between 'restore with replace' and 'drop and restore'
+																-- is except for what i said which is an advantage of 'restore with replace'), set this parameter to 1, however it's risky and not
+																-- recommended because if the restore operation fails, the drop operation cannot be reverted and you will lose the existing database. If you
+																-- don't set this parameter to 1, the 'replace' option of the restore command will be used anyway. 
+																-- Note: if you want to use this parameter only to relocate database files 'replace' command does this for you and you don't need to use this
+																-- parameter. Generally, use this parameter as a last resort on a manual execution basis.
+
+							   @Destination_Database_Name_suffix = N'',
   																-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   																-- the database will be restored on its own. Leave empty to do so.
 							   @Destination_Database_DataFiles_Location = 'same',			
@@ -503,16 +642,24 @@ exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
 																-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
 																-- has an identical structure as your original server, for example it's a clone of it.
 																-- if this parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
-							   @Destination_Database_LogFile_Location = 'D:\test\testLog',							   
-							   @Backup_root = N'D:\backup',		
+																-- Setting this variable to 'same' also means forcing @Drop_Database_if_Exists to 1
+																-- Possible options: 'SAME'|''. '' or NULL means target server's default
+							   @Destination_Database_LogFile_Location = 'D:\test\testLog',	
+																-- if @Destination_Database_DataFiles_Location parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
+							   @Backup_root = N'e:\TestBackup',		
 																-- Root location for backup files.
 							   @IncludeSubdirectories = 1,		-- Choose whether to include subdirectories or not while the script is searching for backup files.
 							   @Keep_Database_in_Restoring_State = 0,						
 																-- If equals to 1, the database will be kept in restoring state
 							   @Take_tail_of_log_backup = 0,
-							   @Temp_Working_Directory = N'C:\Temp',
-																-- Make sure SQL Service has permission to create this folder
-							   @DataFileSeparatorChar = '_'		
+																
+							   @DataFileSeparatorChar = '_',		
 																-- This parameter specifies the punctuation mark used in data files names. For example "_"
 																-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
-
+							   @Change_Target_RecoveryModel_To = 'simple',
+																-- Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+																-- If the chosen option is simple, the log file will also shrink
+							   @Set_Target_Databases_ReadOnly = 1,
+							   @Delete_Backup_File = 0
+																-- Turn this feature on to delete the backup files that are successfully restored.
+							   
