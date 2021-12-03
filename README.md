@@ -184,9 +184,9 @@ has been taken from the following URL written by <b>Alan Jefferson</b>:
 	
 https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
 	
-It helps DBAs plan their jobs time table to smartly set their schedules to carry out necessary practices. For example, overlapping
+It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping
 jobs should generally be avoided:
-
+<p> </p>
 ![Sample script output](img/Screenshot_5.png)
 	</dd>	
 </dl>	
