@@ -115,7 +115,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	@DestinationPass = 'P@$$W0rd'
 
 <dl>
+	<dt>
 7. sp_restore_latest_backups
+	</dt>
 	<dd> </dd>
 	<dd>
 	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
@@ -128,7 +130,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	<dd> </dd>
 	Example:
 	<dd> </dd>
-	<dd>
+	
 ```
 	exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
   					-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
@@ -153,7 +155,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					-- This parameter specifies the punctuation mark used in data files names. For example "_"
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 ```
-	</dd>
+	
 	<dd> </dd>
 </dl>
 <dl>
