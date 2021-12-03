@@ -1,4 +1,12 @@
-﻿use msdb
+
+-- =============================================
+-- Author:				<a-momen>
+-- Contact & Report:	<amomen@gmail.com>
+-- Create date:			<2021.12.02>
+-- Description:			<Jobs' Info>
+-- =============================================
+
+use msdb
 go
 
 CREATE or alter FUNCTION fn_IntToTimeString (@time INT) -- This function has been taken from the following URL written by Alan Jefferson:
