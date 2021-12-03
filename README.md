@@ -12,6 +12,7 @@ please refer to the README.md file included in its folder.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 
 ## Contained Scripts
+  <br/>
 <dl>
   
 <dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
@@ -22,7 +23,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 
 <dt>2. Restore Website (Within T-SQL_Backup&Restore repo directory):</dt>
-
+  <br/>
 <dd>
   Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
   This script restores the backups performed by the Backup_Website.sql script. You can also specify the destination
@@ -39,6 +40,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 
 <dt>3. Execute external tsql</dt>
+  <br/>
 <dd>
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
@@ -61,6 +63,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dl>
 
 <dt>4. Cardinality Factor calculator sp for a table</dt>
+  <br/>
 <dd>
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
   for every column. This may help the tuning experts choose the better candidate column for indexing.
@@ -76,6 +79,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```
 
 <dt>5. Drop login dependencies</dt>
+  <br/>
 <dd>
   This stored procedure disables a login and revokes any dependecies (that prevent the login from being dropped) on the server 
   for that login. Generally, dropping a login in SQL Server is not recommended but there is an option to drop the login at the 
@@ -96,6 +100,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	
 
 <dt>6. sp_restore_latest_backups_on_other_server (using psexec)</dt>
+  <br/>
 <dd>
   The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   restores the latest backups of a server on another server. Can come in handy sometimes. Please note that this SP benefits from
@@ -117,9 +122,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	@DestinationPass = 'P@$$W0rd'
 ```
 
-<dt>
-7. sp_restore_latest_backups
-</dt>
+<dt>7. sp_restore_latest_backups</dt>
+  <br/>
 	<dd> </dd>
 	<dd>
 	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
