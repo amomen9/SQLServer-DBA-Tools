@@ -226,9 +226,9 @@ If you have a corrupt page within your database and have identified it through s
 you can make the page readable/writable again, by ordinary SQL statements, by correcting the checksum at a low level. This script
 is an example of it on the "Northwind" database. This script is included inside "Educational" subdirectory of the repository. You
 can get the "Northwind" sample database from the following link on Microsoft's website:
-  <br/>
+<p> </p>
 https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases
-  <br/>
+<p> </p>
 </dd>
 </dl>	
 
