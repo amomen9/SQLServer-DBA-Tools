@@ -13,7 +13,7 @@ please refer to the README.md file included in its folder.
 
 ## Contained Scripts
 <dl>
-	<dd> </dd>
+<dd> </dd>
 	<dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
 
 
@@ -40,12 +40,12 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 
 <dt>3. Execute external tsql</dt>
-
+<dd>
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
   subdirectories. Sample sp execution statement is as follows:
-  
-	<b>Example:</b>
+</dd>  
+<b>Example:</b>
 ```
   EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
   executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
