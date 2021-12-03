@@ -49,6 +49,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dd>  
 <dd><b>Example:</b></dd>
 </dl>
+
 ```
   EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
   executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
@@ -71,6 +72,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   for every column. This may help the tuning experts choose the better candidate column for indexing.
 </dd>  
   <dd><b>Example:</b></dd>
+</dl>
+
+
 ```  
     DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
     INSERT INTO @temp
@@ -79,7 +83,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
     select * from @temp
     order by 2 desc
 ```
-
+<dl>
 <dt>5. Drop login dependencies</dt>
   <br/>
 <dd>
@@ -93,6 +97,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   login with no specific access.
 	</dd>  
   <dd><b>Example:</b></dd>
+</dl>
+
 ```  
     DECLARE @SID VARBINARY(85)
     EXEC sp_drop_login_dependencies @LoginName = 'test'
@@ -100,7 +106,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                ,@DroppedLoginSID = @SID OUTPUT
 ```                               
 	
-
+<dl>
 <dt>6. sp_restore_latest_backups_on_other_server (using psexec)</dt>
   <br/>
 <dd>
@@ -112,6 +118,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   and tcp\445 which are open by default in Windows Firewall.
 </dd>  
   <dd><b>Example:</b></dd>:
+</dl>
+
 ```  
   exec sp_restore_latest_backups_on_other_server
 	@Source = '192.168.241.3',					-- IPv4, IPv6, or hostname
@@ -123,7 +131,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
 ```
-
+<dl>
 <dt>7. sp_restore_latest_backups</dt>
   <br/>
 	<dd> </dd>
@@ -138,7 +146,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	<dd> </dd>
 	<dd><b>Example:</b></dd>
 	<dd> </dd>
-	
+</dl>
+
 ```
 	exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
   					-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
