@@ -15,15 +15,15 @@ please refer to the README.md file included in its folder.
 
 #### 1. Backup Website (Within T-SQL_Backup&Restore repo directory):
 
-```
+
 This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
 scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
 The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. 
-```
+
 
 #### 2. Restore Website (Within T-SQL_Backup&Restore repo directory):
 
-```
+
   Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
   This script restores the backups performed by the Backup_Website.sql script. You can also specify the destination
   database. If you don't specify the destination database, the database will be restored on its own. This script
@@ -35,10 +35,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   of Website files is normally time-consuming, the database will be kept in restoring state until the whole script
   is completed. For security reasons, the script enables the extended stored procedure xp_cmdshell
   and disables it again immediately once the procedure is finished executing.
-```
+
 
 #### 3. Execute external tsql
-```
+
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
   subdirectories. Sample sp execution statement is as follows:
@@ -56,10 +56,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                      ,@DefaultDatabase = NULL
                                      ,@Keep_xp_cmdshell_Enabled = 0
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
-```
+
 
 #### 4. Cardinality Factor calculator sp for a table
-```
+
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
   for every column. This may help the tuning experts choose the better candidate column for indexing.
   
@@ -71,10 +71,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
     select * from @temp
     order by 2 desc
-```
+
 
 #### 5. Drop login dependencies
-```
+
   This stored procedure disables a login and revokes any dependecies (that prevent the login from being dropped) on the server 
   for that login. Generally, dropping a login in SQL Server is not recommended but there is an option to drop the login at the 
   end of the process. It may also leave orphaned database users. If the login is windows authentication, you do not have to specify
@@ -91,10 +91,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                ,@DropLogin = 1
                                ,@DroppedLoginSID = @SID OUTPUT
                                
-```
+
 
 #### 6. sp_restore_latest_backups_on_other_server (using psexec)
-```
+
   The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   restores the latest backups of a server on another server. Can come in handy sometimes. Please note that this SP benefits from
   Mark Russinovich's PsTools (psexec executable) briefly introduced on Microsoft's website at https://docs.microsoft.com/en-us/sysinternals/downloads/pstools
@@ -113,10 +113,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 									-- in full [Domain or Computer name\username] format. The destination user must
 									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
-```
+
 
 #### 7. sp_restore_latest_backups
-```
+
 	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
 	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
@@ -151,4 +151,35 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 
 
-```
+#### 8. Job duration and schedules:
+
+This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
+optimized though because no optimization would be necessary. Part of the script (first function and the body of second function
+has been taken from the following URL written by **Alan Jefferson**:
+	
+https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
+	
+It helps DBAs plan their jobs time table to smartly set their schedules to carry out necessary practices. For example, overlapping
+jobs should generally be avoided:
+
+![Sample script output](img/Screenshot_5.png)
+	
+	
+<table>
+  <tr>
+    <th>ID</th><th>Name</th><th>Rank</th>
+  </tr>
+  <tr>
+    <td>1</td><td>Tom Preston-Werner</td><td>Awesome</td>
+  </tr>
+  <tr>
+    <td>2</td><td>Albert Einstein</td><td>Nearly as awesome</td>
+  </tr>
+</table>
+
+<dl>
+  <dt>Lower cost</dt>
+  <dd>The new version of this product costs significantly less than the previous one!</dd>
+  <dt>Easier to use</dt>
+  <dd>We've changed the product so that it's much easier to use!</dd>
+</dl>
