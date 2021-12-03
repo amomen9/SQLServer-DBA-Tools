@@ -13,6 +13,7 @@ please refer to the README.md file included in its folder.
 
 ## Contained Scripts
 <dl>
+	<dd> </dd>
 	<dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
 
 
@@ -21,7 +22,7 @@ scheduled job to run at specific schedules. The DB backup file name will be in '
 The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. </dd>
 
 
-	<dt>2. Restore Website (Within T-SQL_Backup&Restore repo directory):</dt>
+<dt>2. Restore Website (Within T-SQL_Backup&Restore repo directory):</dt>
 
 <dd>
   Before using this script, please read the comments at the beginning of Backup_Website.sql script thoroughly.
