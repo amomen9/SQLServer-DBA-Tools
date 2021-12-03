@@ -156,7 +156,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 ```
 	
-	<dd> </dd>
+	
 </dl>
 <dl>
 	<dt>8. Job duration and schedules:</dt>
