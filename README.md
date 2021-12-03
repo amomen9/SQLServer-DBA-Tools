@@ -165,7 +165,7 @@ jobs should generally be avoided:
 ![Sample script output](img/Screenshot_5.png)
 	
 	
-<table style="border:none">
+<table style="border:none;">
   <tr>
     <th>ID</th><th>Name</th><th>Rank</th>
   </tr>
