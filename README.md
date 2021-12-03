@@ -14,9 +14,8 @@ please refer to the README.md file included in its folder.
 ## Contained Scripts
 <dl>
 
-	<dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
- \
-
+<dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
+  	
 <dd>This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
 scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
 The home folder backup has a similar name. A checkdb will also be performed prior to the database backup. </dd>
