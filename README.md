@@ -46,7 +46,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
   subdirectories. Sample sp execution statement is as follows:
 </dd>  
-<b>Example:</b>
+<dd><b>Example:</b></dd>
 ````
   EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
   executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
@@ -68,7 +68,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
   for every column. This may help the tuning experts choose the better candidate column for indexing.
 </dd>  
-  <b>Example:</b>
+  <dd><b>Example:</b></dd>
 ```  
     DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
     INSERT INTO @temp
@@ -90,7 +90,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   roles will be transfered to holder of 0x01 SID (login name 'sa' by default) and the ownership of jobs will be transferred to a new
   login with no specific access.
 	</dd>  
-  <b>Example:</b>
+  <dd><b>Example:</b></dd>
 ```  
     DECLARE @SID VARBINARY(85)
     EXEC sp_drop_login_dependencies @LoginName = 'test'
@@ -109,7 +109,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   which is already in path like %systemroot%\system32\. There is no requirement for psexec on the destination server except for availability of the ports tcp\135
   and tcp\445 which are open by default in Windows Firewall.
 </dd>  
-  <b>Example:</b>:
+  <dd><b>Example:</b></dd>:
 ```  
   exec sp_restore_latest_backups_on_other_server
 	@Source = '192.168.241.3',					-- IPv4, IPv6, or hostname
@@ -134,7 +134,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	database already exists, a tail of log backup can be taken optionally first.
 	</dd>
 	<dd> </dd>
-	<b>Example:</b>
+	<dd><b>Example:</b></dd>
 	<dd> </dd>
 	
 ```
@@ -143,10 +143,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   					-- the database will be restored on its own. Leave empty to do so.
 					@Destination_Database_DataFiles_Location = 'same',			
   					-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
-  					-- This variable must be in the form of for <b>Example:</b> 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
+  					-- This variable must be in the form of for <dd><b>Example:</b></dd> 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
 					-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
 					-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
-					-- has an identical structure as your original server, for <b>Example:</b> it's a clone of it.
+					-- has an identical structure as your original server, for <dd><b>Example:</b></dd> it's a clone of it.
 					-- if this parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
 					@Destination_Database_LogFile_Location = 'D:\test\testLog',							   
 					@Backup_root = N'D:\backup',		
@@ -158,7 +158,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					@Temp_Working_Directory = N'C:\Temp',
 					-- Make sure SQL Service has permission to create this folder
 					@DataFileSeparatorChar = '_'		
-					-- This parameter specifies the punctuation mark used in data files names. For <b>Example:</b> "_"
+					-- This parameter specifies the punctuation mark used in data files names. For <dd><b>Example:</b></dd> "_"
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 ```
 	
@@ -174,7 +174,7 @@ has been taken from the following URL written by **Alan Jefferson**:
 	
 https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
 	
-It helps DBAs plan their jobs time table to smartly set their schedules to carry out necessary practices. For <b>Example:</b>, overlapping
+It helps DBAs plan their jobs time table to smartly set their schedules to carry out necessary practices. For <dd><b>Example:</b></dd>, overlapping
 jobs should generally be avoided:
 
 ![Sample script output](img/Screenshot_5.png)
