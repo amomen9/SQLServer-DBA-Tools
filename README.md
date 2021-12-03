@@ -39,7 +39,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dd>
 
 
-	<dt>3. Execute external tsql</dt>
+<dt>3. Execute external tsql</dt>
 
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
@@ -61,7 +61,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```
 </dl>
 
-	<dt>4. Cardinality Factor calculator sp for a table</dt>
+<dt>4. Cardinality Factor calculator sp for a table</dt>
 <dd>
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
   for every column. This may help the tuning experts choose the better candidate column for indexing.
@@ -76,7 +76,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
     order by 2 desc
 ```
 
-	<dt>5. Drop login dependencies</dt>
+<dt>5. Drop login dependencies</dt>
 <dd>
   This stored procedure disables a login and revokes any dependecies (that prevent the login from being dropped) on the server 
   for that login. Generally, dropping a login in SQL Server is not recommended but there is an option to drop the login at the 
@@ -118,9 +118,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	@DestinationPass = 'P@$$W0rd'
 ```
 
-	<dt>
+<dt>
 7. sp_restore_latest_backups
-	</dt>
+</dt>
 	<dd> </dd>
 	<dd>
 	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
@@ -162,7 +162,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	
 </dl>
 <dl>
-	<dt>8. Job duration and schedules:</dt>
+<dt>8. Job duration and schedules:</dt>
 	<dd> </dd>
 	<dd>
 This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
