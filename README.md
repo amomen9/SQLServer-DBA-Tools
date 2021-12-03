@@ -128,7 +128,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	database already exists, a tail of log backup can be taken optionally first.
 	</dd>
 	<dd> </dd>
-	**Example:**
+	<dd>**Example:**</dd>
 	<dd> </dd>
 	
 ```
