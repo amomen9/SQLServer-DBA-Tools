@@ -41,7 +41,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 <dt>3. Execute external tsql</dt>
   <br/>
-<p> </p>
+
 <dd>
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
@@ -49,7 +49,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dd>  
 <dd><b>Example:</b></dd>
 </dl>
-````
+```
   EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
   executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
                                      ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain
@@ -61,7 +61,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                      ,@DefaultDatabase = NULL
                                      ,@Keep_xp_cmdshell_Enabled = 0
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
-````
+```
 <dl>
 
 <dt>4. Cardinality Factor calculator sp for a table</dt>
