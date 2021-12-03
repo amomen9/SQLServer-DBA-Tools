@@ -150,9 +150,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					-- This parameter specifies the punctuation mark used in data files names. For example "_"
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 
-
-#### 8. Job duration and schedules:
-
+<dl>
+	<dt>8. Job duration and schedules:</dt>
+	<dd> </dd>
+	<dd>
 This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
 optimized though because no optimization would be necessary. Part of the script (first function and the body of second function
 has been taken from the following URL written by **Alan Jefferson**:
@@ -163,9 +164,9 @@ It helps DBAs plan their jobs time table to smartly set their schedules to carry
 jobs should generally be avoided:
 
 ![Sample script output](img/Screenshot_5.png)
-	
-	
-<table style="border:none;">
+	</dd>	
+</dl>	
+<!-- <table style="border:none;">
   <tr>
     <th>ID</th><th>Name</th><th>Rank</th>
   </tr>
@@ -175,11 +176,12 @@ jobs should generally be avoided:
   <tr>
     <td>2</td><td>Albert Einstein</td><td>Nearly as awesome</td>
   </tr>
-</table>
+</table> -->
 
-<dl>
+<!-- <dl>
   <dt>Lower cost</dt>
   <dd>The new version of this product costs significantly less than the previous one!</dd>
   <dt>Easier to use</dt>
   <dd>We've changed the product so that it's much easier to use!</dd>
 </dl>
+ -->
