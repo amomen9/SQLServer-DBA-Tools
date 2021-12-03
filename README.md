@@ -117,7 +117,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   which is already in path like %systemroot%\system32\. There is no requirement for psexec on the destination server except for availability of the ports tcp\135
   and tcp\445 which are open by default in Windows Firewall.
 </dd>  
-  <dd><b>Example:</b></dd>:
+  <dd><b>Example:</b></dd>
 </dl>
 
 ```  
@@ -173,19 +173,18 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 ```
 	
-	
 
-
+<dl>
 <dt>8. Job duration and schedules:</dt>
 	<dd> </dd>
 	<dd>
 This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
 optimized though because no optimization would be necessary. Part of the script (first function and the body of second function
-has been taken from the following URL written by **Alan Jefferson**:
+has been taken from the following URL written by <b>Alan Jefferson</b>:
 	
 https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
 	
-It helps DBAs plan their jobs time table to smartly set their schedules to carry out necessary practices. For <dd><b>Example:</b></dd>, overlapping
+It helps DBAs plan their jobs time table to smartly set their schedules to carry out necessary practices. For example, overlapping
 jobs should generally be avoided:
 
 ![Sample script output](img/Screenshot_5.png)
