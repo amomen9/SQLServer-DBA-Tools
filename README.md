@@ -13,7 +13,7 @@ please refer to the README.md file included in its folder.
 
 ## Contained Scripts
 <dl>
-<br/>
+ \
 	<dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
 
 
