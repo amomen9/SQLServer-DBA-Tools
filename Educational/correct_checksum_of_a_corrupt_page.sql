@@ -1,3 +1,11 @@
+
+-- =============================================
+-- Author:				<a-momen>
+-- Contact & Report:	<amomen@gmail.com>
+-- Create date:			<2021.12.03>
+-- Description:			<sample of Correcting Checksum of a Corrupt Page>
+-- =============================================
+
 USE Northwind
 GO
 
