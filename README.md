@@ -47,7 +47,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   subdirectories. Sample sp execution statement is as follows:
 </dd>  
 <b>Example:</b>
-```
+````
   EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
   executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
                                      ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain
@@ -59,7 +59,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                      ,@DefaultDatabase = NULL
                                      ,@Keep_xp_cmdshell_Enabled = 0
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
-```
+````
 
 
 <dt>4. Cardinality Factor calculator sp for a table</dt>
