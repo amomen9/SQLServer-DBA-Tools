@@ -60,7 +60,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
                                      ,@Keep_xp_cmdshell_Enabled = 0
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
 ```
-</dl>
+
 
 <dt>4. Cardinality Factor calculator sp for a table</dt>
   <br/>
@@ -163,8 +163,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```
 	
 	
-</dl>
-<dl>
+
+
 <dt>8. Job duration and schedules:</dt>
 	<dd> </dd>
 	<dd>
