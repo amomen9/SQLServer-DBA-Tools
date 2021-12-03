@@ -114,19 +114,22 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
 
-
-#### 7. sp_restore_latest_backups
-
+<dl>
+7. sp_restore_latest_backups
+	<dd> </dd>
+	<dd>
 	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
 	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
 	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
 	database already exists, a tail of log backup can be taken optionally first.
-	
+	</dd>
+	<dd> </dd>
 	Example:
-	
-	
+	<dd> </dd>
+	<dd>
+```
 	exec sp_restore_latest_backups @Destination_Database_Name_suffix = N'',
   					-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   					-- the database will be restored on its own. Leave empty to do so.
@@ -149,7 +152,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 					@DataFileSeparatorChar = '_'		
 					-- This parameter specifies the punctuation mark used in data files names. For example "_"
 					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
-
+```
+	</dd>
+	<dd> </dd>
+</dl>
 <dl>
 	<dt>8. Job duration and schedules:</dt>
 	<dd> </dd>
