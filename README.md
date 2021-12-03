@@ -214,7 +214,8 @@ jobs should generally be avoided:
 	
 ![Sample script output](img/Screenshot_5.png)
 
-</dl>	
+</dl>
+  <br/>
 <p> </p>
 <dl>
 <dt> 9. correct checksum of a corrupt_page:</dt>
