@@ -215,6 +215,20 @@ jobs should generally be avoided:
 ![Sample script output](img/Screenshot_5.png)
 
 </dl>	
+
+<dl>
+<dt> 9. correct checksum of a corrupt_page:</dt>
+<dd>
+If you have a corrupt page within your database and have identified it through some means, for example "DBCC CHECKDB('DBNAME')",
+you can make the page readable/writable again, by ordinary SQL statements, by correcting the checksum at a low level. This script
+is an example of it on the "Northwind" database.
+</dd>
+</dl>	
+
+
+
+
+
 <!-- <table style="border:none;">
   <tr>
     <th>ID</th><th>Name</th><th>Rank</th>
