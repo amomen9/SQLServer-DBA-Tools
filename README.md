@@ -180,15 +180,18 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	<dd>
 This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
 optimized though because no optimization would be necessary. Part of the script (first function and the body of second function
-has been taken from the following URL written by <b>Alan Jefferson</b>:
+has been taken from the following URL written by <b>Alan Jefferson</b>:</dd>	
 	
 https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
-	
+<p> </p>  
+<dd>	
 It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping
 jobs should generally be avoided:
-<p> </p>
+</dd>
+<p> </p>	
+	
 ![Sample script output](img/Screenshot_5.png)
-	</dd>	
+
 </dl>	
 <!-- <table style="border:none;">
   <tr>
