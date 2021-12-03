@@ -219,10 +219,15 @@ jobs should generally be avoided:
 <p> </p>
 <dl>
 <dt> 9. correct checksum of a corrupt_page:</dt>
+<p> </p>
 <dd>
 If you have a corrupt page within your database and have identified it through some means, for example "DBCC CHECKDB('DBNAME')",
 you can make the page readable/writable again, by ordinary SQL statements, by correcting the checksum at a low level. This script
-is an example of it on the "Northwind" database. This script is included inside "Educational" subdirectory of the repository.
+is an example of it on the "Northwind" database. This script is included inside "Educational" subdirectory of the repository. You
+can get the "Northwind" sample database from the following link on Microsoft's website:
+  <br/>
+https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases
+  <br/>
 </dd>
 </dl>	
 
