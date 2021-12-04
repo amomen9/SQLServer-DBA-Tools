@@ -6,6 +6,8 @@
 -- Description:			<sample of Correcting Checksum of a Corrupt Page>
 -- =============================================
 
+
+
 USE Northwind
 GO
 
@@ -154,8 +156,10 @@ This error can be caused by many factors; for more information, see SQL Server B
 */
 -- We read the page again to find the incorrect checksum
 
-BEGIN try
-	SELECT ShipCity FROM Orders WHERE orderid=10255		-- The pointer will jump to 'catch' statement because the page is corrupt
+BEGIN TRY
+
+	SELECT ShipCity FROM Orders WHERE orderid=10255		-- The pointer will jump to 'catch' statement because the page is corrupt	
+
 END TRY
 BEGIN CATCH	
 	set @ErrMsg = ERROR_MESSAGE()
@@ -169,6 +173,7 @@ BEGIN CATCH
 --	PRINT(@PageNo)
 END CATCH
 
+begin try
 -- 30deadc8
 -- 335ea548
 
@@ -206,10 +211,15 @@ SELECT @correct_checksum_reordered
 
 DECLARE @correct_checksum_varbinary VARBINARY(8) = dbo.fn_hexstr2varbin(@correct_checksum_reordered)
 
+
 DBCC WRITEPAGE('Northwind' , 1 , @PageNo , @offset_int , 4 , @correct_checksum_varbinary , 1) WITH NO_INFOMSGS
 
-ALTER DATABASE Northwind SET MULTI_USER
 
+ALTER DATABASE Northwind SET MULTI_USER
+END TRY
+BEGIN CATCH
+	RAISERROR('Error: You have not changed any value, that means the corrunt checksum is valid. Probably you have run script more than once in a row.',16,1)
+END CATCH
 ------------------------------------------------------------------
 
 ------ Now we get back to the corrupt row and see if we can access it:
