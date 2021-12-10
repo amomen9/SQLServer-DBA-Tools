@@ -211,7 +211,7 @@ It helps DBAs plan their jobs' time table to smartly set their schedules to carr
 jobs should generally be avoided.
 <p> </p>
 Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins
-which have minimum required permissions and sysadmin members should generally be avoided. The last column lists the server role 
+which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role 
 memberships of the owner of the job.
 </dd>
 <p> </p>	
