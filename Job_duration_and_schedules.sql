@@ -255,6 +255,12 @@ begin
 end
 go
 
+;WITH login_roles
+AS
+(
+	select p.name [Login Name],p2.name [Member of] 
+	FROM sys.server_principals p join sys.server_role_members m on p.principal_id = m.member_principal_id join sys.server_principals p2 on m.role_principal_id = p2.principal_id
+)
 
 SELECT 
 ISNULL(CONNECTIONPROPERTY('local_net_address'),'localhost') as [Server IP],
@@ -266,13 +272,16 @@ j.name as Job_Name,
 isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(AVG(h.run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'AVG_Run_Duration (DD:HH:MM:SS)',
 isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(max(h.run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'MAX_Run_Duration (DD:HH:MM:SS)',
 isnull(convert(nvarchar(200),info.Frequency+' '+info.Interday_Frequency),'On Demand Only') as Schedule,
-SUSER_SNAME(j.owner_sid) as OwnerName
+SUSER_SNAME(j.owner_sid) as OwnerName,
+[lr].[Member of] AS OwnerRole
 -- ,j.date_created as CreateDate
 FROM msdb..SYSJOBS j
 left JOIN msdb..SYSJOBHISTORY h  on h.job_id = j.job_id and h.step_id = 0
 left join msdb..sysjobschedules s on j.job_id = s.job_id
 left join msdb..ufn_jobsinfo() info on j.name = info.Job_Name
+JOIN login_roles lr ON SUSER_SNAME(j.owner_sid) = lr.[Login Name]
 --where cast(j.job_id as nvarchar(100)) = '309D5962-BC1E-4859-A8F0-C9396CF9B29A'
 -- WHERE enabled = 1
-GROUP BY j.name,j.owner_sid, info.Job_Enabled,info.Schedule_Enabled, info.Frequency,info.Interday_Frequency
+GROUP BY j.name,j.owner_sid, info.Job_Enabled,info.Schedule_Enabled, info.Frequency,info.Interday_Frequency, [lr].[Member of]
+ORDER BY Job_Name
 
