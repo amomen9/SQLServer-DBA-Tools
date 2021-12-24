@@ -138,6 +138,7 @@ create or alter proc sp_complete_restore
 	@Drop_Database_if_Exists BIT = 0,
 	@Restore_DBName sysname,
 	@Restore_Suffix sysname = '',
+	@Restore_Prefix sysname = '',
 	@Backup_Location nvarchar(1000),
 	@Destination_Database_DataFiles_Location nvarchar(300) = '',			
 	@Destination_Database_LogFile_Location nvarchar(300) = '',
@@ -154,7 +155,8 @@ BEGIN
   set nocount on
   SET @STATS = ISNULL(@STATS,0)
   SET @Restore_Suffix = ISNULL(@Restore_Suffix,'')
-  SET @Restore_DBName += @Restore_Suffix
+  SET @Restore_Prefix = ISNULL(@Restore_Prefix,'')
+  SET @Restore_DBName = @Restore_Prefix + @Restore_DBName + @Restore_Suffix
   IF (@Change_Target_RecoveryModel_To IS NULL) OR (@Change_Target_RecoveryModel_To = '')
 	SET @Change_Target_RecoveryModel_To = 'same'
   
@@ -277,7 +279,7 @@ BEGIN
   				'
 				
 --  				PRINT @Destination_Database_DataFiles_Location
-				if (@Restore_Suffix <> '') -- (@Destination_Database_DataFiles_Location <> 'same')
+				if (@Restore_Suffix <> '' OR @Restore_Prefix <> '') -- (@Destination_Database_DataFiles_Location <> 'same')
 				BEGIN
                 
   					if OBJECT_ID('tempdb..#temp') is not null
@@ -424,7 +426,8 @@ CREATE OR ALTER PROC sp_restore_latest_backups
 
   @Destination_Database_Name_suffix nvarchar(128) = N'',
   																-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
-  																-- the database will be restored on its own. Leave empty to do so.
+  																-- the database will be restored on its own.
+  @Destination_Database_Name_prefix NVARCHAR(128) = N'',
   @Destination_Database_DataFiles_Location nvarchar(300) = '',			
   																-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
   																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
@@ -699,6 +702,7 @@ BEGIN
 					EXEC sp_complete_restore    @Drop_Database_if_Exists = @Drop_Database_if_Exists,
 												@Restore_DBName = @DatabaseName,
 												@Restore_Suffix = @Destination_Database_Name_suffix,
+												@Restore_Prefix = @Destination_Database_Name_prefix,
 												@Backup_Location = @Backup_Path,
 												@Destination_Database_DataFiles_Location = @Destination_Database_DataFiles_Location ,	-- If the database exists, this parameter assignment will be ignored
 												@Destination_Database_LogFile_Location = @Destination_Database_LogFile_Location,		-- If the database exists, this parameter assignment will be ignored
@@ -740,7 +744,10 @@ exec sp_restore_latest_backups
 
 	@Destination_Database_Name_suffix = N'',
   									-- (Optional) You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
-  									-- the database will be restored on its own. Leave empty to do so.
+  									-- the database will be restored on its own. 
+	@Destination_Database_Name_prefix = N'',
+  									-- (Optional) You can specify the destination database names' prefix here. If the destination database name is equal to the backup database name,
+  									-- the database will be restored on its own. 
 	@Destination_Database_DataFiles_Location = 'same',			
   									-- (Optional) This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
   									-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
