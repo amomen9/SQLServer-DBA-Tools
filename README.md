@@ -44,9 +44,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <br/>
 
 <dd>
-  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
+  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As ":r" is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
-  subdirectories. Sample sp execution statement is as follows:
+  subdirectories. Because the scripts are to be executed by SQLCMD, you can also use SQLCMD commands like the one noted or ":connect" in
+	your scripts as well. Sample sp execution statement is as follows:
 </dd>  
 <dd><b>Example:</b></dd>
 </dl>
