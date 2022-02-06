@@ -2,13 +2,14 @@
 T-SQL Scripts
 
 
-- License: Do whatever you wish with these files!!! :smile::laughing: Just please include the Author tag and do not use them commercially without consent.
+- License: GNU GLP3 as noted, commercial usage without consent is also not allowed.
 If you wish to contribute to the codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com
 These scripts are for SQL Server's general purposes. For full corresponding instructions for each script,
 please refer to the README.md file included in its folder.
 - The scripts are not pretty much optimized where they don't need to be.
 - I will gladly write scripts for you if you wish.
+- If you like the codes, please spread the word and connect me on linkedin at https://www.linkedin.com/in/ali-momen if you like.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 
 ## Contained Scripts
@@ -43,9 +44,10 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <br/>
 
 <dd>
-  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As :r is only available in SSMS and it requires turning the
+  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As ":r" is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
-  subdirectories. Sample sp execution statement is as follows:
+  subdirectories. Because the scripts are to be executed by SQLCMD, you can also use SQLCMD commands like the one noted or ":connect" in
+	your scripts as well. Sample sp execution statement is as follows:
 </dd>  
 <dd><b>Example:</b></dd>
 </dl>
