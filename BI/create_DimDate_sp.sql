@@ -9,6 +9,7 @@
 USE NorthwindDW
 go
 
+--==================== This function returns the Day of Persian year and is used in the body of the main SP
 
 CREATE OR ALTER FUNCTION Persian_DayofYear(@GregorianDate DATETIME)
 RETURNS int
@@ -33,6 +34,9 @@ BEGIN
 END
 GO
 
+
+--==================== This function returns the Week No. of Persian year and is used in the body of the main SP
+
 CREATE OR ALTER FUNCTION Persian_WeekofYear(@PersianDayofYear INT, @DayofWeek int)
 RETURNS int
 AS
@@ -45,6 +49,8 @@ BEGIN
 END
 go
 
+
+--=================== Main SP
 
 CREATE OR ALTER PROCEDURE Create_DimDate
 (
@@ -173,6 +179,8 @@ BEGIN
 			SET @count+=1
 	END
 
+	-- The dimension table is not to change, therefore it's better that we fill up the index pages with fill factor 100%
+
 	ALTER TABLE dbo.DimDate ADD CONSTRAINT PK_DimDate_GregorianDateKey PRIMARY KEY CLUSTERED (DateKey_Gregorian)
 	WITH (FILLFACTOR=100)
 
@@ -186,7 +194,7 @@ BEGIN
 END
 GO
 
---Example:
+--================ Example:
 
 EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
                         @EndDate_Gregorian = '20401231',    -- varchar(8)
