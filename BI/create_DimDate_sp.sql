@@ -200,3 +200,4 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
                         @EndDate_Gregorian = '20401231',    -- varchar(8)
 						@Drop_Last_DimDate_If_Exists = 1
 
+SELECT * FROM dbo.DimDate
