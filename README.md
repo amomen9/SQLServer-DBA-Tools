@@ -72,7 +72,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <br/>
 <dd>
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
-  for every column. This may help the tuning experts choose the better candidate column for indexing.
+  for every column. This may help the tuning specialists choose the better candidate column for indexing.
 </dd>  
   <dd><b>Example:</b></dd>
 </dl>
