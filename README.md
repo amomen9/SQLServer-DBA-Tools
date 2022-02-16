@@ -2,7 +2,8 @@
 T-SQL Scripts
 
 
-- LICENSE: Modified GNU GLP3 as noted, commercial usage without consent is also not allowed.
+- LICENSE: 
+Modified GNU GLP3 as noted, commercial usage without consent is also not allowed.
 If you wish to contribute to the codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com
 These scripts are for SQL Server's general purposes. For full corresponding instructions for each script,
