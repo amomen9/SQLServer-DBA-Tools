@@ -2,13 +2,15 @@
 T-SQL Scripts
 
 
-- License: GNU GLP3 as noted, commercial usage without consent is also not allowed.
+- LICENSE: <br/>
+Modified GNU GLP3 as noted, commercial usage without consent is also not allowed.
 If you wish to contribute to the codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com
 These scripts are for SQL Server's general purposes. For full corresponding instructions for each script,
 please refer to the README.md file included in its folder.
 - The scripts are not pretty much optimized where they don't need to be.
 - I will gladly write scripts for you if you wish.
+- Some scripts (I believe a few) might seem simple (they are put inside the "Educational" directory), but they carry usefull tricky ideas
 - If you like the codes, please spread the word and connect me on linkedin at https://www.linkedin.com/in/ali-momen if you like.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 
@@ -86,7 +88,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <br/>
 <dd>
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
-  for every column. This may help the tuning experts choose the better candidate column for indexing.
+  for every column. This may help the tuning specialists choose the better candidate column for indexing.
 </dd>  
   <dd><b>Example:</b></dd>
 </dl>
