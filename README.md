@@ -44,6 +44,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <br/>
 
 <dd>
+  The new version has become revolutionary and includes many new features! It has been tested in real environment to meet many needs. 
   This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As ":r" is only available in SSMS and it requires turning the
   SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
   subdirectories. Because the scripts are to be executed by SQLCMD, you can also use SQLCMD commands like the one noted or ":connect" in
@@ -53,17 +54,31 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dl>
 
 ```
-  EXECUTE master..execute_external_tsql @InputFiles = N'"C:\Users\Ali\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), 
-  executed by given order, enter the files which their path contains space within double quotations. Relative paths must be relative to %systemroot%\system32
-                                     ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain
-                                                        --space within double quotations.
-                                     ,@Server = NULL
+  EXECUTE sqladministrationdb..sp_execute_external_tsql 
+									  @Change_Directory_To_CD = ''
+									 ,@InputFiles = N'D:\CandoMigration\test\3).sql'			-- Semicolon delimited list of script files to execute.
+                                     ,@InputFolder = ''--'D:\CandoMigration\test'
+                                     ,@Server = NULL			-- Server name/IP + instance name. Include port if applicable
                                      ,@AuthenticationType = NULL -- any value which does not include the word 'sql' means Windows Authentication
                                      ,@UserName = NULL
                                      ,@Password = NULL
-                                     ,@DefaultDatabase = NULL
-                                     ,@Keep_xp_cmdshell_Enabled = 0
+                                     --,@DefaultDatabase = 'SQLAdministrationDB'
+									 ,@DefaultDatabase = 'SQLAdministrationDB'		-- Enter the name of the database unquoted, even if it has special characters or space. Leaving empty means "master"
+                                     ,@Keep_xp_cmdshell_Enabled = 1
                                      ,@isDAC = 0	-- run files with Dedicated Admin Connection
+									 ,@Debug_Mode = 2	--  none = 0 | simple = 1 | show = 2 | verbose = 3
+									 ,@DoNot_Dispaly_Full_Path = 1
+									 ,@skip_cmdshell_configuration = 0
+									 ,@Stop_On_Error = 0
+									 ,@Show_List_of_Executed_Scripts = 1
+									 ,@Stop_After_Executing_Script = ''--'3).sql'		-- stops executing scripts after the first occurance of the given script
+									 ,@After_Successful_Execution_Policy = 0		-- 0 | 1 | 2 | 3	0 (Default): Do nothing, 1: delete after successful execution, 
+																					-- 2: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution replacing existings.
+																					-- 3: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements
+																					-- 4: Copy to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements, but don't delete source files
+																					-- in options 2&3 the folders with the same name will be merged. These options work for @InputFolder only, not @InputFiles.
+									 ,@MoveTo_Folder_Name = 'old'					-- If you set @After_Successful_Execution_Policy to 2 or more, and leave this empty, the files will be moved/copied to one level up in the directory tree.
+
 ```
 <dl>
 
