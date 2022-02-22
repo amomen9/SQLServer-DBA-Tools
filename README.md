@@ -255,25 +255,29 @@ https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloadi
 </dd>
 </dl>	
 
-<dt> 10. create DimDate table (Within BI directory)</dt>
 
-<dd>
-<p> </p>	
-This SP takes the start and end dates and creates DimDate table within the database that this SP is being created in. The DimDate table
+<dt> 10. create DimDate table (Within BI directory)</dt>
+  <br/>
+	<dd> </dd>
+	<dd>
+	This SP takes the start and end dates and creates DimDate table within the database that this SP is being created in. The DimDate table
 can have several cultures altogether besides Gregorian Calendar. The sample culture is Persian. The sample culture has its own non-clustered
 index including all the necessary columns
-<p> </p>
+	</dd>
+	<dd> </dd>
+	<dd><b>Example:</b></dd>
+	<dd> </dd>
+</dl>
+
 ```
 EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
                         @EndDate_Gregorian = '20401231',    -- varchar(8)
 						@Drop_Last_DimDate_If_Exists = 1
 
 ```
-<p> </p>
-</dd>
-</dl>	
+	
 
-
+<dl>
 
 
 
