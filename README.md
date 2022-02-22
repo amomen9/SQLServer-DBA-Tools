@@ -255,7 +255,7 @@ https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloadi
 </dd>
 </dl>	
 
-
+<dl>
 <dt> 10. create DimDate table (Within BI directory)</dt>
   <br/>
 	<dd> </dd>
@@ -272,7 +272,7 @@ index including all the necessary columns
 ```
 EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
                         @EndDate_Gregorian = '20401231',    -- varchar(8)
-						@Drop_Last_DimDate_If_Exists = 1
+			@Drop_Last_DimDate_If_Exists = 1
 
 ```
 	
