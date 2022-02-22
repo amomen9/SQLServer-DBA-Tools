@@ -317,9 +317,9 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 								-- 1. @STATISTICS_INCREMENTAL
 								-- 2. @ONLINE
 	
-			@Email_Recipients,
-			@copy_recipients,
-			@blind_copy_recipients
+		@Email_Recipients,
+		@copy_recipients,
+		@blind_copy_recipients
 	
 ```	
 
