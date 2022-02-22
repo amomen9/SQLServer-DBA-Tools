@@ -311,11 +311,11 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 			@FILESTREAM = NULL,				-- Possible values: {filestream_filegroup_name | partition_scheme_name | NULL}
 			@StartTime = GETDATE(),				-- Stored Procedure's execution start time
 			@Retry_With_Less_Options = 1,
-						-- If some of the transfer statements raise error on first try and this parameter is enabled, the
-						-- script retries only those statements by turning off the following switches. What remains will
-						-- be reported via email:
-						-- 1. @STATISTICS_INCREMENTAL
-						-- 2. @ONLINE
+									-- If some of the transfer statements raise error on first try and this parameter is enabled, the
+									-- script retries only those statements by turning off the following switches. What remains will
+									-- be reported via email:
+									-- 1. @STATISTICS_INCREMENTAL
+									-- 2. @ONLINE
 	
 			@Email_Recipients,
 			@copy_recipients,
