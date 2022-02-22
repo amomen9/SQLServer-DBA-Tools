@@ -296,11 +296,10 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 			@DatabaseName,
 			@starting_index_id,
 			@ending_index_id,
-			@target_filegroup_or_partition_scheme_name,		-- Possible values: {partition_scheme_name ( column_name ) | filegroup_name | default}. 
-															
+			@target_filegroup_or_partition_scheme_name,	-- Possible values: {partition_scheme_name ( column_name ) | filegroup_name | default}. 
 			@SORT_IN_TEMPDB = 0,
 			@STATISTICS_NORECOMPUTE = 1,
-			@STATISTICS_INCREMENTAL = 0,						-- It's not recommended to turn this feature on because you may face the following error:
+			@STATISTICS_INCREMENTAL = 0,		-- It's not recommended to turn this feature on because you may face the following error:
 																	/*
 																		Msg 9108, Level 16, State 9, Line 139
 																		This type of statistics is not supported to be incremental.
