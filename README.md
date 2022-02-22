@@ -121,8 +121,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```  
     DECLARE @SID VARBINARY(85)
     EXEC sp_drop_login_dependencies @LoginName = 'test'
-								,@DropLogin = 1
-								,@DroppedLoginSID = @SID OUTPUT
+					,@DropLogin = 1
+					,@DroppedLoginSID = @SID OUTPUT
 ```                               
 	
 <dl>
