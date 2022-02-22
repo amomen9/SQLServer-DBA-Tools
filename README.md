@@ -56,7 +56,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 ```
   EXECUTE sqladministrationdb..sp_execute_external_tsql 
-								@Change_Directory_To_CD = ''
+						@Change_Directory_To_CD = ''
 									 ,@InputFiles = N'D:\CandoMigration\test\3).sql'			-- Semicolon delimited list of script files to execute.
                                      ,@InputFolder = ''--'D:\CandoMigration\test'
                                      ,@Server = NULL			-- Server name/IP + instance name. Include port if applicable
