@@ -47,8 +47,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 <dd>
   The new version has become revolutionary and includes many new features! It has been tested in real environment to meet many needs. 
-  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. As ":r" is only available in SSMS and it requires turning the
-  SQLCMD mode on, it can execute external tsql files without SSMS. It can also run all the tsql files contained within a folder and its
+  This script executes external tsql file(s) using sqlcmd and xp_cmdshell. It can run all the tsql files contained within a folder and its
   subdirectories. Because the scripts are to be executed by SQLCMD, you can also use SQLCMD commands like the one noted or ":connect" in
 	your scripts as well. Sample sp execution statement is as follows:
 </dd>  
@@ -57,7 +56,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 ```
   EXECUTE sqladministrationdb..sp_execute_external_tsql 
-									  @Change_Directory_To_CD = ''
+								@Change_Directory_To_CD = ''
 									 ,@InputFiles = N'D:\CandoMigration\test\3).sql'			-- Semicolon delimited list of script files to execute.
                                      ,@InputFolder = ''--'D:\CandoMigration\test'
                                      ,@Server = NULL			-- Server name/IP + instance name. Include port if applicable
