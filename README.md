@@ -299,23 +299,23 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 			@target_filegroup_or_partition_scheme_name,	-- Possible values: {partition_scheme_name ( column_name ) | filegroup_name | default}. 
 			@SORT_IN_TEMPDB = 0,
 			@STATISTICS_NORECOMPUTE = 1,
-			@STATISTICS_INCREMENTAL = 0,		-- It's not recommended to turn this feature on because you may face the following error:
-																	/*
-																		Msg 9108, Level 16, State 9, Line 139
-																		This type of statistics is not supported to be incremental.
-																	*/
+			@STATISTICS_INCREMENTAL = 0,			-- It's not recommended to turn this feature on because you may face the following error:
+											/*
+												Msg 9108, Level 16, State 9, Line 139
+												This type of statistics is not supported to be incremental.
+											*/
 			@ONLINE = 1,
 			@MAXDOP = 4,
-			@DATA_COMPRESSION = 'NONE',				-- Possible values: {DEFAULT|NONE|ROW|PAGE}
+			@DATA_COMPRESSION = 'NONE',			-- Possible values: {DEFAULT|NONE|ROW|PAGE}
 			@DATA_COMPRESSION_PARTITIONS = NULL,		-- Possible values: leave it empty for the whole partitions or for example 1,3,10,11 or 1-8
-			@FILESTREAM = NULL,						-- Possible values: {filestream_filegroup_name | partition_scheme_name | NULL}
-			@StartTime = GETDATE(),								-- Stored Procedure's execution start time
+			@FILESTREAM = NULL,				-- Possible values: {filestream_filegroup_name | partition_scheme_name | NULL}
+			@StartTime = GETDATE(),				-- Stored Procedure's execution start time
 			@Retry_With_Less_Options = 1,
-																	-- If some of the transfer statements raise error on first try and this parameter is enabled, the
-																	-- script retries only those statements by turning off the following switches. What remains will
-																	-- be reported via email:
-																	-- 1. @STATISTICS_INCREMENTAL
-																	-- 2. @ONLINE
+						-- If some of the transfer statements raise error on first try and this parameter is enabled, the
+						-- script retries only those statements by turning off the following switches. What remains will
+						-- be reported via email:
+						-- 1. @STATISTICS_INCREMENTAL
+						-- 2. @ONLINE
 	
 			@Email_Recipients,
 			@copy_recipients,
