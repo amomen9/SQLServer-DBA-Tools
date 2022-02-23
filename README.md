@@ -241,7 +241,7 @@ memberships of the owner of the job.
   <br/>
 <p> </p>
 <dl>
-<dt> 9. correct checksum of a corrupt_page:</dt>
+<dt> 9. correct checksum of a corrupt_page: (Within Educational directory)</dt>
 
 <dd>
 <p> </p>	
