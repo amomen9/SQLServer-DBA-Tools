@@ -13,6 +13,7 @@ please refer to the README.md file included in its folder.
 - Some scripts (I believe a few) might seem simple (they are put inside the "Educational" directory), but they carry usefull tricky ideas
 - If you like the codes, please spread the word and connect me on linkedin at https://www.linkedin.com/in/ali-momen if you like.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
+- Most of stored procedures start with "sp_" in the name instead of "usp_". That's how I have been more convenient. You can change the name of course.
 
 ## Contained Scripts
   <br/>
