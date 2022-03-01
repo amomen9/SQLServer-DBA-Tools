@@ -14,6 +14,7 @@ please refer to the README.md file included in its folder.
 - If you like the codes, please spread the word and connect me on linkedin at https://www.linkedin.com/in/ali-momen if you like.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 - Most of stored procedures start with "sp_" in the name instead of "usp_". That's how I have been more convenient. You can change the name of course.
+- These scripts are mostly written in chronological order, not in order of importance.
 
 ## Contained Scripts
   <br/>
