@@ -15,6 +15,8 @@ please refer to the README.md file included in its folder.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
 - Most of stored procedures start with "sp_" in the name instead of "usp_". That's how I have been more convenient. You can change the name of course.
 - These scripts are mostly written in chronological order, not in order of importance.
+- General note:
+	T-SQL is not optimized when it comes to heavy workloads and may become partly the bottleneck of your tasks unless you natively compile and optimize it. This does not usually happen in OLTP systems though. You just may want to bear this in mind.
 
 ## Contained Scripts
   <br/>
