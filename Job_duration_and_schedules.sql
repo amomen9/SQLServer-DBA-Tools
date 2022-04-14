@@ -2,9 +2,14 @@
 -- =============================================
 -- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
--- Create date:			<2021.12.02>
--- Description:			<Jobs' Info>
+-- Create date:			<2021.03.11>
+-- Description:			<Backup Website>
 -- =============================================
+
+-- For information please refer to the README.md
+
+
+
 
 use msdb
 go
@@ -261,27 +266,115 @@ AS
 	select p.name [Login Name],p2.name [Member of] 
 	FROM sys.server_principals p join sys.server_role_members m on p.principal_id = m.member_principal_id join sys.server_principals p2 on m.role_principal_id = p2.principal_id
 )
+, cte2
+AS
+(
+	SELECT 
+			h.run_duration,
+			SuccussfulFirstRun_duration = IIF(h.run_status=1, run_duration, NULL),		
+			ISNULL(h.job_id,js.job_id) job_id,
+			h.instance_id,
+			ISNULL(h.step_id,js.step_id) step_id,
+			ISNULL(step_uid,h.job_id) step_uid,
+			h.run_status
+					
+			FROM msdb..sysjobsteps js FULL JOIN msdb..sysjobhistory h
+			ON h.job_id = js.job_id AND h.step_id = js.step_id
+			--WHERE js.step_id=3
+)
 
 SELECT 
-ISNULL(CONNECTIONPROPERTY('local_net_address'),'localhost') as [Server IP],
-@@servername as ServerName,
-j.name as Job_Name,
-[Job&Sched_enabled] = isnull(convert(nvarchar(20), info.Job_Enabled*info.Schedule_Enabled),'On Demand Only'),
---next_run_time,
---(select top 1 run_time from msdb..sysjobhistory where job_id = j.job_id order by run_date desc) [Last Run Time],
-isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(AVG(h.run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'AVG_Run_Duration (DD:HH:MM:SS)',
-isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(max(h.run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'MAX_Run_Duration (DD:HH:MM:SS)',
-isnull(convert(nvarchar(200),info.Frequency+' '+info.Interday_Frequency),'On Demand Only') as Schedule,
-SUSER_SNAME(j.owner_sid) as OwnerName,
-[lr].[Member of] AS OwnerRole
--- ,j.date_created as CreateDate
-FROM msdb..SYSJOBS j
-left JOIN msdb..SYSJOBHISTORY h  on h.job_id = j.job_id and h.step_id = 0
-left join msdb..sysjobschedules s on j.job_id = s.job_id
-left join msdb..ufn_jobsinfo() info on j.name = info.Job_Name
-JOIN login_roles lr ON SUSER_SNAME(j.owner_sid) = lr.[Login Name]
---where cast(j.job_id as nvarchar(100)) = '309D5962-BC1E-4859-A8F0-C9396CF9B29A'
--- WHERE enabled = 1
-GROUP BY j.name,j.owner_sid, info.Job_Enabled,info.Schedule_Enabled, info.Frequency,info.Interday_Frequency, [lr].[Member of]
-ORDER BY Job_Name
+	ISNULL(CONNECTIONPROPERTY('local_net_address'),'localhost') as [Server IP],
+	@@servername as ServerName,
+	Job_Name+IIF(dt.step_id=0,' (Total)','') Job_Name
+	,dt.step_id,
+	IIF([Total Runs]<>0,CONVERT(VARCHAR(6),CONVERT(DECIMAL(5,2),[dt].[Successfull First Runs]*100.0/[dt].[Total Runs])),'No run data in history') [Successful Run Percentage],
+	[Job&Sched_enabled],	
+	--[MIN_Successfull_Run_Duration (DD:HH:MM:SS)],
+	isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(((dt.AverageInSeconds % 60) + ((AverageInSeconds/60)%60)*100 + (dt.AverageInSeconds/3600)*10000) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'AVG_Successfull_Run_Duration (DD:HH:MM:SS)',
+	[MAX_Successfull_Run_Duration (DD:HH:MM:SS)],
+	(SELECT ISNULL(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(max(run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') FROM msdb..SYSJOBHISTORY WHERE instance_id=dt.[Last Instance ID] AND run_status=1) 'Last_Successfull_Run_Duration (DD:HH:MM:SS)',
+	Schedule,
+	OwnerName,
+	[OwnerServerRole(s)]
 
+FROM
+(
+	SELECT
+	j.name as Job_Name,
+	jsh.step_id,
+	
+	[Job&Sched_enabled] = isnull(convert(nvarchar(20), info.Job_Enabled*info.Schedule_Enabled),'On Demand Only'),
+	--next_run_time,
+	--(select top 1 run_time from msdb..sysjobhistory where job_id = j.job_id order by run_date desc) [Last Run Time],
+	--AVG(h.run_duration),
+	--max(h.run_duration),
+	AVG((jsh.SuccussfulFirstRun_duration/10000)*3600+((jsh.SuccussfulFirstRun_duration/100)%100)*60+jsh.SuccussfulFirstRun_duration%100) AverageInSeconds,
+	--isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(AVG(h.run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'AVG_Successfull_Run_Duration (DD:HH:MM:SS)',
+	--ISNULL(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(min(run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'MIN_Successfull_Run_Duration (DD:HH:MM:SS)',
+	isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(max(SuccussfulFirstRun_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'MAX_Successfull_Run_Duration (DD:HH:MM:SS)',
+	isnull(REPLACE(info.Frequency+' '+info.Interday_Frequency,'Every Day Every','Every'),'On Demand Only') as Schedule,
+	SUSER_SNAME(j.owner_sid) as OwnerName,
+	[lr].[Member of] AS [OwnerServerRole(s)],
+	MIN(jsh.job_id) job_id
+	-- ,j.date_created as CreateDate
+	, MAX(jsh.instance_id) [Last Instance ID]
+	, MIN([Successfull First Runs]) [Successfull First Runs]
+	, MIN([Total Runs]) [Total Runs]
+
+
+	FROM msdb..SYSJOBS j
+	LEFT JOIN 
+			( 
+				SELECT WithoutAggregate.*,[WithAggregate].[Successfull First Runs],[Total Runs] FROM cte2 WithoutAggregate JOIN 
+				(
+					SELECT
+							  cte2.step_uid,
+							  count(IIF(run_status = 1, step_uid, NULL)) [Successfull First Runs]
+							, COUNT(run_status) [Total Runs]
+					FROM cte2
+					GROUP BY cte2.step_uid
+				) WithAggregate
+				ON WithAggregate.step_uid = WithoutAggregate.step_uid
+				
+				 
+			 ) jsh ON jsh.job_id = j.job_id
+	--LEFT JOIN msdb..sysjobsteps js ON js.job_id = j.job_id
+	--left JOIN msdb..SYSJOBHISTORY h  on h.job_id = j.job_id --and h.step_id = 0
+	
+	LEFT join msdb..sysjobschedules s on j.job_id = s.job_id
+	
+	left join msdb..ufn_jobsinfo() info on j.name = info.Job_Name
+	JOIN login_roles lr ON SUSER_SNAME(j.owner_sid) = lr.[Login Name]
+	--where cast(j.job_id as nvarchar(100)) = '309D5962-BC1E-4859-A8F0-C9396CF9B29A'
+	-- WHERE enabled = 1
+	
+	GROUP BY j.name,j.owner_sid, info.Job_Enabled,info.Schedule_Enabled, info.Frequency,info.Interday_Frequency, [lr].[Member of], jsh.step_id
+) dt
+	--WHERE dt.step_id=0
+	ORDER BY dt.Job_Name,dt.step_id --dt.Job_Name
+
+
+----------------- run times ordered by duration for a specific job descending:
+SELECT 	
+--		h.run_time,
+		STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(run_date as varchar(8)), 8), 5, 0, '_'), 8, 0, '_')+'  '+RIGHT(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8)+CAST(run_time as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':'),8) 'Run DATETIME',
+		j.name as Job_Name,
+		isnull(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(run_duration as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') 'Run_Duration (DD:HH:MM:SS)'
+FROM msdb..SYSJOBS j
+	left JOIN msdb..SYSJOBHISTORY h  on h.job_id = j.job_id and h.step_id = 0
+	left join msdb..sysjobschedules s on j.job_id = s.job_id
+	left join msdb..ufn_jobsinfo() info on j.name = info.Job_Name
+	WHERE j.name LIKE 'Nightly Jobs' 
+ORDER BY h.run_duration DESC,
+		 h.run_date desc, h.run_time DESC
+
+--SELECT * FROM msdb..sysjobhistory where step_id=0
+
+
+--SELECT DISTINCT h.step_id FROM msdb..SYSJOBHISTORY h JOIN msdb..sysjobs j
+--ON j.job_id = h.job_id
+--WHERE j.name='Backup Log IdentityProviderDB'
+
+--SELECT * FROM msdb..sysjobs where name='Backup Log IdentityProviderDB'
+--SELECT * FROM dbo.sysjobsteps
