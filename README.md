@@ -17,6 +17,7 @@ please read them below.
 - These scripts are mostly written in chronological order, not in order of importance.
 - General note:
 	T-SQL is not optimized when it comes to heavy workloads and may become partly the bottleneck of your tasks unless you natively compile and optimize it. This does not usually happen in OLTP systems though. You just may want to bear this in mind.
+- Some codes may not have been well cleaned and commented yet. Though they will be some time in the future. Though mostly I don't believe they are hard to understand right now.
 - I love commands! Hail to commands instead of visualization!! Visualization is slow and for amateur humans, but commands are faster and more customizable.
 
 ## Contained Scripts
@@ -327,6 +328,21 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 		@blind_copy_recipients
 	
 ```	
+
+<dl>
+<dt> 12. Typical SQL Server setup configuration file with installation batch file. (Within educational folder)</dt>
+  <br/>
+	<dd> </dd>
+	<dd>
+	This SP takes database names on the instance, generates the index transfer statements, and moves the specified index IDs to another
+	filegroup/partition scheme. Email report of the result can also be implemented. Please note that index creation statements do not
+	exist within "sys.all_sql_modules" or "sys.sql_modules" system catalogue views.
+	</dd>
+	<dd> </dd>
+	<dd><b>Example:</b></dd>
+	<dd> </dd>
+</dl>
+
 
 <dl>
 

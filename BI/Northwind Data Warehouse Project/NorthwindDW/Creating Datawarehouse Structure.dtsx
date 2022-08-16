@@ -1,0 +1,609 @@
+﻿<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts"
+  DTS:refId="Package"
+  DTS:CreationDate="1/14/2022 6:26:01 PM"
+  DTS:CreationName="Microsoft.Package"
+  DTS:CreatorComputerName="ALI-PC"
+  DTS:CreatorName="ALI-PC\Ali"
+  DTS:DTSID="{D5A6AD52-3846-4070-893D-783134C94342}"
+  DTS:ExecutableType="Microsoft.Package"
+  DTS:LastModifiedProductVersion="15.0.2000.180"
+  DTS:LocaleID="1033"
+  DTS:ObjectName="Creating Datawarehouse Structure"
+  DTS:PackageType="5"
+  DTS:VersionBuild="124"
+  DTS:VersionGUID="{0D29EB78-0001-44CB-9A0A-95E06544BE75}">
+  <DTS:Property
+    DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:Variables>
+    <DTS:Variable
+      DTS:CreationName=""
+      DTS:DTSID="{48027C5B-6BA0-4DE3-918B-933B4D3E6FB7}"
+      DTS:IncludeInDebugDump="6789"
+      DTS:Namespace="User"
+      DTS:ObjectName="EmpId">
+      <DTS:VariableValue
+        DTS:DataType="3">1</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable
+      DTS:CreationName=""
+      DTS:DTSID="{0664EA95-42B5-4E3D-BF61-24A8AB7D1BCC}"
+      DTS:IncludeInDebugDump="2345"
+      DTS:Namespace="User"
+      DTS:ObjectName="EndDate">
+      <DTS:VariableValue
+        DTS:DataType="3">19900101</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable
+      DTS:CreationName=""
+      DTS:DTSID="{66541D4D-8E4D-494F-B9EB-2A1A750E9014}"
+      DTS:IncludeInDebugDump="2345"
+      DTS:Namespace="User"
+      DTS:ObjectName="FirstName">
+      <DTS:VariableValue
+        DTS:DataType="8">Large_Northwind</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable
+      DTS:CreationName=""
+      DTS:DTSID="{D7600F9A-0635-4A96-B600-02FB669DD422}"
+      DTS:IncludeInDebugDump="2345"
+      DTS:Namespace="User"
+      DTS:ObjectName="LastName">
+      <DTS:VariableValue
+        DTS:DataType="8"
+        xml:space="preserve"></DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable
+      DTS:CreationName=""
+      DTS:DTSID="{27ACFBEC-326F-4CEE-8E30-DDE92BFC2114}"
+      DTS:IncludeInDebugDump="2345"
+      DTS:Namespace="User"
+      DTS:ObjectName="StartDate">
+      <DTS:VariableValue
+        DTS:DataType="3">20401231</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable
+      DTS:refId="Package\Create Dimension Tables"
+      DTS:CreationName="STOCK:SEQUENCE"
+      DTS:Description="Sequence Container"
+      DTS:DTSID="{7CA96038-6EDD-4A77-BF6B-335D9F37E6C1}"
+      DTS:ExecutableType="STOCK:SEQUENCE"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Create Dimension Tables">
+      <DTS:Variables />
+      <DTS:Executables>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\Create SP Create_DimDate"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{abed8cf7-c378-4cb0-a0ef-31566c34e4ac}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="Create SP Create_DimDate"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="&#xA;&#xA;--SELECT FORMAT(convert(datetime, '2008.03.21'),'dd','fa-ir')&#xA;&#xA;CREATE OR ALTER FUNCTION Persian_DayofYear(@GregorianDate DATETIME)&#xA;RETURNS int&#xA;AS&#xA;BEGIN&#xA;&#x9;DECLARE @MonthDay INT = CONVERT(INT,FORMAT(@GregorianDate,'MMdd','en-uk'))&#xA;&#x9;DECLARE @GregorianYear INT = YEAR(@GregorianDate)&#xA;&#x9;IF @MonthDay &lt; 321&#xA;&#x9;&#x9;SET @GregorianYear-=1&#xA;&#x9;&#xA;&#x9;DECLARE @FirstPersianDayofYear_Gregorian DATETIME&#xA;&#x9;DECLARE @FirstDayEstimate_Gregorian VARCHAR(8) = CONVERT(VARCHAR(4),@GregorianYear)+'0321'&#xA;&#x9;DECLARE @RightofPersianDate int = CONVERT(INT,FORMAT(convert(datetime, @FirstDayEstimate_Gregorian),'dd','fa-ir'))&#xA;&#x9;IF @RightofPersianDate &gt; 20&#xA;&#x9;&#x9;SET @FirstPersianDayofYear_Gregorian = DATEADD(DAY,1,CONVERT(DATETIME,@FirstDayEstimate_Gregorian))&#xA;&#x9;ELSE&#xA;&#x9;&#x9;IF @RightofPersianDate = 1&#xA;&#x9;&#x9;&#x9;SET @FirstPersianDayofYear_Gregorian = CONVERT(DATETIME,@FirstDayEstimate_Gregorian)&#xA;&#x9;&#x9;ELSE &#xA;&#x9;&#x9;&#x9;SET @FirstPersianDayofYear_Gregorian = DATEADD(DAY,(~@RightofPersianDate+2),CONVERT(DATETIME,@FirstDayEstimate_Gregorian))&#xA;&#x9;RETURN (DATEDIFF(DAY,@FirstPersianDayofYear_Gregorian,@GregorianDate)+1)&#xA;END&#xA;GO&#xA;&#xA;CREATE OR ALTER FUNCTION Persian_WeekofYear(@PersianDayofYear INT, @DayofWeek int)&#xA;RETURNS int&#xA;AS&#xA;BEGIN&#xA;&#x9;DECLARE @BaseNum INT = @PersianDayofYear / 7 + 1&#xA;&#x9;DECLARE @Remainder INT = @PersianDayofYear % 7&#xA;&#x9;IF (@DayofWeek&lt;@Remainder)&#xA;&#x9;&#x9;SET @BaseNum+=1&#xA;&#x9;RETURN @BaseNum&#xA;END&#xA;go&#xA;&#xA;--SELECT ~1125&#xA;CREATE OR ALTER PROCEDURE Create_DimDate&#xA;(&#xA;&#x9;@StartDate_Gregorian VARCHAR(8) = '20210101',&#xA;&#x9;@EndDate_Gregorian VARCHAR(8) = '20401231',&#xA;&#x9;@Drop_Last_DimDate_If_Exists BIT = 0&#xA;)&#xA;AS&#xA;BEGIN&#xA;&#x9;SET NOCOUNT on&#xA;&#xA;&#x9;--SELECT FORMAT(convert(datetime, @EndDate_Gregorian),'yyyyMMdd','fa-ir')&#xA;&#x9;&#xA;&#x9;-- 13741011  -----&gt;&#x9;13771010&#xA;&#x9;IF @Drop_Last_DimDate_If_Exists = 1&#xA;&#x9;&#x9;DROP TABLE IF EXISTS DimDate&#x9;&#xA;&#x9;&#x9;&#xA;&#x9;&#xA;&#x9;IF OBJECT_ID('DimDate') IS NULL&#xA;&#x9;&#x9;CREATE TABLE DimDate ( &#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;--------------- Gregorian:&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DateKey_Gregorian INT NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DisplayDate_Gregorian VARCHAR(10) NOT NULL,&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;Year_Gregorian INT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;Quarter_Gregorian TINYINT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;MonthID_Gregorian TINYINT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;MonthName_Gregorian VARCHAR(15) NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DOW_ID_Gregorian TINYINT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DOW_Name_Gregorian VARCHAR(12) NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DayOfYear_Gregorian INT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WeekNo_Gregorian TINYINT NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;--------------- Persian:&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DateKey_Persian INT NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DisplayDate_Persian VARCHAR(10) NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;Year_Persian INT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;Quarter_Persian TINYINT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;MonthID_Persian TINYINT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;MonthName_Persian NVARCHAR(100) NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DOW_ID_Persian TINYINT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DOW_Name_Persian NVARCHAR(10) NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DayOfYear_Persian INT NOT NULL ,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WeekNo_Persian TINYINT NOT NULL,&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9; )&#xA;&#xA;&#xA;&#x9;&#xA;&#x9;DECLARE @LoopDate INT &#xA;&#x9;DECLARE @LoopDate_string VARCHAR(8)&#xA;&#x9;DECLARE @LoopDate_datetime DATETIME&#xA;&#x9;DECLARE @Iteration_Count INT =datediff(DAY,CONVERT(DATETIME,@StartDate_Gregorian),CONVERT(DATETIME,@EndDate_Gregorian))&#xA;&#x9;DECLARE @StartDate_Gregorian_datetime DATETIME=CONVERT(DATETIME,@StartDate_Gregorian)&#xA;&#xA;&#xA;&#x9;DECLARE @LoopDate_SecondCulture INT &#xA;&#x9;DECLARE @LoopDate_SecondCulture_string VARCHAR(8)&#xA;&#x9;DECLARE @LoopDate_SecondCulture_datetime DATETIME&#xA;&#xA;&#x9;DECLARE @FirstDayofYear_Equivalent DATETIME&#xA;&#x9;DECLARE @Persian_DayofYear INT&#xA;&#x9;DECLARE @PersianDayofWeek int&#xA;&#xA;&#xA;&#x9;--DECLARE @sql NVARCHAR(MAX)&#xA;&#x9;--CREATE TABLE DimDate ( &#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DateKey AS CONVERT(INT,FORMAT(convert(datetime,DATEADD(DAY,[incrementer],CONVERT(VARCHAR(8),))),'yyyyMMdd','fa-ir')) PERSISTED NOT NULL PRIMARY key ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DisplayDate as STUFF(STUFF(CONVERT(varchar(8),DateKey), 3, 0, '.'),8,0,'.'),&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;[Year] int ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;Quarter tinyint ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;MonthID tinyint ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;MonthName NVARCHAR(100) ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DOW_ID TINYINT ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DOW_Name TINYINT ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;DayOfYear INT ,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WeekNo TINYINT,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;incrementer int IDENTITY NOT null,&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;NULLValue bit&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;  )&#xA;&#xA;&#x9;--&#x9;&#x9;&#x9;&#x9;&#x9;  SELECT DATEADD(DAY,1,19981231)&#xA;&#x9;--SELECT DATEADD(DAY,211,'19981231')&#xA;&#xA;&#x9;--SELECT dbo.Persian_DayofYear('1996-01-01 00:00:00.000')&#xA;&#xA;&#x9;DECLARE @count INT = 0&#xA;&#x9;WHILE @count &lt; @Iteration_Count&#xA;&#x9;BEGIN&#xA;&#x9;&#xA;&#x9;&#x9;SET @LoopDate=CONVERT(INT,FORMAT(DATEADD(DAY,@count,@StartDate_Gregorian),'yyyyMMdd','en-uk'))&#xA;&#x9;&#x9;SET @LoopDate_string = CONVERT(VARCHAR(8),@LoopDate)&#xA;&#x9;&#x9;SET @LoopDate_datetime = CONVERT(DATETIME,@LoopDate_string)&#xA;&#xA;&#x9;&#x9;SET @LoopDate_SecondCulture = CONVERT(INT,FORMAT(@LoopDate_datetime,'yyyyMMdd','fa-ir'))&#xA;&#x9;&#x9;SET @LoopDate_SecondCulture_string = CONVERT(VARCHAR(8),@LoopDate_SecondCulture)&#xA;&#x9;--&#x9;SET @LoopDate_SecondCulture_datetime = CONVERT(DATETIME,@LoopDate_SecondCulture_string)&#xA;&#x9;&#x9;SET @Persian_DayofYear = dbo.Persian_DayofYear(@LoopDate_datetime)&#xA;&#x9;&#x9;--SELECT @LoopDate_datetime&#xA;&#x9;&#x9;SET @PersianDayofWeek = CASE DATEPART(WEEKDAY,@LoopDate_datetime) WHEN 7 THEN 1 ELSE DATEPART(WEEKDAY,@LoopDate_datetime)+1 END&#xA;    &#xA;&#x9;&#x9;INSERT dbo.DimDate&#xA;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;DateKey_Gregorian,&#xA;&#x9;&#x9;&#x9;DisplayDate_Gregorian,&#xA;&#x9;&#x9;&#x9;Year_Gregorian,&#xA;&#x9;&#x9;&#x9;Quarter_Gregorian,&#xA;&#x9;&#x9;&#x9;MonthID_Gregorian,&#xA;&#x9;&#x9;&#x9;MonthName_Gregorian,&#xA;&#x9;&#x9;&#x9;DOW_ID_Gregorian,&#xA;&#x9;&#x9;&#x9;DOW_Name_Gregorian,&#xA;&#x9;&#x9;&#x9;DayOfYear_Gregorian,&#xA;&#x9;&#x9;&#x9;WeekNo_Gregorian,&#xA;&#x9;&#x9;&#x9;DateKey_Persian,&#xA;&#x9;&#x9;&#x9;DisplayDate_Persian,&#xA;&#x9;&#x9;&#x9;Year_Persian,&#xA;&#x9;&#x9;&#x9;Quarter_Persian,&#xA;&#x9;&#x9;&#x9;MonthID_Persian,&#xA;&#x9;&#x9;&#x9;MonthName_Persian,&#xA;&#x9;&#x9;&#x9;DOW_ID_Persian,&#xA;&#x9;&#x9;&#x9;DOW_Name_Persian,&#xA;&#x9;&#x9;&#x9;DayOfYear_Persian,&#xA;&#x9;&#x9;&#x9;WeekNo_Persian&#xA;&#x9;&#x9;)&#xA;&#x9;&#xA;&#x9;&#x9;SELECT &#xA;&#x9;&#x9;&#x9;@LoopDate,   -- DateKey_Gregorian - INT&#xA;&#x9;&#x9;&#x9;STUFF(STUFF(@LoopDate_string, 5, 0, '-'),8,0,'-'),  -- DisplayDate_Gregorian - varchar(10)&#xA;&#x9;&#x9;&#x9;DATEPART(YEAR,@LoopDate_datetime),   -- Year_Gregorian - INT&#xA;&#x9;&#x9;&#x9;DATEPART(QUARTER,@LoopDate_datetime),   -- Quarter_Gregorian - tinyint&#xA;&#x9;&#x9;&#x9;DATEPART(MONTH,@LoopDate_datetime),   -- MonthID_Gregorian - tinyint&#xA;&#x9;&#x9;&#x9;DATENAME(MONTH,@LoopDate_datetime), -- MonthName_Gregorian - varchar(15)&#xA;&#x9;&#x9;&#x9;DATEPART(WEEKDAY,@LoopDate_datetime),   -- DOW_ID_Gregorian - tinyint&#xA;&#x9;&#x9;&#x9;DATENAME(WEEKDAY,@LoopDate_datetime),   -- DOW_Name_Gregorian - varchar(12)&#xA;&#x9;&#x9;&#x9;DATEPART(DAYOFYEAR,@LoopDate_datetime),   -- DayOfYear_Gregorian - INT&#xA;&#x9;&#x9;&#x9;DATEPART(WEEK,@LoopDate_datetime),   -- WeekNo_Gregorian - tinyint&#xA;&#x9;&#x9;&#x9;--------------------&#xA;&#x9;&#x9;&#x9;@LoopDate_SecondCulture,   -- DateKey_Persian - INT&#xA;&#x9;&#x9;&#x9;STUFF(STUFF(@LoopDate_SecondCulture_string, 5, 0, '\'),8,0,'\'),  -- DisplayDate_Persian - varchar(10)&#xA;&#x9;&#x9;&#x9;DATEPART(YEAR,(LEFT(@LoopDate_SecondCulture_string,6)+'01')),   -- Year_Persian - INT&#xA;&#x9;&#x9;&#x9;DATEPART(QUARTER,(LEFT(@LoopDate_SecondCulture_string,6)+'01')),   -- Quarter_Persian - tinyint&#xA;&#x9;&#x9;&#x9;DATEPART(MONTH,(LEFT(@LoopDate_SecondCulture_string,6)+'01')),   -- MonthID_Persian - tinyint&#xA;&#x9;&#x9;&#x9;FORMAT(@LoopDate_datetime, 'MMMM', 'fa-ir'), -- MonthName_Persian - nvarchar(100)&#xA;&#x9;&#x9;&#x9;@PersianDayofWeek,   -- DOW_ID_Persian - tinyint&#xA;&#x9;&#x9;&#x9;FORMAT(@LoopDate_datetime, 'dddd', 'fa-ir'),   -- DOW_Name_Persian - nvarchar(10)&#xA;&#x9;&#x9;&#x9;@Persian_DayofYear,   -- DayOfYear_Persian - INT&#xA;&#x9;&#x9;&#x9;dbo.Persian_WeekofYear(@Persian_DayofYear,@PersianDayofWeek)    -- WeekNo_Persian - tinyint&#xA;&#x9;    &#xA;&#x9;&#x9;&#x9;SET @count+=1&#xA;&#x9;END&#xA;&#xA;&#x9;ALTER TABLE dbo.DimDate ADD CONSTRAINT PK_DimDate_GregorianDateKey PRIMARY KEY CLUSTERED (DateKey_Gregorian)&#xA;&#x9;WITH (FILLFACTOR=100)&#xA;&#xA;&#xA;&#x9;CREATE UNIQUE INDEX IX_DimDate_Persian ON DimDate (DateKey_Persian)&#xA;&#x9;INCLUDE (DisplayDate_Persian,Year_Persian,Quarter_Persian,MonthID_Persian,&#xA;&#x9;&#x9;&#x9;MonthName_Persian,DOW_ID_Persian,DOW_Name_Persian,DayOfYear_Persian,WeekNo_Persian)&#xA;&#x9;WITH (FILLFACTOR=100)&#xA;&#xA;&#xA;END" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\DimCustomer"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{5d5051aa-6dcb-48cc-bff5-26c76bacd44f}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="DimCustomer"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="1">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+              SQLTask:SqlStatementSource="&#xA;SELECT IDENTITY(int,1,1) AS CustomerKey , CustomerID, CompanyName , Country, CONVERT(NVARCHAR(15),NULL) CurrentCountry, convert(DATETIME,NULL) StartDate ,convert(DATETIME,NULL) EndDate &#xA; INTO NorthwindDW2.dbo.DimCustomers&#xA;  FROM [dbo].[Customers]&#xA;WHERE 1=2&#xA;  &#xA;select db_name() DBName" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\DimDate"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{5c574d6b-4a76-44ef-8204-3183d09f853e}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="DimDate"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="&#xA;EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)&#xA;                        @EndDate_Gregorian = '20401231',    -- varchar(8)&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;@Drop_Last_DimDate_If_Exists = 0&#xA;&#xA;&#xA;&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\DimEmployee"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{BAA0317B-762F-4DF6-B2DF-A3151B189DE7}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="DimEmployee"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="2">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="CREATE TABLE DimEmployee (EmployeeKey INT IDENTITY(1,1) NOT NULL , EmployeeID INT NOT null, FirstName NVARCHAR(10), LastName NVARCHAR(20))&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\DimProduct"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{351D8116-455F-4783-B341-DF469F9FF6F8}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="DimProduct"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="3">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+              SQLTask:SqlStatementSource="SELECT IDENTITY(INT,1,1) as ProductKey, P.ProductID, P.ProductName , C.CategoryID , C.CategoryName , convert(nvarchar(8), CASE P.Discontinued&#xA;                                                                            WHEN 0 THEN N'Active'&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;ELSE N'Inactive'&#xA;                                                                      END) AS [Status] , P.SupplierID, convert(DATETIME,NULL) StartDate ,convert(DATETIME,NULL) EndDate&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;                      -- Type 2&#xA;INTO NorthwindDW2..DimProduct&#xA;FROM dbo.Products P INNER JOIN dbo.Categories C&#xA;   ON P.CategoryID = C.CategoryID&#xA;WHERE 1=2&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\DimShipper"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{F7FF94B0-CABA-4791-B078-A178FFE5CC06}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="DimShipper"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="4">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+              SQLTask:SqlStatementSource="&#xA;SELECT IDENTITY(INT,1,1) AS ShipperKey, s1.ShipperID, s1.CompanyName&#xA;INTO NorthwindDW2..DimShipper&#xA;FROM dbo.Shippers s1 JOIN dbo.Shippers s2&#xA;ON s1.ShipperID = s2.ShipperID&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Create Dimension Tables\DimSupplier"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{badcc890-6835-4c89-b141-adc23f8cc321}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="DimSupplier"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="5">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+              SQLTask:SqlStatementSource="&#xA;SELECT IDENTITY(INT,1,1) SupplierKey, s1.SupplierID, s1.CompanyName , s1.Country&#xA;INTO NorthwindDW2..DimSupplier&#xA;FROM dbo.Suppliers s1 JOIN dbo.Suppliers s2 ON s1.SupplierID = s2.SupplierID&#xA;WHERE 1=2&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+      <DTS:PrecedenceConstraints>
+        <DTS:PrecedenceConstraint
+          DTS:refId="Package\Create Dimension Tables.PrecedenceConstraints[Constraint]"
+          DTS:CreationName=""
+          DTS:DTSID="{7834DC55-D1CD-48D7-9859-BBE5B8CCB369}"
+          DTS:From="Package\Create Dimension Tables\Create SP Create_DimDate"
+          DTS:LogicalAnd="True"
+          DTS:ObjectName="Constraint"
+          DTS:To="Package\Create Dimension Tables\DimDate" />
+      </DTS:PrecedenceConstraints>
+    </DTS:Executable>
+    <DTS:Executable
+      DTS:refId="Package\Create NorthwindDW2"
+      DTS:CreationName="Microsoft.ExecuteSQLTask"
+      DTS:Description="Execute SQL Task"
+      DTS:DTSID="{AEA904C7-199E-4B10-8BEC-97D384954F3A}"
+      DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Create NorthwindDW2"
+      DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+      DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData
+          SQLTask:Connection="{60D4CE64-067B-4D3C-81EC-41612F8DAB9D}"
+          SQLTask:SqlStatementSource="IF DB_ID('NorthwindDW2') IS NOT NULL&#xA;BEGIN&#xA;&#x9;DECLARE @SQL NVARCHAR(max)=&#xA;&#x9;'&#xA;&#x9;&#x9;USE NorthwindDW2&#xA;&#x9;&#x9;ALTER DATABASE NorthwindDW2 SET SINGLE_USER WITH ROLLBACK IMMEDIATE&#xA;&#x9;&#x9;USE master&#xA;&#x9;&#x9;DROP DATABASE NorthwindDW2&#xA;&#x9;'&#xA;&#x9;EXEC(@sql)&#xA;END&#xA;&#xA;CREATE DATABASE NorthwindDW2&#xA;GO&#xA;&#xA;ALTER DATABASE NorthwindDW2 SET RECOVERY SIMPLE" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable
+      DTS:refId="Package\Create View V_FactOrders"
+      DTS:CreationName="Microsoft.ExecuteSQLTask"
+      DTS:Description="Execute SQL Task"
+      DTS:DTSID="{69e4e98f-5c10-4786-9cca-fc92679a74c8}"
+      DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Create View V_FactOrders"
+      DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+      DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData
+          SQLTask:Connection="{60D4CE64-067B-4D3C-81EC-41612F8DAB9D}"
+          SQLTask:SqlStatementSource="SET ANSI_NULLS ON&#xA;&#xA;SET QUOTED_IDENTIFIER ON&#xA;&#xA;&#xA;DECLARE @SQL NVARCHAR(max)&#xA;DECLARE @SourceDBName sysname = 'Northwind'&#xA;use NorthwindDW2&#xA;&#xA;SET @SQL=&#xA;'&#xA;CREATE  OR ALTER VIEW dbo.V_FactOrders&#xA;AS&#xA;SELECT &#xA; O.OrderID,&#xA; O.OrderDate,&#xA; O.CustomerID,&#xA; O.EmployeeID,&#xA; OD.ProductID, &#xA; O.ShipVia, &#xA; O.Freight * OD.Quantity /(SELECT SUM(Quantity) FROM '+@SourceDBName+'.dbo.[Order Details] WHERE OrderID = O.OrderID) AS Freight,&#xA; OD.UnitPrice, &#xA; OD.Quantity, &#xA; OD.UnitPrice * OD.Quantity AS SalesAmount ,&#xA; OD.UnitPrice * OD.Quantity * OD.Discount AS DiscountAmount ,&#xA; OD.UnitPrice * OD.Quantity * (1-OD.Discount) AS NetSalesAmount&#xA; FROM     &#xA; '+@SourceDBName+'..Orders AS O INNER JOIN&#xA; '+@SourceDBName+'..[Order Details] AS OD &#xA; ON O.OrderID = OD.OrderID&#xA;'&#xA;&#xA;EXEC (@SQL)&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable
+      DTS:refId="Package\FactSale"
+      DTS:CreationName="Microsoft.ExecuteSQLTask"
+      DTS:Description="Execute SQL Task"
+      DTS:DTSID="{22884635-fcbb-4e55-9de7-73c4a31e296a}"
+      DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="FactSale"
+      DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+      DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData
+          SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+          SQLTask:SqlStatementSource="CREATE  TABLE FactSale&#xA;(&#xA;&#x9;OrderID INT  NOT NULL,&#xA;&#x9;DateKey INT  NOT NULL,&#xA;&#x9;CustomerKey INT  NOT NULL,&#xA;&#x9;EmployeeKey INT NOT NULL,&#xA;&#x9;ShipperKey INT  NOT NULL,&#xA;&#x9;ProductKey INT  NOT NULL ,&#xA;&#x9;[Freight] DECIMAL (10,2), &#xA;&#x9;[UnitPrice]  DECIMAL (10,2),&#xA;&#x9;[Quantity] INT, &#xA;&#x9;[SalesAmount] DECIMAL (18,2), &#xA;&#x9;[DiscountAmount] DECIMAL (18,2), &#xA;&#x9;[NetSalesAmount] DECIMAL (18,2) &#xA;)&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable
+      DTS:refId="Package\Sequence Container - Create SPs"
+      DTS:CreationName="STOCK:SEQUENCE"
+      DTS:Description="Sequence Container"
+      DTS:DTSID="{BA37AAF2-C645-4C98-BDF9-99C82E0412E1}"
+      DTS:ExecutableType="STOCK:SEQUENCE"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Sequence Container - Create SPs">
+      <DTS:Variables />
+      <DTS:Executables>
+        <DTS:Executable
+          DTS:refId="Package\Sequence Container - Create SPs\CREATE PROC CustomerKeyLookup"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{DA63AA89-7D0B-4042-AB8B-7005F95B111B}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="CREATE PROC CustomerKeyLookup"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="--------- CustomerKeyLookup ------------------------------------------------------------------------------------------------------------------&#xA;&#xA;CREATE OR ALTER PROC CustomerKeyLookup&#xA;&#x9;@CustomerID NCHAR(5),&#xA;&#x9;@OrderDate DATETIME,&#xA;&#x9;@CustomerKey int out&#xA;AS&#xA;BEGIN&#xA;&#x9;&#xA;&#x9;DECLARE @Country NVARCHAR(15)&#x9;&#xA;&#x9;SELECT @Country = Country FROM Northwind..Customers WHERE CustomerID = @CustomerID&#xA;&#xA;&#x9;DECLARE @temp TABLE&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;CustomerKey int NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;CustomerID NCHAR(5) NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;StartDate DATETIME NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;EndDate DATETIME,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;Country NVARCHAR(15),&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;INDEX IX_P CLUSTERED(CustomerKey,CustomerID)&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;)&#xA;&#x9;INSERT @temp&#xA;&#x9;(&#xA;&#x9;    CustomerKey,&#xA;&#x9;&#x9;CustomerID,&#xA;&#x9;    StartDate,&#xA;&#x9;    EndDate,&#xA;&#x9;    Country&#xA;&#x9;)&#xA;&#x9;SELECT CustomerKey, CustomerID, StartDate, EndDate, Country&#xA;&#x9;FROM dbo.DimCustomers&#xA;&#x9;WHERE CustomerID = @CustomerID&#xA;&#xA;&#x9;--ALTER TABLE @temp ADD CONSTRAINT PK_temp PRIMARY KEY (CustomerKey, CustomerID)&#xA;&#xA;&#x9;DECLARE @MinDimDate DATETIME = (SELECT StartDate FROM @temp WHERE CustomerKey=(SELECT MIN(CustomerKey) FROM @temp))&#xA;&#x9;DECLARE @DimEntityState TINYINT&#x9;&#x9;-- 0|1|2&#x9;0: Dimension entity does not exist&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;--&#x9;&#x9;&#x9;1: Dimension entity exists but its historical attribute for the current @ID has chnaged&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;--&#x9;&#x9;&#x9;2: Dimension entity exists with the same historical attribute as the current @ID&#xA;&#x9;SELECT @OrderDate = IIF(@MinDimDate&gt;@OrderDate, @MinDimDate,@OrderDate)&#xA;&#x9;SELECT @DimEntityState = CASE &#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WHEN @MinDimDate IS NULL THEN 0&#x9;-- Does not exist&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WHEN EXISTS (SELECT 1 FROM @temp WHERE @OrderDate BETWEEN StartDate AND ISNULL(EndDate,DATEADD(YEAR,100,GETDATE())) AND Country=@Country) THEN 2&#x9;-- Exists with different identity&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;ELSE 1&#x9;&#x9;-- Exists like before&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9; END&#xA;&#x9;&#xA;&#x9;&#xA;&#xA;&#x9;----- Fill inferred record&#xA;&#x9;IF @DimEntityState = 2&#xA;&#x9;BEGIN&#xA;&#x9;&#x9;SELECT @CustomerKey = CustomerKey &#xA;&#x9;&#x9;FROM @temp&#xA;&#x9;&#x9;WHERE CustomerID = @CustomerID&#xA;&#x9;&#x9;&#x9;&#x9;AND @OrderDate BETWEEN StartDate AND ISNULL(EndDate,DATEADD(YEAR,100,GETDATE()))&#xA;&#x9;&#x9;&#x9;&#x9;AND Country=@Country&#xA;&#x9;&#xA;    END&#xA;&#x9;ELSE&#xA;&#x9;&#x9;IF @DimEntityState = 0&#xA;&#x9;&#x9;BEGIN&#xA;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;INSERT dbo.DimCustomers&#xA;&#x9;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;&#x9;CustomerID,&#xA;&#x9;&#x9;&#x9;&#x9;CompanyName,&#xA;&#x9;&#x9;&#x9;&#x9;Country,&#xA;&#x9;&#x9;&#x9;&#x9;CurrentCountry,&#xA;&#x9;&#x9;&#x9;&#x9;StartDate,&#xA;&#x9;&#x9;&#x9;&#x9;EndDate&#xA;&#x9;&#x9;&#x9;)&#xA;&#x9;&#x9;&#x9;SELECT&#xA;&#x9;&#x9;&#x9;&#x9;@CustomerID,&#xA;&#x9;&#x9;&#x9;&#x9;CompanyName,&#xA;&#x9;&#x9;&#x9;&#x9;@Country,&#xA;&#x9;&#x9;&#x9;&#x9;@Country,&#xA;&#x9;&#x9;&#x9;&#x9;GETDATE(),&#xA;&#x9;&#x9;&#x9;&#x9;NULL&#xA;&#x9;&#x9;&#x9;FROM Northwind..Customers&#xA;&#x9;&#x9;&#x9;WHERE CustomerID=@CustomerID&#xA;&#x9;&#x9;&#x9;SELECT @CustomerKey = SCOPE_IDENTITY()&#xA;&#x9;&#x9;END&#xA;&#x9;&#x9;ELSE&#xA;&#x9;&#x9;BEGIN&#xA;&#x9;&#x9;&#x9;UPDATE dbo.DimCustomers&#xA;&#x9;&#x9;&#x9;SET CurrentCountry = @Country&#xA;&#x9;&#x9;&#x9;WHERE CustomerID = @CustomerID&#xA;&#xA;&#x9;&#x9;&#x9;UPDATE dbo.DimCustomers&#xA;&#x9;&#x9;&#x9;SET EndDate = GETDATE()&#xA;&#x9;&#x9;&#x9;WHERE CustomerID = @CustomerID&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;AND EndDate IS NULL&#xA;&#xA;&#x9;&#x9;&#x9;INSERT dbo.DimCustomers&#xA;&#x9;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;&#x9;CustomerID,&#xA;&#x9;&#x9;&#x9;&#x9;CompanyName,&#xA;&#x9;&#x9;&#x9;&#x9;Country,&#xA;&#x9;&#x9;&#x9;&#x9;CurrentCountry,&#xA;&#x9;&#x9;&#x9;&#x9;StartDate,&#xA;&#x9;&#x9;&#x9;&#x9;EndDate&#xA;&#x9;&#x9;&#x9;)&#xA;&#x9;&#x9;&#x9;SELECT&#xA;&#x9;&#x9;&#x9;&#x9;@CustomerID,&#xA;&#x9;&#x9;&#x9;&#x9;CompanyName,&#xA;&#x9;&#x9;&#x9;&#x9;@Country,&#xA;&#x9;&#x9;&#x9;&#x9;@Country,&#xA;&#x9;&#x9;&#x9;&#x9;GETDATE(),&#xA;&#x9;&#x9;&#x9;&#x9;NULL&#xA;&#x9;&#x9;&#x9;FROM Northwind..Customers&#xA;&#x9;&#x9;&#x9;WHERE CustomerID=@CustomerID&#xA;&#x9;&#x9;&#x9;SELECT @CustomerKey = SCOPE_IDENTITY()&#xA;&#xA;        END&#xA;&#x9;&#x9;&#x9;&#xA;&#x9;&#xA;END&#xA;GO&#xA;&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Sequence Container - Create SPs\CREATE PROC InsertInferredEmployee"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{5c2c7839-3f8a-412d-a5fc-5ef1e2b8a401}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="CREATE PROC InsertInferredEmployee"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="1">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="CREATE OR ALTER PROC InsertInferredEmployee&#xA;&#x9;@EmployeeID int,&#xA;&#x9;@EmployeeKey INt OUT&#xA;AS&#xA;BEGIN&#xA;&#x9;INSERT dbo.DimEmployee&#xA;&#x9;(&#xA;&#x9;    EmployeeID,&#xA;&#x9;    FirstName,&#xA;&#x9;    LastName&#xA;&#x9;)&#xA;&#x9;SELECT&#xA;&#x9;&#x9;@EmployeeID,&#xA;&#x9;&#x9;FirstName,&#xA;&#x9;&#x9;LastName&#xA;&#x9;FROM Northwind..Employees&#xA;&#x9;WHERE EmployeeID = @EmployeeID&#xA;&#x9;SELECT @EmployeeKey = SCOPE_IDENTITY()&#xA;END&#xA;GO&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Sequence Container - Create SPs\CREATE PROC InsertInferredShipper"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{6a44d5d9-5355-4a6c-93c2-84d47d603101}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="CREATE PROC InsertInferredShipper"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="2">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="CREATE OR ALTER PROC InsertInferredShipper&#xA;&#x9;@ShipperID int,&#xA;&#x9;@ShipperKey INt OUT&#xA;AS&#xA;BEGIN&#xA;&#x9;INSERT dbo.DimShipper&#xA;&#x9;(&#xA;&#x9;    ShipperID,&#xA;&#x9;    CompanyName&#xA;&#x9;)&#xA;&#x9;SELECT&#xA;&#x9;&#x9;@ShipperID,&#xA;&#x9;&#x9;CompanyName&#xA;&#x9;FROM Northwind..Shippers&#xA;&#x9;WHERE ShipperID = @ShipperID&#xA;&#x9;SELECT @ShipperKey = SCOPE_IDENTITY()&#xA;END&#xA;GO&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable
+          DTS:refId="Package\Sequence Container - Create SPs\CREATE PROC ProductKeyLookup"
+          DTS:CreationName="Microsoft.ExecuteSQLTask"
+          DTS:Description="Execute SQL Task"
+          DTS:DTSID="{15747c7f-c406-4f99-ad89-f4ca25a403df}"
+          DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+          DTS:LocaleID="-1"
+          DTS:ObjectName="CREATE PROC ProductKeyLookup"
+          DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+          DTS:ThreadHint="3">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData
+              SQLTask:Connection="{A370CF84-5B26-4D0E-BE2E-84642CC63877}"
+              SQLTask:SqlStatementSource="------------ ProductKeyLookup ----------------------------------------------------------------------------------------------&#xA;--#&#xA;CREATE OR ALTER PROC ProductKeyLookup&#xA;&#x9;@ProductID NCHAR(5),&#xA;&#x9;@OrderDate DATETIME,&#xA;&#x9;@ProductKey int out&#xA;AS&#xA;BEGIN&#xA;&#x9;DECLARE @SupplierID NVARCHAR(15)&#x9;&#xA;&#x9;SELECT @SupplierID = SupplierID FROM Northwind..Products WHERE ProductID = @ProductID &#xA;&#xA;&#x9;DECLARE @temp TABLE&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;ProductKey INT NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;ProductID INT NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;StartDate DATETIME NOT NULL,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;EndDate DATETIME,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;SupplierID int,&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;INDEX IX_P CLUSTERED(ProductKey, ProductID)&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;)&#xA;&#x9;INSERT @temp&#xA;&#x9;(&#xA;&#x9;    ProductKey,&#xA;&#x9;&#x9;ProductID,&#xA;&#x9;    StartDate,&#xA;&#x9;    EndDate,&#xA;&#x9;    SupplierID&#xA;&#x9;)&#xA;&#x9;SELECT ProductKey, ProductID, StartDate, EndDate, SupplierID&#xA;&#x9;FROM dbo.DimProduct&#xA;&#x9;WHERE ProductID = @ProductID&#xA;&#xA;&#x9;--ALTER TABLE @temp ADD CONSTRAINT PK_temp PRIMARY KEY (ProductKey, ProductID)&#xA;&#xA;&#x9;DECLARE @MinDimDate DATETIME = (SELECT StartDate FROM @temp WHERE ProductKey=(SELECT MIN(ProductKey) FROM @temp))&#xA;&#x9;DECLARE @DimEntityState TINYINT&#x9;&#x9;&#x9;-- 0|1|2&#x9;0: Dimension entity does not exist&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;--&#x9;&#x9;&#x9;1: Dimension entity exists but its historical attribute for the current @ID has chnaged&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;--&#x9;&#x9;&#x9;2: Dimension entity exists with the same historical attribute as the current @ID&#xA;&#x9;SELECT @OrderDate = IIF(@MinDimDate&gt;@OrderDate, @MinDimDate,@OrderDate)&#xA;&#x9;SELECT @DimEntityState = CASE &#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WHEN @MinDimDate IS NULL THEN 0&#x9;-- Does not exist&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;WHEN EXISTS (SELECT 1 FROM @temp WHERE @OrderDate BETWEEN StartDate AND ISNULL(EndDate,DATEADD(YEAR,100,GETDATE())) AND SupplierID=@SupplierID) THEN 2&#x9;-- Exists with different identity&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;ELSE 1&#x9;&#x9;-- Exists like before&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9;&#x9; END&#xA;&#x9;&#xA;&#x9;&#xA;&#x9;----- Fill inferred record&#xA;&#x9;IF @DimEntityState = 2&#xA;&#x9;BEGIN&#xA;&#x9;&#x9;SELECT @ProductKey = ProductKey &#xA;&#x9;&#x9;FROM @temp&#xA;&#x9;&#x9;WHERE ProductID = @ProductID&#xA;&#x9;&#x9;&#x9;&#x9;AND @OrderDate BETWEEN StartDate AND ISNULL(EndDate,DATEADD(YEAR,100,GETDATE()))&#xA;&#x9;&#x9;&#x9;&#x9;AND SupplierID=@SupplierID&#xA;&#x9;&#xA;    END&#xA;&#x9;ELSE&#xA;&#x9;&#x9;IF @DimEntityState = 0&#xA;&#x9;&#x9;BEGIN&#xA;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;INSERT dbo.DimProduct&#xA;&#x9;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;&#x9;ProductID,&#xA;&#x9;&#x9;&#x9;&#x9;ProductName,&#xA;&#x9;&#x9;&#x9;&#x9;CategoryID,&#xA;&#x9;&#x9;&#x9;&#x9;CategoryName,&#xA;&#x9;&#x9;&#x9;&#x9;Status,&#xA;&#x9;&#x9;&#x9;&#x9;SupplierID,&#xA;&#x9;&#x9;&#x9;&#x9;StartDate,&#xA;&#x9;&#x9;&#x9;&#x9;EndDate&#xA;&#x9;&#x9;&#x9;)&#xA;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;SELECT&#xA;&#x9;&#x9;&#x9;&#x9;@ProductId,&#xA;&#x9;&#x9;&#x9;&#x9;cu.ProductName,&#xA;&#x9;&#x9;&#x9;&#x9;cu.CategoryID,&#xA;&#x9;&#x9;&#x9;&#x9;ca.CategoryName,&#xA;&#x9;&#x9;&#x9;&#x9;CASE cu.Discontinued WHEN 1 THEN 'Inactive' ELSE 'Active' END,&#xA;&#x9;&#x9;&#x9;&#x9;cu.SupplierID,&#xA;&#x9;&#x9;&#x9;&#x9;GETDATE(),&#xA;&#x9;&#x9;&#x9;&#x9;NULL&#xA;&#x9;&#x9;&#x9;FROM Northwind..Products cu&#xA;&#x9;&#x9;&#x9;&#x9;JOIN Northwind..Categories ca&#xA;&#x9;&#x9;&#x9;&#x9;ON ca.CategoryID = cu.CategoryID&#xA;&#x9;&#x9;&#x9;WHERE ProductID=@ProductId&#xA;&#x9;&#x9;&#x9;SELECT @ProductKey = SCOPE_IDENTITY()&#xA;&#x9;&#x9;END&#xA;&#x9;&#x9;ELSE&#xA;&#x9;&#x9;BEGIN&#xA;&#x9;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;UPDATE dbo.DimProduct&#xA;&#x9;&#x9;&#x9;SET EndDate = GETDATE()&#xA;&#x9;&#x9;&#x9;WHERE ProductID = @ProductID&#xA;&#x9;&#x9;&#x9;&#x9;&#x9;AND EndDate IS NULL&#xA;&#xA;&#x9;&#x9;&#x9;INSERT dbo.DimProduct&#xA;&#x9;&#x9;&#x9;(&#xA;&#x9;&#x9;&#x9;&#x9;ProductID,&#xA;&#x9;&#x9;&#x9;&#x9;ProductName,&#xA;&#x9;&#x9;&#x9;&#x9;CategoryID,&#xA;&#x9;&#x9;&#x9;&#x9;CategoryName,&#xA;&#x9;&#x9;&#x9;&#x9;Status,&#xA;&#x9;&#x9;&#x9;&#x9;SupplierID,&#xA;&#x9;&#x9;&#x9;&#x9;StartDate,&#xA;&#x9;&#x9;&#x9;&#x9;EndDate&#xA;&#x9;&#x9;&#x9;)&#xA;&#x9;&#x9;&#xA;&#x9;&#x9;&#x9;SELECT&#xA;&#x9;&#x9;&#x9;&#x9;@ProductId,&#xA;&#x9;&#x9;&#x9;&#x9;cu.ProductName,&#xA;&#x9;&#x9;&#x9;&#x9;cu.CategoryID,&#xA;&#x9;&#x9;&#x9;&#x9;ca.CategoryName,&#xA;&#x9;&#x9;&#x9;&#x9;CASE cu.Discontinued WHEN 1 THEN 'Inactive' ELSE 'Active' END,&#xA;&#x9;&#x9;&#x9;&#x9;cu.SupplierID,&#xA;&#x9;&#x9;&#x9;&#x9;GETDATE(),&#xA;&#x9;&#x9;&#x9;&#x9;NULL&#xA;&#x9;&#x9;&#x9;FROM Northwind..Products cu&#xA;&#x9;&#x9;&#x9;&#x9;JOIN Northwind..Categories ca&#xA;&#x9;&#x9;&#x9;&#x9;ON ca.CategoryID = cu.CategoryID&#xA;&#x9;&#x9;&#x9;WHERE ProductID=@ProductId&#xA;&#x9;&#x9;&#x9;SELECT @ProductKey = SCOPE_IDENTITY()&#xA;&#xA;        END&#xA;&#x9;&#x9;&#x9;&#xA;&#x9;&#xA;END&#xA;GO&#xA;--#&#xA;" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint
+      DTS:refId="Package.PrecedenceConstraints[Constraint]"
+      DTS:CreationName=""
+      DTS:DTSID="{F405B00B-326D-4E5E-A0F3-3F09C692AF3B}"
+      DTS:From="Package\Create NorthwindDW2"
+      DTS:LogicalAnd="True"
+      DTS:ObjectName="Constraint"
+      DTS:To="Package\Create Dimension Tables" />
+    <DTS:PrecedenceConstraint
+      DTS:refId="Package.PrecedenceConstraints[Constraint 1]"
+      DTS:CreationName=""
+      DTS:DTSID="{BC96AB5E-E842-43D7-8D54-E9354689ECDF}"
+      DTS:From="Package\FactSale"
+      DTS:LogicalAnd="True"
+      DTS:ObjectName="Constraint 1"
+      DTS:To="Package\Sequence Container - Create SPs" />
+    <DTS:PrecedenceConstraint
+      DTS:refId="Package.PrecedenceConstraints[Constraint 2]"
+      DTS:CreationName=""
+      DTS:DTSID="{8E5331CA-7317-4326-AA2F-86B5A4CE849B}"
+      DTS:From="Package\Create Dimension Tables"
+      DTS:LogicalAnd="True"
+      DTS:ObjectName="Constraint 2"
+      DTS:To="Package\FactSale" />
+    <DTS:PrecedenceConstraint
+      DTS:refId="Package.PrecedenceConstraints[Constraint 3]"
+      DTS:CreationName=""
+      DTS:DTSID="{60381815-F658-44B4-9F52-A26DDD9B5EE0}"
+      DTS:From="Package\Sequence Container - Create SPs"
+      DTS:LogicalAnd="True"
+      DTS:ObjectName="Constraint 3"
+      DTS:To="Package\Create View V_FactOrders" />
+  </DTS:PrecedenceConstraints>
+  <DTS:DesignTimeProperties><![CDATA[<?xml version="1.0"?>
+<!--This CDATA section contains the layout information of the package. The section includes information such as (x,y) coordinates, width, and height.-->
+<!--If you manually edit this section and make a mistake, you can delete it. -->
+<!--The package will still be able to load normally but the previous layout information will be lost and the designer will automatically re-arrange the elements on the design surface.-->
+<Objects
+  Version="8">
+  <!--Each node below will contain properties that do not affect runtime behavior.-->
+  <Package
+    design-time-name="Package">
+    <LayoutInfo>
+      <GraphLayout
+        Capacity="32" xmlns="clr-namespace:Microsoft.SqlServer.IntegrationServices.Designer.Model.Serialization;assembly=Microsoft.SqlServer.IntegrationServices.Graph" xmlns:mssgle="clr-namespace:Microsoft.SqlServer.Graph.LayoutEngine;assembly=Microsoft.SqlServer.Graph" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:mssge="clr-namespace:Microsoft.SqlServer.Graph.Extended;assembly=Microsoft.SqlServer.IntegrationServices.Graph" xmlns:av="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+        <NodeLayout
+          Size="205,42"
+          Id="Package\Create Dimension Tables\Create SP Create_DimDate"
+          TopLeft="107.75,207.388888888889" />
+        <NodeLayout
+          Size="146,42"
+          Id="Package\Create Dimension Tables\DimCustomer"
+          TopLeft="231.944444444445,21.5833333333333" />
+        <NodeLayout
+          Size="120,42"
+          Id="Package\Create Dimension Tables\DimDate"
+          TopLeft="357.277777777778,209.972222222222" />
+        <NodeLayout
+          Size="148,42"
+          Id="Package\Create Dimension Tables\DimEmployee"
+          TopLeft="32.7777777777778,21.5833333333333" />
+        <NodeLayout
+          Size="137,42"
+          Id="Package\Create Dimension Tables\DimProduct"
+          TopLeft="138.75,111.166666666667" />
+        <NodeLayout
+          Size="133,42"
+          Id="Package\Create Dimension Tables\DimShipper"
+          TopLeft="428.583333333333,21.0555555555555" />
+        <NodeLayout
+          Size="136,42"
+          Id="Package\Create Dimension Tables\DimSupplier"
+          TopLeft="332.222222222222,111.222222222222" />
+        <EdgeLayout
+          Id="Package\Create Dimension Tables.PrecedenceConstraints[Constraint]"
+          TopLeft="312.75,229.680555555555">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="44.5277777777779,0"
+              Start="0,0"
+              End="37.0277777777779,0">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="37.0277777777779,0" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <ContainerLayout
+          HeaderHeight="43"
+          IsExpanded="True"
+          PanelSize="627,303"
+          Size="627,346"
+          Id="Package\Create Dimension Tables"
+          TopLeft="128.888888888893,293.972222222223" />
+        <NodeLayout
+          Size="184,42"
+          Id="Package\Create NorthwindDW2"
+          TopLeft="348.583333333333,206.444444444445" />
+        <NodeLayout
+          Size="202,42"
+          Id="Package\Create View V_FactOrders"
+          TopLeft="346.492063492064,1193.65079365079" />
+        <NodeLayout
+          Size="118,42"
+          Id="Package\FactSale"
+          TopLeft="389.333333333333,676.972222222224" />
+        <NodeLayout
+          Size="255,42"
+          Id="Package\Sequence Container - Create SPs\CREATE PROC CustomerKeyLookup"
+          TopLeft="71,10.3333333333335" />
+        <NodeLayout
+          Size="261,42"
+          Id="Package\Sequence Container - Create SPs\CREATE PROC InsertInferredEmployee"
+          TopLeft="74.2222222222223,153.666666666667" />
+        <NodeLayout
+          Size="251,42"
+          Id="Package\Sequence Container - Create SPs\CREATE PROC InsertInferredShipper"
+          TopLeft="69.7777777777778,228.111111111111" />
+        <NodeLayout
+          Size="237,42"
+          Id="Package\Sequence Container - Create SPs\CREATE PROC ProductKeyLookup"
+          TopLeft="74.3333333333334,76.7777777777781" />
+        <ContainerLayout
+          HeaderHeight="43"
+          IsExpanded="True"
+          PanelSize="403,331"
+          Size="403,374"
+          Id="Package\Sequence Container - Create SPs"
+          TopLeft="242.444444444443,783.904761904761" />
+        <EdgeLayout
+          Id="Package.PrecedenceConstraints[Constraint]"
+          TopLeft="441.486111111113,248.444444444445">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="0,45.5277777777777"
+              Start="0,0"
+              End="0,38.0277777777777">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="0,38.0277777777777" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <EdgeLayout
+          Id="Package.PrecedenceConstraints[Constraint 1]"
+          TopLeft="446.138888888888,718.972222222224">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="0,64.9325396825376"
+              Start="0,0"
+              End="0,57.4325396825376">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="0,57.4325396825376" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <EdgeLayout
+          Id="Package.PrecedenceConstraints[Constraint 2]"
+          TopLeft="445.361111111113,639.972222222223">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="0,37.000000000001"
+              Start="0,0"
+              End="0,29.500000000001">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="0,29.500000000001" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <EdgeLayout
+          Id="Package.PrecedenceConstraints[Constraint 3]"
+          TopLeft="445.718253968254,1157.90476190476">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="0,35.7460317460291"
+              Start="0,0"
+              End="0,28.2460317460291">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="0,28.2460317460291" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <AnnotationLayout
+          Text="Dropping existing NorthwindDW2 database and creating a new one"
+          ParentId="Package"
+          FontInfo="{x:Null}"
+          Size="387,40"
+          Id="7808ce01-d6f7-472a-b259-d8fc76b34ad6"
+          TopLeft="574.000000000003,213.666666666667" />
+        <AnnotationLayout
+          Text="This package is executed only once as we intend to fill the Data Warehouse incrementally"
+          ParentId="Package"
+          Size="670,41"
+          Id="e7119cad-2459-41a0-a20a-28a8e0393463"
+          TopLeft="94.0000000000002,84.6666666666667">
+          <AnnotationLayout.FontInfo>
+            <mssge:FontInfo
+              Family="Tahoma"
+              Size="14.25"
+              Color="#FF000000"
+              Weight="Bold">
+              <mssge:FontInfo.TextDecorations>
+                <av:TextDecorationCollection />
+              </mssge:FontInfo.TextDecorations>
+            </mssge:FontInfo>
+          </AnnotationLayout.FontInfo>
+        </AnnotationLayout>
+        <AnnotationLayout
+          Text="Creating Dimension Tables' structure plus filling DimDate"
+          ParentId="Package"
+          FontInfo="{x:Null}"
+          Size="330,40"
+          Id="f9b882b6-506b-4310-b3b7-ea812260aa75"
+          TopLeft="843.000000000003,458.666666666668" />
+        <AnnotationLayout
+          Text="Creating the FactSale structure"
+          ParentId="Package"
+          FontInfo="{x:Null}"
+          Size="191,40"
+          Id="cb0802b4-c423-4148-a3dc-515b0c9b3e7d"
+          TopLeft="552.333333333333,671.222222222224" />
+      </GraphLayout>
+    </LayoutInfo>
+  </Package>
+</Objects>]]></DTS:DesignTimeProperties>
+</DTS:Executable>

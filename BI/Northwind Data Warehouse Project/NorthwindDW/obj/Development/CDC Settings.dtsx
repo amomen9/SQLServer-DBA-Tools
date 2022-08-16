@@ -1,0 +1,216 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts"
+  DTS:refId="Package"
+  DTS:CreationDate="2/5/2022 10:05:46 AM"
+  DTS:CreationName="Microsoft.Package"
+  DTS:CreatorComputerName="ALI-PC"
+  DTS:CreatorName="ALI-PC\Ali"
+  DTS:DTSID="{1581B9F8-C35C-4F16-B7FF-198EFD4F92C2}"
+  DTS:ExecutableType="Microsoft.Package"
+  DTS:LastModifiedProductVersion="15.0.2000.180"
+  DTS:LocaleID="1033"
+  DTS:ObjectName="Package1"
+  DTS:PackageType="5"
+  DTS:VersionBuild="12"
+  DTS:VersionGUID="{5AC4CACD-FDB7-4067-907C-F34B6F48ADA2}">
+  <DTS:Property
+    DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager
+      DTS:refId="Package.ConnectionManagers[172.16.40.27,2828.a.momen]"
+      DTS:CreationName="SMOServer"
+      DTS:DTSID="{FCD16F5F-8C74-40C1-8E23-EB61285F9022}"
+      DTS:ObjectName="172.16.40.27,2828.a.momen">
+      <DTS:ObjectData>
+        <SMOServerConnectionManager
+          ConnectionString="SqlServerName=172.16.40.27,2828;UseWindowsAuthentication=False;UserName=a.momen;"
+          ConnectByProxy="False">
+          <PassWord
+            Sensitive="1" xmlns="www.microsoft.com/SqlServer/Dts"
+            Encrypted="1">AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAeAiVBXKd8kGCPWSMFqwYswAAAAAIAAAARABUAFMAAAAQZgAAAAEAACAAAACugnElabpT3IXjtHioRhPh4lehRErjv0fSkJgeHJXgOAAAAAAOgAAAAAIAACAAAAAEoRNhZXhrST2UlhXt8q40k0AE2vUHOpLq0V1rlHeJ2iAAAAD1BNdUule4oQyWYfZNJYLZQnpU4KXc9PCrthLx6URmX0AAAAAdg9jH/dZS6EdF2s1j4knvxt8qD12bfdCGw5b0CDxVwUPua9l2pb1k+eIA1WktfQ3W8hxbdIrPSJYU5oSVtTDo</PassWord>
+        </SMOServerConnectionManager>
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager
+      DTS:refId="Package.ConnectionManagers[172.16.40.30,2828.a.momen]"
+      DTS:CreationName="SMOServer"
+      DTS:DTSID="{3A5692C8-B5ED-428B-A11F-3D61680361F5}"
+      DTS:ObjectName="172.16.40.30,2828.a.momen">
+      <DTS:ObjectData>
+        <SMOServerConnectionManager
+          ConnectionString="SqlServerName=172.16.40.30,2828;UseWindowsAuthentication=False;UserName=a.momen;"
+          ConnectByProxy="False">
+          <PassWord
+            Sensitive="1" xmlns="www.microsoft.com/SqlServer/Dts"
+            Encrypted="1">AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAeAiVBXKd8kGCPWSMFqwYswAAAAAIAAAARABUAFMAAAAQZgAAAAEAACAAAABBUaFKHYuRRQKyqxNOl+qHNM8SN/2ObG8T7guH9yiJoQAAAAAOgAAAAAIAACAAAADN7vfFLWPIDKVHUXD83pDLGEwgTBIE3sFSIDzfOcKFESAAAADtC/nepJ/hAG7C4Xb5n26u+HaU8akRLWBRrp52Mg35uEAAAAC0EcON4C3Xs2n1KPPKpGySvQ4NQ7mYuHcnA4VZ5QOp+vuexCa65hzqhqF6xWYoJIliXLX1detpsG8WObHGvRsj</PassWord>
+        </SMOServerConnectionManager>
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager
+      DTS:refId="Package.ConnectionManagers[172.16.40.43,2828.a.momen]"
+      DTS:CreationName="SMOServer"
+      DTS:DTSID="{ABDBE53F-823F-46F9-85B8-33CE539B6D10}"
+      DTS:ObjectName="172.16.40.43,2828.a.momen">
+      <DTS:ObjectData>
+        <SMOServerConnectionManager
+          ConnectionString="SqlServerName=172.16.40.43,2828;UseWindowsAuthentication=False;UserName=a.momen;"
+          ConnectByProxy="False">
+          <PassWord
+            Sensitive="1" xmlns="www.microsoft.com/SqlServer/Dts"
+            Encrypted="1">AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAeAiVBXKd8kGCPWSMFqwYswAAAAAIAAAARABUAFMAAAAQZgAAAAEAACAAAAArpcivV2QFuOIvHoO8Fdtdr/9XQwMHonx6h6BsuWqlHAAAAAAOgAAAAAIAACAAAAAlcp9A+I/vBJ9ExkaX1pUf76n6VuGuo4uegeiZOcldcSAAAAA65XOBDBesz9cXSFQCqVsU7j4Q1WZB68kDL+8FRUICH0AAAAAqnn75gL7dWI9Kp+vy1LXReBGVAxFImKJzlYfeXdgC57wuoylY8gmECS7LjmJeZNk03coFMnL7mJkmuQy75bxj</PassWord>
+        </SMOServerConnectionManager>
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:Variables />
+  <DTS:Executables>
+    <DTS:Executable
+      DTS:refId="Package\Enable CDC on Order Details"
+      DTS:CreationName="Microsoft.ExecuteSQLTask"
+      DTS:Description="Execute SQL Task"
+      DTS:DTSID="{1E2B0825-465A-4E32-AF22-3CED1F51C7FC}"
+      DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Enable CDC on Order Details"
+      DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+      DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData
+          SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+          SQLTask:SqlStatementSource="IF(SELECT is_tracked_by_cdc FROM Northwind.sys.tables WHERE name='Order Details') = 0&#xA;&#x9;EXEC sys.sp_cdc_enable_table  @source_schema = N'dbo',@source_name = N'Order Details',@role_name = NULL , @Supports_Net_Changes = 1" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable
+      DTS:refId="Package\Enable CDC on Orders"
+      DTS:CreationName="Microsoft.ExecuteSQLTask"
+      DTS:Description="Execute SQL Task"
+      DTS:DTSID="{9BBC02B5-B627-4C93-91B8-588CEC8556A9}"
+      DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Enable CDC on Orders"
+      DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+      DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData
+          SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+          SQLTask:SqlStatementSource="IF(SELECT is_tracked_by_cdc FROM Northwind.sys.tables WHERE name='Orders') = 0&#xA;&#xA;&#x9;EXEC sys.sp_cdc_enable_table  @source_schema = N'dbo',@source_name = N'Orders',@role_name = NULL , @Supports_Net_Changes = 1" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable
+      DTS:refId="Package\Enable CDC Service on the Source Database"
+      DTS:CreationName="Microsoft.ExecuteSQLTask"
+      DTS:Description="Execute SQL Task"
+      DTS:DTSID="{BDB6A9EB-2F57-47D3-8190-40F1439C5849}"
+      DTS:ExecutableType="Microsoft.ExecuteSQLTask"
+      DTS:LocaleID="-1"
+      DTS:ObjectName="Enable CDC Service on the Source Database"
+      DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1"
+      DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData
+          SQLTask:Connection="{2ED43DA2-9CA4-483C-A850-C5B428B0323A}"
+          SQLTask:SqlStatementSource="declare @sql nvarchar(max)=&#xA;'&#xA;&#xA;alter authorization on database::Northwind to '+(select suser_sname(0x01))+'&#xA;&#xA;IF(SELECT is_cdc_enabled FROM sys.databases WHERE name=''Northwind'') = 0&#xA;&#x9;EXEC sp_cdc_enable_db &#xA;&#xA;'&#xA;&#xA;exec (@sql)" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint
+      DTS:refId="Package.PrecedenceConstraints[Constraint]"
+      DTS:CreationName=""
+      DTS:DTSID="{1C59E000-0E54-4DC8-BA5A-6FA85F28CBA0}"
+      DTS:From="Package\Enable CDC Service on the Source Database"
+      DTS:LogicalAnd="True"
+      DTS:ObjectName="Constraint"
+      DTS:To="Package\Enable CDC on Orders" />
+    <DTS:PrecedenceConstraint
+      DTS:refId="Package.PrecedenceConstraints[Constraint 1]"
+      DTS:CreationName=""
+      DTS:DTSID="{A6DB0435-1191-4A0B-BB25-9A53B65A232E}"
+      DTS:From="Package\Enable CDC on Orders"
+      DTS:LogicalAnd="True"
+      DTS:ObjectName="Constraint 1"
+      DTS:To="Package\Enable CDC on Order Details" />
+  </DTS:PrecedenceConstraints>
+  <DTS:DesignTimeProperties><![CDATA[<?xml version="1.0"?>
+<!--This CDATA section contains the layout information of the package. The section includes information such as (x,y) coordinates, width, and height.-->
+<!--If you manually edit this section and make a mistake, you can delete it. -->
+<!--The package will still be able to load normally but the previous layout information will be lost and the designer will automatically re-arrange the elements on the design surface.-->
+<Objects
+  Version="8">
+  <!--Each node below will contain properties that do not affect runtime behavior.-->
+  <Package
+    design-time-name="Package">
+    <LayoutInfo>
+      <GraphLayout
+        Capacity="8" xmlns="clr-namespace:Microsoft.SqlServer.IntegrationServices.Designer.Model.Serialization;assembly=Microsoft.SqlServer.IntegrationServices.Graph" xmlns:mssgle="clr-namespace:Microsoft.SqlServer.Graph.LayoutEngine;assembly=Microsoft.SqlServer.Graph" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        <NodeLayout
+          Size="214,42"
+          Id="Package\Enable CDC on Order Details"
+          TopLeft="418,200" />
+        <NodeLayout
+          Size="184,42"
+          Id="Package\Enable CDC on Orders"
+          TopLeft="434,118" />
+        <NodeLayout
+          Size="287,42"
+          Id="Package\Enable CDC Service on the Source Database"
+          TopLeft="383,38" />
+        <EdgeLayout
+          Id="Package.PrecedenceConstraints[Constraint]"
+          TopLeft="526.25,80">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="0,38"
+              Start="0,0"
+              End="0,30.5">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="0,30.5" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <EdgeLayout
+          Id="Package.PrecedenceConstraints[Constraint 1]"
+          TopLeft="525.5,160">
+          <EdgeLayout.Curve>
+            <mssgle:Curve
+              StartConnector="{x:Null}"
+              EndConnector="0,40"
+              Start="0,0"
+              End="0,32.5">
+              <mssgle:Curve.Segments>
+                <mssgle:SegmentCollection
+                  Capacity="5">
+                  <mssgle:LineSegment
+                    End="0,32.5" />
+                </mssgle:SegmentCollection>
+              </mssgle:Curve.Segments>
+            </mssgle:Curve>
+          </EdgeLayout.Curve>
+          <EdgeLayout.Labels>
+            <EdgeLabelCollection />
+          </EdgeLayout.Labels>
+        </EdgeLayout>
+        <AnnotationLayout
+          Text="If the current login is the owner of the database and the current login is not original&#xA;sa user, the 'sp_cdc_enable_db' might not work. So we first alter the owner of the&#xA;database to sa then run this SP "
+          ParentId="Package"
+          FontInfo="{x:Null}"
+          Size="471,72"
+          Id="4971050a-5f47-4e19-bd86-fc85ad9cad18"
+          TopLeft="699,94" />
+      </GraphLayout>
+    </LayoutInfo>
+  </Package>
+</Objects>]]></DTS:DesignTimeProperties>
+</DTS:Executable>

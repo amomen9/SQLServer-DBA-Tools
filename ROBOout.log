@@ -1,0 +1,136 @@
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Thursday, April 14, 2022 10:34:34 PM
+   Source : D:\Database\Data\
+     Dest : D:\Database Data\
+
+    Files : CandoLogDB.mdf
+	    
+  Options : /TEE /UNICODE /COPYALL /MOV /J /MT:8 /R:3 /W:1 
+
+------------------------------------------------------------------------------
+
+2022/04/14 22:34:37 ERROR 2 (0x00000002) Accessing Source Directory D:\Database\Data\
+The system cannot find the file specified.
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Thursday, April 14, 2022 10:35:48 PM
+   Source : E:\Downloads\idm\Adobe.Photoshop.22.0.0.35.x64.v2.rar\
+     Dest : E:\Downloads\idm\Adobe.Photoshop.22.0.0.35.x64.v2.rar\
+
+    Files : Adobe.Photoshop.22.0.0.35.x64.v2.rar
+	    
+  Options : /TEE /UNICODE /COPYALL /MOV /J /MT:8 /R:3 /W:1 
+
+------------------------------------------------------------------------------
+
+2022/04/14 22:35:48 ERROR 123 (0x0000007B) Accessing Source Directory E:\Downloads\idm\Adobe.Photoshop.22.0.0.35.x64.v2.rar\
+The filename, directory name, or volume label syntax is incorrect.
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Thursday, April 14, 2022 10:36:12 PM
+   Source : E:\Downloads\idm\
+     Dest : E:\Downloads\idm\
+
+    Files : Adobe.Photoshop.22.0.0.35.x64.v2.rar
+	    
+  Options : /TEE /UNICODE /COPYALL /MOV /J /MT:8 /R:3 /W:1 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :         1         1         1         0         0         0
+   Files :         1         0         1         0         0         0
+   Bytes :   2.299 g         0   2.299 g         0         0         0
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+   Ended : Thursday, April 14, 2022 10:36:12 PM
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Thursday, April 14, 2022 10:36:20 PM
+   Source : E:\Downloads\idm\
+     Dest : E:\Downloads\idm\
+
+    Files : Adobe.Photoshop.22.0.0.35.x64.v2.rar
+	    
+  Options : /TEE /UNICODE /COPYALL /MOV /J /MT:8 /R:3 /W:1 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :         1         1         1         0         0         0
+   Files :         1         0         1         0         0         0
+   Bytes :   2.299 g         0   2.299 g         0         0         0
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+   Ended : Thursday, April 14, 2022 10:36:20 PM
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Friday, April 15, 2022 11:52:03 AM
+   Source : D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\
+     Dest : E:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\
+
+    Files : Co-snapp shopLogDB.mdf
+	    
+  Options : /TEE /UNICODE /COPYALL /MOV /J /MT:8 /R:3 /W:1 
+
+------------------------------------------------------------------------------
+
+	  *EXTRA File 		  16.0 m	E:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\Co-snapp shopLogDB.mdf
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :         1         1         1         0         0         0
+   Files :         0         0         0         0         0         1
+   Bytes :         0         0         0         0         0   16.00 m
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+   Ended : Friday, April 15, 2022 11:52:03 AM
+
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Friday, April 15, 2022 12:06:14 PM
+   Source : D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\
+     Dest : E:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\
+
+    Files : Co-snapp shopLogDB.mdf
+	    
+  Options : /TEE /UNICODE /COPYALL /MOV /J /MT:8 /R:3 /W:1 
+
+------------------------------------------------------------------------------
+
+	  *EXTRA File 		  16.0 m	E:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\Co-snapp shopLogDB.mdf
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :         1         1         1         0         0         0
+   Files :         0         0         0         0         0         1
+   Bytes :         0         0         0         0         0   16.00 m
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+   Ended : Friday, April 15, 2022 12:06:14 PM
+
