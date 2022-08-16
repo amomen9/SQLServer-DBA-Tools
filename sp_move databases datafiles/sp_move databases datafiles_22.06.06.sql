@@ -7,10 +7,6 @@
 -- =============================================
 
 
--- todo: remove from AG before moving, on primary
---		maintain restoring state of the database if possible, on secondary
---		support for filestream
-
 
 USE SQLAdministrationDB
 GO
