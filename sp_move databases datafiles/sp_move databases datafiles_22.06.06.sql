@@ -4,6 +4,7 @@
 -- Create date:			<2022.05.12>
 -- Latest Update Date:	<2022.06.06>
 -- Description:			<Move Databases' Datafiles>
+-- License:				<Please refer to the license file>
 -- =============================================
 
 
