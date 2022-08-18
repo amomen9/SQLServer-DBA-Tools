@@ -2602,3 +2602,9 @@ GO
 SELECT * FROM SQLAdministrationDB.dbo.RestoreHistory ORDER BY RestoreHistoryID DESC
 SELECT * FROM msdb..restorehistory ORDER BY restore_history_id DESC
 SELECT * FROM SQLAdministrationDB..DiskBackupFiles
+
+
+-- Results after "SQLAdministrationDB Caching of Files" optimization for about 6000 backup files:
+-- First Run: 00:20:51
+-- Second Run: 00:00:13
+-- Third Run: 00:00:03
