@@ -1,8 +1,8 @@
 ﻿-- =============================================
 -- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
--- Create date:			<2021.03.11>
--- Description:			<Backup Website>
+-- Create date:			<2021.08.19>
+-- Description:			<Jobs Info>
 -- =============================================
 
 -- For information please refer to the README.md
@@ -207,8 +207,6 @@ begin
 			FROM msdb.dbo.sysschedules ss
 		   )
 		insert into @result
-		--SELECT Job_Name
-		--(
 			SELECT
 				Server_Name = @@ServerName,	-- 0
 				Job_Name = sj.name, -- 1
@@ -275,19 +273,31 @@ begin
 				LEFT JOIN @daysOfWeek_relative DOWR
 					ON ss.freq_interval = DOWR.dayCode;
 				
-			--) dt
-			--GROUP BY sj.NAME, sj.ENABLED, 
-		return
-end
-go
+		RETURN 
+END 
+GO
+
+--========= Main SP: ================================================================
+
 CREATE OR ALTER PROC usp_JobsInfo
 	@Start_DATETIME DATETIME = '1980-01-01 00:00:00',
-	@End_DATETIME DATETIME = '2200-01-01 00:00:00'
+	@End_DATETIME DATETIME = '2200-01-01 00:00:00',
+	@Start_Time TIME = '00:00:00',
+	@End_Time TIME = '23:59:59',
+	@Only_Show_Entries_With_History_Data BIT = 0
 AS
 BEGIN
 
-	SET @Start_DATETIME = ISNULL(@Start_DATETIME, '1980-01-01 00:00:00')
-	SET @End_DATETIME = ISNULL(@End_DATETIME, '2200-01-01 00:00:00')
+	SET @Start_DATETIME = IIF(@Start_DATETIME IS NULL OR @Start_DATETIME = '', '1980-01-01 00:00:00', @Start_DATETIME)
+	SET @End_DATETIME = IIF(@End_DATETIME IS NULL OR @End_DATETIME = '', '2200-01-01 00:00:00', @End_DATETIME)
+
+	SET @Start_TIME = IIF(@Start_TIME IS NULL OR @Start_Time = '', '00:00:00', @Start_Time)
+	SET @End_TIME = IIF(@End_TIME IS NULL OR @End_Time = '', '23:59:59', @End_Time)
+
+	DECLARE @Start_TIME_INT INT = DATEPART(HOUR,@Start_TIME)*10000+DATEPART(MINUTE,@Start_TIME)*100+DATEPART(SECOND,@Start_TIME)
+	DECLARE @End_TIME_INT INT = DATEPART(HOUR,@End_TIME)*10000+DATEPART(MINUTE,@End_TIME)*100+DATEPART(SECOND,@End_TIME)
+
+	SET @Only_Show_Entries_With_History_Data = ISNULL(@Only_Show_Entries_With_History_Data,0)
 
 	DECLARE   @StartDatetime bigint = CONVERT(bigINT,REPLACE(CONVERT(VARCHAR(10),LEFT(CONVERT(date,@Start_DATETIME),10)),'-','')+REPLACE(CONVERT(VARCHAR(8),LEFT(CONVERT(TIME,@Start_DATETIME),8)),':',''))
 			, @EndDatetime bigINT = CONVERT(bigINT,REPLACE(CONVERT(VARCHAR(10),LEFT(CONVERT(date,@End_DATETIME),10)),'-','')+REPLACE(CONVERT(VARCHAR(8),LEFT(CONVERT(TIME,@End_DATETIME),8)),':',''))
@@ -328,18 +338,6 @@ BEGIN
 	(
 		SELECT * FROM
         (
-			--SELECT 
-			--	h.run_duration,
-			--	SuccussfulRun_duration = IIF(h.run_status=1, run_duration, NULL),		
-			--	js.job_id,
-			--	h.instance_id,
-			--	js.step_id,
-			--	ISNULL(step_uid,h.job_id) step_uid,
-			--	h.run_status,
-			--	(CONVERT(BIGINT,h.run_date)*1000000+h.run_time) [Run Datetime]
-					
-			--	FROM msdb..sysjobsteps js FULL JOIN msdb..sysjobhistory h
-			--	ON h.job_id = js.job_id AND h.step_id = js.step_id
 			SELECT 
 				h.run_duration,
 				SuccussfulRun_duration = IIF(h.run_status=1, run_duration, NULL),		
@@ -352,10 +350,14 @@ BEGIN
 				(CONVERT(BIGINT,h.run_date)*1000000+h.run_time) [Run Datetime]
 					
 				FROM #sysjobsteps js WITH (NOLOCK) left JOIN msdb..sysjobhistory h WITH (NOLOCK)
-				ON  js.job_id =h.job_id AND js.step_id = h.step_id AND (CONVERT(BIGINT,h.run_date)*1000000+h.run_time) BETWEEN @StartDatetime AND @EndDatetime
+				ON  js.job_id =h.job_id AND				
+				js.step_id = h.step_id AND 
+				(CONVERT(BIGINT,h.run_date)*1000000+h.run_time) BETWEEN @StartDatetime AND @EndDatetime AND
+                h.run_time BETWEEN @Start_TIME_INT AND @End_TIME_INT
+				where
+                ISNULL(h.run_duration,'') = CASE @Only_Show_Entries_With_History_Data WHEN 0 THEN ISNULL(h.run_duration,'') ELSE h.run_duration END
 				
-		) dt
-		--WHERE [dt].[Run Datetime] IS NULL OR ([Run Datetime] BETWEEN @StartDatetime AND @EndDatetime)
+		) dt		
 		
 	)
 	
@@ -374,41 +376,10 @@ BEGIN
 		(SELECT ISNULL(STUFF(STUFF(STUFF(RIGHT(REPLICATE('0', 8) + CAST(max(run_duration) as varchar(8)), 8), 3, 0, ':'), 6, 0, ':'), 9, 0, ':')+'         ','No Run Duration Data') FROM msdb..SYSJOBHISTORY WHERE instance_id=dt.[Last Instance ID] AND run_status=1) 'Last_Successfull_Run_Duration (DD:HH:MM:SS)',
 		Schedule,
 		OwnerName,
-		[dt].[OwnerServerRole(s) (Aggregated)],
-		
+		[dt].[OwnerServerRole(s) (Aggregated)],		
 		[dt].[First Job/Step Start_Date (Within Boundry)],
 		[dt].[Last Job/Step Start_Date (Within Boundry)],
-		--(SELECT CONVERT(VARCHAR(max),SUBSTRING(program_name,30,34)) FROM sys.dm_exec_sessions WHERE is_user_process=1 AND program_name LIKE 'SQLAgent - TSQL JobStep (Job%'),
-		--(SELECT CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100),CONVERT(VARCHAR(max),SUBSTRING(program_name,30,34)),1)) FROM sys.dm_exec_sessions WHERE is_user_process=1 AND program_name LIKE 'SQLAgent - TSQL JobStep (Job%'),
-		--(SELECT STRING_AGG(CONVERT(VARCHAR(100),CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100),CONVERT(VARCHAR(34),SUBSTRING(program_name,30,34)),1))),'') FROM sys.dm_exec_sessions WHERE is_user_process = 1 and program_name LIKE 'SQLAgent - TSQL JobStep (Job%'),
-		--dt.job_id,
-		--IIF
-		--(charindex(CONVERT(VARCHAR(100),dt.job_id),
-		--					(SELECT STRING_AGG(CONVERT(VARCHAR(100),CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1))),'') FROM sys.dm_exec_sessions WHERE is_user_process = 1 and program_name LIKE 'SQLAgent - TSQL JobStep (Job%')
-		--			  ) <> 0,
-		--	CONVERT(BIT,1),
-		--	CONVERT(BIT,0)
-		--) [Is currently running?]
-		--case		
-		--	WHEN CHARINDEX(dt.binary_job_id,(SELECT STRING_AGG(program_name,'') FROM sys.dm_exec_sessions WHERE program_name LIKE ('%'+dt.binary_job_id+'%') )) <> 0 AND dt.step_id = 0
-		--		THEN 1
-		--	WHEN CHARINDEX(dt.binary_job_id,(SELECT STRING_AGG(program_name,'') FROM sys.dm_exec_sessions WHERE program_name LIKE ('%'+dt.binary_job_id+' : Step '+CONVERT(VARCHAR(3),dt.step_id)+')%') )) <> 0
-		--		THEN 1
-		--	ELSE 0
-		--END [Is currently running?]
 		[dt].[Is currently running?]
-		--iif
-		--( 
-		--	dt.[Is currently running?] = 1,
-		--	DATEDIFF(SECOND,dt.[Last Job/Step Start_Date (Within Boundry)],GETDATE()),
-		--	NULL
-		--) [Run Elapsed Time],
-		--IIF
-		--(
-		--	dt.[Is currently running?] = 1,
-		--	DATEADD(SECOND,dt.AverageInSeconds,[dt].[Last Job/Step Start_Date (Within Boundry)]),
-		--	null
-		--) [Estimated Job/Step Completion Time]
 		FROM
 		(
 			SELECT
@@ -430,8 +401,7 @@ BEGIN
 					THEN 1
 				ELSE 0
 			END [Is currently running?]
-			--, CONVERT(VARCHAR(34),CONVERT(VARBINARY(100),MIN(j.job_id)),1) binary_job_id	-- aggregated to prevent group by clause 
-			-- ,j.date_created as CreateDate
+
 			, MAX(jsh.instance_id) [Last Instance ID]
 			, MIN([Successfull First Runs]) [Successfull First Runs]						-- aggregated to prevent group by clause
 			, MIN([Total Runs]) [Total Runs]												-- aggregated to prevent group by clause
@@ -474,27 +444,24 @@ BEGIN
 					 jsh.step_name,
 					 binary_job_id
 		) dt
+		
 		ORDER BY dt.Job_Name, [Schedule Name], dt.step_id --dt.Job_Name
-		--OPTION (RECOMPILE)
 
 END
 GO
-
-SET STATISTICS TIME ON
-DECLARE @StartTime DATETIME2 = SYSDATETIME()
+-------------------------------------------------------------------------
 
 EXEC usp_JobsInfo 
-					@Start_DATETIME = '2022-02-15 00:00:00',
-					@End_DATETIME = '2022-03-01 00:00:00'
---	CPU time = 1172 ms,  elapsed time = 1177 ms
--- CPU time = 1125 ms,  elapsed time = 1143 ms.
+					@Start_DATETIME = '',	--'2022-02-15 00:00:00',
+					@End_DATETIME = '',		--'2022-03-01 00:00:00',
+					@Start_Time = '',		--'00:00:00',
+					@End_Time = '',			--'23:59:59',
+					@Only_Show_Entries_With_History_Data = 1
+
 
 EXEC dbo.usp_JobsInfo 
 
---	CPU time = 4781 ms,  elapsed time = 5174 ms
--- CPU time = 4922 ms,  elapsed time = 5579 ms.
-PRINT ''
-PRINT ('-------------Total execution time:'+CONVERT(VARCHAR(20),DATEDIFF(MILLISECOND,@StartTime,SYSDATETIME())))
+
 
 GO
 DROP PROC dbo.usp_JobsInfo
@@ -509,3 +476,4 @@ GO
 --DECLARE @1 DATETIME2 = SYSDATETIME()
 --WAITFOR DELAY '00:02:06'
 --PRINT (DATEDIFF(MILLISECOND,@1,SYSDATETIME()))
+
