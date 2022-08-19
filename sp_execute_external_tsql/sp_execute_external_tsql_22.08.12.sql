@@ -6,6 +6,8 @@
 -- =============================================
 
 -- For information please refer to the README.md file
+
+
 use SQLAdministrationDB
 go
 
@@ -26,11 +28,14 @@ BEGIN
 END
 go
 
-create or alter proc sp_execute_external_tsql
+CREATE OR ALTER PROC sp_execute_external_tsql
 
 	@Change_Directory_To_CD NVARCHAR(3000) = '',
 	@InputFiles nvarchar(3000) = '',  -- Delimited by a semicolon (;), executed by given order, enter the files which their path contains space within double quotations.Enter full paths or relative paths must be relative to %systemroot%\system32. You can also change directory to the desired directory using @Change_Directory_To_CD
 	@InputFolder NVARCHAR(1000) = '',  -- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain space within double quotations.
+	@PreCommand NVARCHAR(max) = '',
+	@PostCommand NVARCHAR(max) = '',
+	@FileName_REGEX_Filter_PowerShell NVARCHAR(128) = '*.sql',
 	@Include_Subdirectories BIT = 1,
 	@Server sysname = '.',
 	@AuthenticationType nvarchar(10) = N'Windows',    -- any value which does not include the word 'sql' means Windows Authentication
@@ -55,12 +60,10 @@ SET NOCOUNT on
 	drop table if exists #output2
 	DECLARE @AbortFlag BIT = 0
 
-    DECLARE @CommandtoExecute NVARCHAR(4000)=''
-    --print 'external is invoked'
-	--if @skip_cmdshell_configuration = 0 
-	--begin		
+    DECLARE @CommandtoExecute VARCHAR(8000)=''
+
 	EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE; EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE; 
-    --end
+
     
     ---------- Parameters Standardizations:-----------
     
@@ -91,15 +94,54 @@ SET NOCOUNT on
 	IF @Change_Directory_To_CD <> '' and RIGHT(@Change_Directory_To_CD,1) <> '\'
             SET @Change_Directory_To_CD+='\'
 
+	SET @PreCommand = ISNULL(@PreCommand,'')
+
+	SET @PostCommand = ISNULL(@PostCommand,'')
+
+	SET @UserName = ISNULL(@UserName,'')
+
+	SET @Password = ISNULL(@Password,'')
+
+	SET @SQLCMD_and_Shell_CodePage = ISNULL(@SQLCMD_and_Shell_CodePage,'')
+
 	--------------------------------------------------
 
-	
-	
-	Declare @DirTree Table (id INT identity PRIMARY KEY NOT NULL,[file] nvarchar(255))
+	IF @After_Successful_Execution_Policy > 1 AND isnull(@MoveTo_Folder_Name,'') = ''
+	BEGIN    
+		RAISERROR('You have set @After_Successful_Execution_Policy to 2 or bigger but you have not provided @MoveTo_Folder_Name.',16,1)
+		RETURN 1
+	END
+	IF EXISTS (SELECT a FROM (SELECT '\' a UNION SELECT '/' UNION SELECT ':' UNION SELECT '*' UNION SELECT '?' UNION SELECT '"' UNION SELECT '<' UNION SELECT '>' UNION SELECT '|' ) b
+				WHERE CHARINDEX(a,@MoveTo_Folder_Name) > 0
+			  )
+	BEGIN
+		RAISERROR('Directory name entered for @MoveTo_Folder_Name contains illegal characters.',16,1)
+		RETURN 1
+    END
 
-    IF (@InputFiles = '') AND (@InputFolder = '')
+	CREATE table #DirTree (id INT identity PRIMARY KEY NOT NULL,[file] nvarchar(max),isFile BIT NOT NULL DEFAULT 1)
+	
+	IF @PreCommand<>''
+	begin
+		SET IDENTITY_INSERT #DirTree on
+		INSERT #DirTree
+		(
+			id,
+			[file],
+			isFile
+		)
+		VALUES
+		(   
+			0,
+			@PreCommand, -- file - nvarchar(max)
+			0 -- isFile - bit
+		)
+		SET IDENTITY_INSERT #DirTree OFF
+	END
+
+    IF (@InputFiles = '') AND (@InputFolder = '') AND @PostCommand = '' AND @PreCommand = ''
     BEGIN
-        RAISERROR('You have to specify either @InputFiles or @InputFolder',16,1)
+        RAISERROR('SP Error: You have to specify either @InputFiles or @InputFolder or @PostCommand or @PreCommand',16,1)
         RETURN 1
     END
     IF @InputFolder <> ''
@@ -107,15 +149,17 @@ SET NOCOUNT on
         IF RIGHT(@InputFolder,1) <> '\'
             SET @InputFolder+='\'
         
-        DECLARE @cmdshellInput NVARCHAR(500) =  --IIF(@Change_Directory_To_CD = '','',('cd ' + QUOTENAME(@Change_Directory_To_CD,'"') + ' & ')) + 
-												'dir /A /B /S /ONG ' + QUOTENAME(@InputFolder,'"') + '*.sql'
-		--PRINT @cmdshellInput
+        DECLARE @cmdshellInput VARCHAR(1000) =  --IIF(@Change_Directory_To_CD = '','',('cd ' + QUOTENAME(@Change_Directory_To_CD,'"') + ' & ')) + 
+												--'dir /A /B /S /ONG ' + QUOTENAME(@InputFolder,'"') + '*.sql'					--CommandLine
+												'powershell ' + '"GET-ChildItem -Recurse -File \"'+@InputFolder+@FileName_REGEX_Filter_PowerShell+'\" | %{ $_.FullName }"'			--PowerShell
+		PRINT @cmdshellInput
         
-        insert into @DirTree ([file])
+        insert into #DirTree ([file])
   			EXEC master..xp_cmdshell @cmdshellInput	
 			
-		
-  		if ((select TOP 1 [file] from @DirTree) = 'File Not Found' or (select TOP 1 [file] from @DirTree) = 'The system cannot find the path specified.')
+		DECLARE @DirQueryHeadLine NVARCHAR(255) = (select TOP 1 [file] from #DirTree WHERE isfile=1)
+
+  		if (CHARINDEX('Cannot find path',@DirQueryHeadLine) <> 0 or @DirQueryHeadLine = 'File Not Found' or @DirQueryHeadLine = 'The system cannot find the path specified.')
   		BEGIN
     		declare @message nvarchar(150) = 'The folder you specified either does not exist or no tsql scripts exist within that folder or its subdirectories'
     		raiserror(@message, 16, 1)
@@ -136,19 +180,31 @@ SET NOCOUNT on
     END
         
         
-	INSERT INTO @DirTree ([file])
+	INSERT INTO #DirTree ([file])
 	SELECT * FROM STRING_SPLIT(@InputFiles,';')
-    --SELECT @InputFiles += CASE WHEN [file] IS NULL THEN '' ELSE ([file] + '; ') END FROM @DirTree
-    delete from @DirTree where ISNULL([file],'') = ''
+
+    delete from #DirTree where ISNULL([file],'') = ''
 
 	if @Stop_After_Executing_Script <> ''
 	begin
-		delete from @DirTree where id > (select top 1 id from @DirTree where CHARINDEX(@Stop_After_Executing_Script,[file])<>0)
+		delete from #DirTree where id > (select top 1 id from #DirTree where CHARINDEX(@Stop_After_Executing_Script,[file])<>0)
 	end
 
-	IF (SELECT COUNT(*) FROM @DirTree) = 0
+	IF @PostCommand <> ''
+		INSERT #DirTree
+		(
+			[file],
+			isFile
+		)
+		VALUES
+		(   @PostCommand, -- file - nvarchar(max)
+			0 -- isFile - bit
+		)
+
+
+	IF (SELECT COUNT(*) FROM #DirTree) = 0
 	BEGIN
-		RAISERROR('No input files was specified to be executed',16,1)
+		RAISERROR('No input files or commands were specified to be executed',16,1)
 		RETURN 1
     END
 
@@ -163,55 +219,65 @@ SET NOCOUNT on
     IF ISNULL(@DefaultDatabase,'') = ''
       SET @DefaultDatabase = 'master'
     
-    DECLARE @ConnectionString NVARCHAR(500) = 'chcp '+CONVERT(nchar(4),@SQLCMD_and_Shell_CodePage)+' & sqlcmd '+iif(@Server=N'.' ,'' ,'-S '+ @Server+' ') + CASE WHEN @AuthenticationType <> 'Windows' THEN ' -U ' + @UserName + ' -P ' + @Password ELSE '' END + ' '+CASE @isDAC WHEN 1 THEN ' -A ' ELSE '' END+ iif(@DefaultDatabase = N'master','',' -d ' + QUOTENAME(@DefaultDatabase,'"')) + ' -p1 -f '+CONVERT(nchar(4),@SQLCMD_and_Shell_CodePage)+' '
+    DECLARE @ConnectionString VARCHAR(4000) = --'chcp '+CONVERT(nchar(4),@SQLCMD_and_Shell_CodePage)+' & '+
+												'sqlcmd '+iif(@Server=N'.' ,'' ,'-S '+ @Server+' ') + CASE WHEN @AuthenticationType <> 'Windows' THEN '-U ' + @UserName + ' -P ' + @Password ELSE '' END + CASE @isDAC WHEN 1 THEN '-A ' ELSE '' END+ iif(@DefaultDatabase = N'master','','-d ' + QUOTENAME(@DefaultDatabase,'"')+' ') + '-p1'+IIF(@SQLCMD_and_Shell_CodePage<>'',' -f '+CONVERT(nchar(4),@SQLCMD_and_Shell_CodePage),'')+' '
+
     
-    DECLARE @ScriptPath NVARCHAR(1000)
-	CREATE table #output (id int identity not null primary key,[ScriptOrdinal] int,Script NVARCHAR(1000),[output] nvarchar(255),[Estimated Execution Time] varchar(50))
+	DECLARE @ScriptPath NVARCHAR(max)
+	DECLARE @isFile BIT
+    
+	CREATE table #output (id int identity not null primary key,[ScriptOrdinal] int,Script NVARCHAR(max),[output] nvarchar(255),[Estimated Execution Time] varchar(50), isSuccessful BIT, isFile bit)
 	declare @ScriptOrdinal int = 0
-	declare @CommandHolder nvarchar(2000)
-	declare @NumberofScripts_to_Execute int = (select count(*) from @DirTree)
-	--select * from @DirTree
-	DECLARE executor CURSOR FOR SELECT [file] FROM @DirTree ORDER BY id asc
+	DECLARE @id int
+	declare @CommandHolder nvarchar(max)
+	declare @NumberofScripts_to_Execute int = (select count(*) from #DirTree)
+
+	
+	DECLARE executor CURSOR FOR
+
+		SELECT [file],isFile,id FROM #DirTree ORDER BY id asc
+	
 	OPEN executor
-		FETCH NEXT FROM executor INTO @ScriptPath
+		FETCH NEXT FROM executor INTO @ScriptPath, @isFile, @id
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
 
 			if CHARINDEX(':',@ScriptPath)=0
 			begin
 				set @ScriptPath = @Change_Directory_To_CD+@ScriptPath
-				update @DirTree set [file] = @ScriptPath where current of executor
+				update #DirTree set [file] = @ScriptPath where current of executor
 			end
+			
+			SET @CommandtoExecute = @ConnectionString + IIF(@isFile = 1,'-i ','-Q ') + '"' + @ScriptPath + '"'
 
-			SET @CommandtoExecute = @ConnectionString + '-i ' + QUOTENAME(@ScriptPath,'"')
-			--PRINT (@ScriptPath)
-			--PRINT @CommandtoExecute
-			set @ScriptOrdinal+=1
-			--insert #output ([output]) select @ScriptPath
-			--insert #output ([output]) select @CommandtoExecute
 			declare @StartTime datetime=sysdatetime()
 			insert #output ([output])
 			EXECUTE master..xp_cmdshell @CommandtoExecute
-			--select @StartTime, datediff(day,@StartTime,sysdatetime())
+
 			declare @ExecutionTime_INT int = datediff(microsecond,@StartTime,sysdatetime())
-			--select @ExecutionTime_INT/1000000, @ExecutionTime_INT/1e6, @ExecutionTime_INT/3600000000, @ExecutionTime_INT/36/100000000
+
 			declare @ExceutionTime_varchar varchar(50) = convert(varchar(2),(@ExecutionTime_INT/36/100000000))+':'
-				+convert(varchar(2),(@ExecutionTime_INT/6/10000000)%60)+':'+convert(varchar(2),(@ExecutionTime_INT/1000000)%3600)+'.'+right(convert(varchar(50),@ExecutionTime_INT),6)
+				+convert(VARCHAR(2),(@ExecutionTime_INT/6/10000000)%60)+':'+convert(varchar(2),(@ExecutionTime_INT/1000000)%3600)+'.'+right(convert(varchar(50),@ExecutionTime_INT),6)
 
 			
 			print @commandtoexecute
-			update #output set [Estimated Execution Time] = @ExceutionTime_varchar where ScriptOrdinal is NULL
-			update #output set ScriptOrdinal = @ScriptOrdinal where ScriptOrdinal is NULL
-            update #output set Script = @ScriptPath where Script is null
+			DECLARE @SuccessFlag BIT = IIF((SELECT COUNT(*) FROM #output WHERE ScriptOrdinal IS NULL and (output LIKE '%Sqlcmd:%' or output LIKE '%Msg %, Level %')) = 0,1,0)
+			update #output 
+			SET [Estimated Execution Time] = @ExceutionTime_varchar,
+				ScriptOrdinal = @id,
+				Script = @ScriptPath, 
+				isSuccessful = @SuccessFlag, 
+				isFile = @isFile
+			WHERE ScriptOrdinal is NULL
 			
-			IF @Stop_On_Error = 1 AND (SELECT COUNT(*) FROM #output WHERE output LIKE '%Sqlcmd:%' or output LIKE '%Msg %, Level %') > 0
+			IF @Stop_On_Error = 1 AND @SuccessFlag = 0
 			BEGIN
 				SET @AbortFlag = 1
 				set @CommandHolder = @CommandtoExecute
 				GOTO abort
             END
 			
-			FETCH NEXT FROM executor INTO @ScriptPath
+			FETCH NEXT FROM executor INTO @ScriptPath, @isFile, @id
         END
 	close executor
 	deallocate executor
@@ -223,29 +289,30 @@ SET NOCOUNT on
 	delete from #output where ISNULL([output],'') = ''
 	if @Show_List_of_Executed_Scripts = 1
 	begin
-		select row_number() over (order by script) Row, Script [Executed Script], iif(@server='.',@@servername,@server) Server, @DefaultDatabase [Database], [Estimated Execution Time] 
+		select row_number() over (order by MIN(id))-1 Row, Script [Executed Script], iif(@server='.',@@servername,@server) Server, @DefaultDatabase [Database], IIF(@UserName = '', 'Integrated Authentication',@UserName) UserName ,[Estimated Execution Time], isSuccessful [Was Successfull?]
 		from #output
-		group by Script, [Estimated Execution Time]
+		group by Script, [Estimated Execution Time], isSuccessful
 		union
-		select null, 'Total Executed scripts/Total Found Scripts', NULL, NULL, convert(varchar(5),count(distinct ScriptOrdinal))+'/'+convert(varchar(5),@NumberofScripts_to_Execute)+IIF(count(distinct ScriptOrdinal)<>@NumberofScripts_to_Execute,' Warning!!!','') from #output
+		select null, 'Total Executed scripts/Total Found Scripts', NULL, NULL, NULL, convert(varchar(5),count(distinct ScriptOrdinal))+'/'+convert(varchar(5),@NumberofScripts_to_Execute)+IIF(count(distinct ScriptOrdinal)<>@NumberofScripts_to_Execute,' Warning!!!',''),NULL from #output
 	end
-
-	--SELECT * FROM #output
-	--SELECT SUBSTRING(left(Script,len(script)-charindex('\',reverse(script))+1),LEN(@InputFolder),LEN(script)) RelativeScriptPath, Script  ,
-	--	 LEFT(right(Script,charindex('\',reverse(script))-1),(LEN(right(Script,charindex('\',reverse(script))-1))-4))
-	--FROM #output GROUP BY ScriptOrdinal, Script ORDER BY MIN(id) 
-	--SELECT @InputFolder
-
 
 
 
 	IF @After_Successful_Execution_Policy > 0
 	BEGIN
-		
 		DECLARE FileOperation CURSOR FOR
-			SELECT SUBSTRING(left(Script,len(script)-charindex('\',reverse(script))+1),LEN(@InputFolder),LEN(script)) RelativeScriptPath, Script  ,
-				right(Script,charindex('\',reverse(script))-1)
-			FROM #output GROUP BY ScriptOrdinal, Script ORDER BY MIN(id) 
+		
+			SELECT 
+				SUBSTRING(left(Script,len(script)-charindex('\',reverse(script))+1),LEN(@InputFolder),LEN(script)) RelativeScriptPath,
+				Script,
+				right(Script,charindex('\',reverse(script))-1) FileName,
+				isSuccessful,
+				isFile
+			FROM #output 
+			WHERE isFile = 1
+			GROUP BY ScriptOrdinal, Script, isSuccessful, isFile 			
+			ORDER BY MIN(id) 
+
 		OPEN FileOperation
 			DECLARE @Script NVARCHAR(2000)
 			DECLARE @FileName NVARCHAR(255)
@@ -253,13 +320,15 @@ SET NOCOUNT on
 			DECLARE @ParentFolder NVARCHAR(2000)=LEFT(@InputFolder_WithoutEndBackslash,(LEN(@InputFolder_WithoutEndBackslash)-CHARINDEX('\',REVERSE(@InputFolder_WithoutEndBackslash))))
 			DECLARE @TargetFolder NVARCHAR(2000)=@ParentFolder+'\'+@MoveTo_Folder_Name
 			DECLARE @RelativeScriptPath NVARCHAR(1000)
+			DECLARE @isSuccessful BIT
 
-			FETCH NEXT FROM FileOperation INTO @RelativeScriptPath, @Script, @FileName
-			
+			FETCH NEXT FROM FileOperation INTO @RelativeScriptPath, @Script, @FileName, @isSuccessful, @isFile
 			WHILE @@FETCH_STATUS = 0
 			BEGIN
+				IF @isSuccessful = 0
+					GOTO NextIteration
 				BEGIN TRY
-					--DECLARE @Error int
+
 					IF @After_Successful_Execution_Policy > 1
 					BEGIN
 						DECLARE @Subdir NVARCHAR(2000) = @TargetFolder+@RelativeScriptPath
@@ -270,9 +339,9 @@ SET NOCOUNT on
 							SET @PathNew=dbo.find_nonexistant_name(@PathNew)
 						
 						EXEC sys.xp_copy_file @Script, @PathNew
-						--SET @Error = @@ERROR
+
 					END
-					--IF @Error < 1
+
 					IF @After_Successful_Execution_Policy < 4
 						EXEC xp_delete_files @Script		
 				END TRY
@@ -281,7 +350,8 @@ SET NOCOUNT on
 					RAISERROR(@ErrMsg,16,1)
 				END CATCH
 
-				FETCH NEXT FROM FileOperation INTO @RelativeScriptPath, @Script, @FileName
+				NextIteration:
+				FETCH NEXT FROM FileOperation INTO @RelativeScriptPath, @Script, @FileName, @isSuccessful, @isFile
             END
 		CLOSE FileOperation
 		DEALLOCATE FileOperation
@@ -289,31 +359,37 @@ SET NOCOUNT on
 
 
 		
-	--print @debug_mode
 
 	if @Debug_Mode > 1
  	BEGIN
-		--print 'why'
-		--ALTER TABLE #output ADD [Error Description] VARCHAR(10) NULL
-		SELECT id, ScriptOrdinal, left(Script,len(script)-charindex('\',reverse(script))+1) ScriptPath, right(Script,charindex('\',reverse(script))-1) Script, output, lead(output) OVER (ORDER BY id) AS [Error Description] INTO #output2 FROM #output 
+
+		SELECT 
+			id,
+			ScriptOrdinal,
+			IIF(isFile=1,left(Script,len(script)-charindex('\',reverse(script))+1),'N/A') ScriptDirectory,
+			IIF(isFile=1,right(Script,charindex('\',reverse(script))-1),Script) Script,
+			iif(@server='.',@@servername,@server) Server,
+			@DefaultDatabase [Database],
+			IIF(@UserName = '', 'Integrated Authentication',@UserName) UserName,
+			output,
+			LEAD(output) OVER (ORDER BY id) AS [Error Description]
+		INTO #output2
+		FROM #output
+		WHERE isSuccessful = 0
+		
 		DROP TABLE #output
 		
+
 		DELETE FROM #output2 WHERE output NOT LIKE '%Sqlcmd:%' AND output NOT LIKE '%Msg %, Level %'
 		UPDATE #output2 SET [Error Description] = NULL WHERE output NOT LIKE '%Msg %, Level %'
 		
-		--SELECT * FROM #output
-		--UPDATE #output SET [Error No.] =
-		--IIF(CHARINDEX('Msg',output) <> 0,SUBSTRING(TRIM([output]),CHARINDEX(' ',TRIM(output)),(CHARINDEX(',',TRIM(output))-CHARINDEX(' ',TRIM(output)))),'SQLCMD') 
+
 		declare @TotalErrors INT = (select COUNT(*) FROM #output2)
 		if (@TotalErrors) > 0
 			SELECT * FROM #output2
 			order by id
-		--declare @SQLCMD_Error_Count int = (select count(*) from #output where [output] like '%Sqlcmd: Error%')
-		--declare @SQL_Error_Count int = (select count(*) from #output where [output] like '%Msg %, Level %')
-		--select @SQLCMD_Error_Count [SQLCMD Error Count], @SQL_Error_Count [SQL Error Count]
-		--create table #tempSQLCMD ([Script Name] sysname, [Count SQLCMD] int, [Count SQL] int, [Count Distinct SQL] int, [Top SQL Err No.] int)
-		--print @debug_mode
-		if (@Debug_Mode = 3 or @TotalErrors > 0)
+		
+		IF (@TotalErrors > 0 OR @Debug_Mode = 3)
 			SELECT (@TotalErrors - count(*)) AS [Count SQLCMD Errors], count(*) [Count SQL Errors], COUNT(DISTINCT LEFT([output],CHARINDEX(',',[output]))) [Count distinct SQL Errors] from #output2 where [output] like '%Msg %, Level %' 
 		
 	END
@@ -324,10 +400,9 @@ SET NOCOUNT on
 
 	IF @Keep_xp_cmdshell_Enabled = 0 --and @skip_cmdshell_configuration = 0
 	begin
-		--print @Keep_xp_cmdshell_Enabled
-		--print @skip_cmdshell_configuration
+
 		print 'disable xp_cmdshell condition was executed but not applied'
-		--EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
+
     END
 
 	IF @AbortFlag = 1
@@ -347,13 +422,15 @@ go
 
 --/*
 
--- Warning!!!I have seen this SP to skip some scripts with long paths. (I don't care why, to even think about it :D) When I shortened that path they got executed successfully.
---If you want to make sure that all scripts have been executed, you can set the @Show_List_of_Executed_Scripts switch to 1 to see the list of executed scripts.
 
 EXECUTE sqladministrationdb..sp_execute_external_tsql 
 									  @Change_Directory_To_CD = ''
-									 ,@InputFiles = N'D:\CandoMigration\test\3).sql'			-- Semicolon delimited list of script files to execute.
-                                     ,@InputFolder = ''--'D:\CandoMigration\test'
+									 ,@InputFiles = ''--N'D:\CandoMigration\test\3).sql'			-- Semicolon delimited list of script files to execute.
+                                     ,@InputFolder = '"C:\Users\Administrator\Desktop\test"'--'D:\CandoMigration\test'
+									 ,@PreCommand = 'exec sp_configure ''show advanced options'',1; reconfigure; exec sp_configure ''cost threshold for parallelism'',25; reconfigure; exec sp_configure ''show advanced options'',0; reconfigure;'--'select 1987'
+									 --,@PostCommand = 'exec sp_configure ''show advanced options'',0; reconfigure;'--'select ''jook'''
+									 ,@FileName_REGEX_Filter_PowerShell = '*.sql'
+									 ,@Include_Subdirectories = 1
                                      ,@Server = NULL			-- Server name/IP + instance name. Include port if applicable
                                      ,@AuthenticationType = NULL -- any value which does not include the word 'sql' means Windows Authentication
                                      ,@UserName = NULL
@@ -366,16 +443,23 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 									 ,@DoNot_Dispaly_Full_Path = 1
 									 ,@skip_cmdshell_configuration = 0
 									 ,@Stop_On_Error = 0
-									 ,@Show_List_of_Executed_Scripts = 1
+									 ,@Show_List_of_Executed_Scripts = 0
 									 ,@Stop_After_Executing_Script = ''--'3).sql'		-- stops executing scripts after the first occurance of the given script
-									 ,@After_Successful_Execution_Policy = 0		-- 0 | 1 | 2 | 3	0 (Default): Do nothing, 1: delete after successful execution, 
+									 ,@After_Successful_Execution_Policy = 4		-- 0 | 1 | 2 | 3	0 (Default): Do nothing, 1: delete after successful execution, 
 																					-- 2: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution replacing existings.
 																					-- 3: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements
 																					-- 4: Copy to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements, but don't delete source files
 																					-- in options 2&3 the folders with the same name will be merged. These options work for @InputFolder only, not @InputFiles.
-									 ,@MoveTo_Folder_Name = 'old'					-- If you set @After_Successful_Execution_Policy to 2 or more, and leave this empty, the files will be moved/copied to one level up in the directory tree.
+									 ,@MoveTo_Folder_Name = 'old'					-- If you set @After_Successful_Execution_Policy to 2 or more, the copy or movement command will be t this folder preserving the original directory tree structure, and if you
+																					-- leave this empty, the files will be logically moved/copied to one level up in the directory tree.
 																					
 
 --*/
 
 
+--SELECT * FROM sys.configurations WHERE is_advanced=1
+
+--DROP PROC dbo.sp_execute_external_tsql
+--GO
+--DROP FUNCTION dbo.find_nonexistant_name
+--GO
