@@ -7,10 +7,6 @@
 -- ==============================================
 
 
--- todo: remove from AG before moving, on primary
---		maintain restoring state of the database if possible, on secondary
---		support for filestream
-
 
 USE SQLAdministrationDB
 GO
@@ -430,8 +426,8 @@ GO
 
 EXEC dbo.sp_MoveDatabases_Datafiles 
 									@DatabasesToBeMoved = 'mem_optimized_test',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
-									@New_Datafile_Directory = 'D:\Database Data', -- nvarchar(300), if left empty, data files will not be moved
-                                    @New_Logfile_Directory = ''    -- nvarchar(300), if left empty, log files will not be moved
+									@New_Datafile_Directory = 'D:\Database Data',			-- nvarchar(300), if left empty, data files will not be moved
+                                    @New_Logfile_Directory = ''								-- nvarchar(300), if left empty, log files will not be moved
 
 
 GO
@@ -442,46 +438,4 @@ DROP PROC dbo.sp_MoveDatabases_Datafiles
 GO
 
 
-
-
-
---SELECT d.name dbname,
---		mf.name filename,
---		mf.physical_name path,
---		right(mf.physical_name,charindex('\',reverse(mf.physical_name))-1) PhysicalFileName
-
---FROM sys.master_files mf JOIN sys.databases d
---ON d.database_id = mf.database_id
---WHERE d.database_id>4 AND d.name LIKE 'CandoMainDB'
-
-
---SELECT file_exists,* FROM sys.master_files
---CROSS APPLY
---sys.dm_os_file_exists(physical_name)
---WHERE database_id = DB_ID('8_dbWarden_8')
-
---DECLARE @FileRelocate NVARCHAR(max)
---SET @FileRelocate =
---		'
---			ALTER DATABASE '+QUOTENAME(''+'Northwind'+'')+'
---			MODIFY FILE (NAME=' + QUOTENAME('Northwind') + ',
---			FILENAME = ''' + 'C:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA' + ''')
---		'
---PRINT @FileRelocate
-
---ALTER DATABASE [Northwind]
---			MODIFY FILE (NAME=[Northwind_log],
---			FILENAME = 'C:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\Northwind_log.ldf')
---ALTER DATABASE Northwind SET ONLINE
-
---IF (SELECT state FROM sys.databases WHERE database_id = DB_ID('Northwind')) IN (0,5)
---	PRINT 'Good'
---ELSE
---	PRINT 'Not Good'
-
---SELECT right(PhysicalName, CHARINDEX('\',REVERSE(PhysicalName))-1) 
---from
---(
---SELECT physical_name PhysicalName FROM sys.master_files
---) dt
 
