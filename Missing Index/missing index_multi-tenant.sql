@@ -11,11 +11,9 @@
 USE SQLAdministrationDB
 
 DROP TABLE IF EXISTS #ExistingCompanyNames
---create table #ExistingCompanyNames (DBName sysname)
 
 SELECT name, create_date INTO #ExistingCompanyNames FROM sys.databases WHERE database_id>4 AND state = 0
-																		--name LIKE 'co-%db' AND name NOT LIKE '%logdb%' -- and name<>'co-jobvision-1db' --and name = 'co-modeldb'
---and create_date >= (SELECT create_date FROM sys.databases WHERE name='Co-JobVision-1DB')
+
 DECLARE @Index_FILEGROUP sysname = 'NIX'
 
 DROP TABLE IF EXISTS #temp
@@ -41,7 +39,6 @@ DECLARE @CoID UNIQUEIDENTIFIER
 DECLARE CoFiller CURSOR FOR
 	SELECT NEWID(),name FROM #ExistingCompanyNames
 	ORDER BY create_date
-		--@CoID,[CompanyNameAppropriateForDBName] from SQLAdministrationDB.momen.[Cando Companies] where isConversionNeeded = 1 --and CompanyEnName <> 'jobvision'
 DECLARE @ConnectionString NVARCHAR(MAX)
 OPEN CoFiller
 	FETCH NEXT FROM CoFiller INTO @CoID,@CoName
@@ -108,12 +105,8 @@ OPEN CoFiller
 				--PRINT (@SQL)
 				insert #temp
 				EXEC (@sql)
-
-
-
 			
 			'
-			--print @sql			
 			
 			EXEC (@sql)
 		END TRY
@@ -121,23 +114,7 @@ OPEN CoFiller
 			DECLARE @ErrMsg NVARCHAR(MAX) = ERROR_MESSAGE()
 			RAISERROR(@ErrMsg,16,1)
 		END CATCH
-		BEGIN TRY
-			SET @sql = @usedb + CHAR(10)+
-			'
-							print('''+@CompanyDBName+''')
-				
-				ALTER TABLE [Ats].[Jobs] ADD CONSTRAINT DF_1_FOR_LanguageId DEFAULT 1 FOR LanguageId;
-
-			
-			'
-			--print @sql
-			--EXEC (@sql)
-			
-		END TRY
-		BEGIN CATCH
-			SET @ErrMsg = ERROR_MESSAGE()
-			RAISERROR(@ErrMsg,16,1)
-		END CATCH
+	
 		FETCH NEXT FROM CoFiller INTO @CoID,@CoName    			
 	
 	
@@ -148,112 +125,8 @@ DEALLOCATE CoFiller
 SELECT COUNT(*) [Number of Databases] FROM #ExistingCompanyNames
 
 
-/****** Script for SelectTopNRows command from SSMS  ******/
-
-
---select * from #ExistingCompanyNames
-
-
---SELECT * FROM sys.databases
-
---delete from [Co-AliTestDB].ats.RolePermissions
-
-
---SELECT DISTINCT rawdata,dbname FROM #temp WHERE RawData IN (SELECT RawData FROM #temp GROUP BY RawData HAVING COUNT(DISTINCT DBName)>1) ORDER BY RawData
-
-
-/*
-
-SELECT TableName, [Covered Columns], [Included Columns], AVG(Avg_Estimated_Impact) [avg impact], STRING_AGG(CONVERT(VARCHAR(128),QUOTENAME(DB_NAME(DatabaseID))),', ') [Databases], Create_Statement FROM #temp
-GROUP BY Create_Statement, TableName, [Covered Columns], [Included Columns]
-ORDER BY [avg impact] DESC
-
-SELECT TableName, STRING_AGG([Covered Columns] + ';' + [Included Columns],' ::: ') Columns, AVG(Avg_Estimated_Impact) [avg impact], STRING_AGG(dt.DatabaseName,', ') [Databases] 
-FROM
-(
-	SELECT TOP 1000000 
-		TableName, [Covered Columns], [Included Columns], MAX(Avg_Estimated_Impact) Avg_Estimated_Impact, STRING_AGG(CONVERT(VARCHAR(128),QUOTENAME(DB_NAME(DatabaseID))),', ') DatabaseName
-	FROM #temp
-	GROUP BY TableName, [Covered Columns], [Included Columns]
-	ORDER BY TableName, [Covered Columns], [Included Columns]
-) dt
-GROUP BY TableName
-ORDER BY [avg impact] DESC
-
-
-*/
-
-
-
-
-
-
-
-
-
-
-
-
---SELECT	DISTINCT
---				TableName,
---				[Covered Columns],
---				--[t].[Included Columns],
---				t.Avg_Estimated_Impact,
---				t.DatabaseID
-
---		FROM #temp t
-		
---		WHERE t.TableName = 'CvWorkExperiences'
-
-/*
-SELECT TableName, STRING_AGG([Covered Columns] + ';' + [Included Columns],' ::: ') Columns, AVG(Avg_Estimated_Impact) [avg impact], STRING_AGG(dt.DatabaseName,', ') [Databases] 
-FROM
-(
-	SELECT TOP 1000000 
-		TableName,
-		[Covered Columns],
-		STRING_AGG([Included Columns],', ') [Included Columns],
-		MAX(Avg_Estimated_Impact) Avg_Estimated_Impact,
-		STRING_AGG(CONVERT(VARCHAR(128),QUOTENAME(DB_NAME(DatabaseID))),', ') DatabaseName
-	FROM 
-	(
-		SELECT	DISTINCT
-				TableName,
-				[Covered Columns],
-				--[t].[Included Columns],
-				trim(ss.value) [Included Columns],
-				t.Avg_Estimated_Impact,
-				t.DatabaseID											
-		FROM #temp t
-		CROSS APPLY STRING_SPLIT([Included Columns],',') ss
-		WHERE ss.value <> ''
-	) dt
-	GROUP BY TableName, [Covered Columns]
-	ORDER BY TableName, [Covered Columns]
-) dt
-GROUP BY TableName
-ORDER BY [avg impact] DESC
-*/
-
-
-
-
---SELECT
---	DB_NAME([DatabaseID]),
---	[Avg_Estimated_Impact],
---	[Last_User_Seek],
---	[TableName],
---	[Create_Statement],
---	[Covered Columns],
---	[Included Columns]
---FROM #temp
---WHERE TableName = 'CvWorkExperiences'
-
 SELECT COUNT(Create_Statement) Create_Statement_Count, COUNT(DISTINCT Create_Statement) Distinct_Create_Statement_Count FROM #temp
 
-
-
---SELECT * FROM sys.all_sql_modules
 
 SELECT 
 		TableName,
@@ -277,10 +150,9 @@ FROM
 		MIN(dt.[Database Count]) [Database Count]
 	FROM 
 	(
-		SELECT	--DISTINCT
+		SELECT	
 				TableName,
 				[Covered Columns],
-				--[t].[Included Columns],
 				MAX(t.Avg_Impact_Percentage) Avg_Impact_Percentage,
 				SUM(t.user_seek_plus_scan) user_seek_plus_scan, 
 				MAX(t.Avg_Estimated_Impact) Avg_Estimated_Impact,
@@ -289,7 +161,6 @@ FROM
 				trim(ss.value) [Included Columns]
 		FROM #temp t
 		CROSS APPLY STRING_SPLIT([Included Columns],',') ss
-		--WHERE ss.value <> '' --AND t.TableName = 'CvWorkExperiences'
 		GROUP BY TableName,	[Covered Columns], TRIM(ss.value)
 		
 
@@ -297,28 +168,9 @@ FROM
 	GROUP BY TableName, [Covered Columns]
 	ORDER BY TableName, [Covered Columns]
 ) dt
-WHERE DatabaseName not LIKE '%co-%db%' --AND DatabaseName NOT LIKE '%logdb%' --AND state = 0 -- and name<>'co-jobvision-1db' --and name = 'co-modeldb'
+WHERE DatabaseName LIKE '%co-%db%' -- Filtering multi-tenant databases, leave this condition empty to include all databases.
 
 GROUP BY TableName
 --HAVING AVG(user_seek_plus_scan) > 10
 ORDER BY [avg impact] DESC
 
---SELECT * FROM #temp WHERE DB_NAME(DatabaseID) = 'CandoNotificationDB'
-
---SELECT * FROM #ExistingCompanyNames WHERE name not LIKE '%co-%db%' --AND DatabaseName NOT LIKE '%logdb%' --AND state = 0 -- and name<>'co-jobvision-1db' --and name = 'co-modeldb'
------===============================================================================
-
---SELECT	--DISTINCT
---				TableName,
---				[Covered Columns],
---				--[t].[Included Columns],
---				(t.Avg_Impact_Percentage) Avg_Impact_Percentage,
---				(t.user_seek_plus_scan) user_seek_plus_scan, 
---				--(t.Avg_Estimated_Impact) Avg_Estimated_Impact,
---				(CONVERT(VARCHAR(128),QUOTENAME(DB_NAME(DatabaseID)))) DatabaseName,											
---				trim(ss.value) [Included Columns]
---		FROM #temp t
---		CROSS APPLY STRING_SPLIT([Included Columns],',') ss
---		WHERE ss.value <> '' --AND t.TableName = 'CvWorkExperiences'
---		ORDER BY t.TableName, t.[Covered Columns], t.[Included Columns]
-		
