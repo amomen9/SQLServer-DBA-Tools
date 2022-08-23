@@ -330,7 +330,7 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 ```	
 
 <dl>
-<dt> 12. Typical SQL Server setup configuration file with installation batch file. (Within educational folder)</dt>
+<dt> 12. Typical SQL Server setup configuration file with installation batch file. (Within educational directory)</dt>
   <br/>
 	<dd> </dd>
 	<dd>
