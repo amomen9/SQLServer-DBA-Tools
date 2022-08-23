@@ -46,6 +46,7 @@ BEGIN
 	DECLARE @Offline_Database NVARCHAR(1000)
 	DECLARE @New_Datafile_Directory_In_Loop NVARCHAR(300),
 			@New_Logfile_Directory_In_Loop NVARCHAR(300)
+	DECLARE @message NVARCHAR(2000)
 
 	SET @DatabasesToBeMoved = TRIM(ISNULL(@DatabasesToBeMoved,''))
 
@@ -79,8 +80,22 @@ BEGIN
 	-- Temp table for user specified database names
 	SELECT TRIM(value) dbname INTO #dbnames FROM STRING_SPLIT(@DatabasesToBeMoved,',')
 	
-
-
+	IF NOT EXISTS
+		(
+		SELECT 1 
+		FROM sys.databases d JOIN  #dbnames dbnames
+				ON d.name LIKE CASE WHEN @DatabasesToBeMoved = '' THEN '%' ELSE dbnames.dbname END
+				AND database_id > CASE WHEN @DatabasesToBeMoved = '' THEN 4 ELSE 1 END
+				
+				AND state IN (0,1,2,3,5,6)
+				AND d.user_access = 0 
+		WHERE sys.fn_hadr_is_primary_replica(name) IS NULL
+		)
+	BEGIN 
+		SET @message = 'No Database was found with your given criteria that is not a member of an Availability Group.'+
+						CHAR(10)+ 'Note: To move datafiles of databases which are members of an AG, you must first remove them from AG.'
+		RAISERROR(@message,16,1)
+	END
 	DECLARE LoopThroughDatabases CURSOR FOR
 		SELECT name 
 		FROM sys.databases d JOIN  #dbnames dbnames
@@ -448,7 +463,7 @@ GO
 
 
 EXEC dbo.sp_MoveDatabases_Datafiles 
-									@DatabasesToBeMoved = '',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
+									@DatabasesToBeMoved = 'fdsfsdff',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
 									@New_Datafile_Directory = 'D:\Database Data',			-- nvarchar(300), if left empty, data files will not be moved
                                     @New_Logfile_Directory = 'D:\Database Log'								-- nvarchar(300), if left empty, log files will not be moved
 
