@@ -244,11 +244,22 @@ BEGIN
 									MODIFY FILE (NAME='' + QUOTENAME(@FileLogicalName) + '',
 									FILENAME = '''''' + @NewPath + '''''')
 								''
-								IF (select file_exists+file_is_a_directory from sys.dm_os_file_exists(@NewPath)) = 1
-									EXEC (@FileRelocate)
-								else
-									raiserror(''Something has went wrong in the file movement process. The relocation in the system catalogs will not be applied.'',16,1)
-
+					'
+					IF @DBName <> 'TempDB'
+						SET @SQL +=
+						'
+									IF (select file_exists+file_is_a_directory from sys.dm_os_file_exists(@NewPath)) = 1
+										EXEC (@FileRelocate)
+									else
+										raiserror(''Something has went wrong in the file movement process. The relocation in the system catalogs will not be applied.'',16,1)
+						'
+					ELSE
+						SET @SQL +=
+						'									
+									EXEC (@FileRelocate)									
+						'
+					SET @SQL +=
+					'
 							END TRY
 							BEGIN CATCH
 								SET @ErrMessage = ''Something went wrong trying to copy/move datafile "''+@PhysicalName+''". The operation will not continue. System Error Message:''+CHAR(10)+
@@ -337,10 +348,22 @@ BEGIN
 									MODIFY FILE (NAME='' + QUOTENAME(@FileLogicalName) + '',
 									FILENAME = '''''' + @NewPath + '''''')
 								''
-								IF (select file_exists from sys.dm_os_file_exists(@NewPath)) = 1
-									EXEC (@FileRelocate)
-								else
-									raiserror(''Something has went wrong in the file movement process. The relocation in the system catalogs will not be applied.'',16,1)
+					'
+					IF @DBName <> 'TempDB'
+						SET @SQL +=
+						'
+									IF (select file_exists from sys.dm_os_file_exists(@NewPath)) = 1
+										EXEC (@FileRelocate)
+									else
+										raiserror(''Something has went wrong in the file movement process. The relocation in the system catalogs will not be applied.'',16,1)
+						'
+					ELSE
+						SET @SQL +=
+						'									
+									EXEC (@FileRelocate)									
+						'
+					SET @SQL +=
+					'
 							END TRY
 							BEGIN CATCH
 								SET @ErrMessage = ''Something went wrong trying to copy/move datafile "''+@PhysicalName+''". The operation will not continue. System Error Message:''+CHAR(10)+
@@ -425,9 +448,9 @@ GO
 
 
 EXEC dbo.sp_MoveDatabases_Datafiles 
-									@DatabasesToBeMoved = 'mem_optimized_test',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
+									@DatabasesToBeMoved = '',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
 									@New_Datafile_Directory = 'D:\Database Data',			-- nvarchar(300), if left empty, data files will not be moved
-                                    @New_Logfile_Directory = ''								-- nvarchar(300), if left empty, log files will not be moved
+                                    @New_Logfile_Directory = 'D:\Database Log'								-- nvarchar(300), if left empty, log files will not be moved
 
 
 GO
