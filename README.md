@@ -194,7 +194,7 @@ EXEC sp_restore_latest_backups
 </dl>
 
 
-```  
+```TSQL  
 EXEC dbo.sp_MoveDatabases_Datafiles 
 		@DatabasesToBeMoved = '',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
 		@New_Datafile_Directory = '',				-- nvarchar(300), if left empty, data files will not be moved
@@ -245,7 +245,7 @@ memberships of the owner of the job.
 	<dd> </dd>
 </dl>
 
-```
+```TSQL
 	EXEC dbo.usp_move_indexes_to_another_filegroup_per_every_database
 
 		@DatabaseName,
@@ -295,7 +295,7 @@ memberships of the owner of the job.
 <dd><b>Example:</b></dd>
 </dl>
 
-```
+```TSQL
 EXECUTE sqladministrationdb..sp_execute_external_tsql 
 		  @Change_Directory_To_CD = ''
 		 ,@InputFiles = ''--N'D:\CandoMigration\test\3).sql'	-- Semicolon delimited list of script files to execute.
@@ -411,7 +411,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dl>
 
 
-```  
+```TSQL  
     DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
     INSERT INTO @temp
     EXECUTE master..CardinalityCalc 'Northwind','saasdsad.orders'
@@ -438,7 +438,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <dd><b>Example:</b></dd>
 </dl>
 
-```  
+```TSQL  
     DECLARE @SID VARBINARY(85)
     EXEC sp_drop_login_dependencies @LoginName = 'test'
 					,@DropLogin = 1
@@ -462,7 +462,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
   <dd><b>Example:</b></dd>
 </dl>
 
-```  
+```TSQL  
   exec sp_restore_latest_backups_on_other_server
 	@Source = '192.168.241.3',					-- IPv4, IPv6, or hostname
 	@Destination = '192.168.241.100',				-- IPv4, IPv6, or hostname
@@ -508,7 +508,7 @@ index including all the necessary columns
 	<dd> </dd>
 </dl>
 
-```
+```TSQL
 EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
                         @EndDate_Gregorian = '20401231',    -- varchar(8)
 			@Drop_Last_DimDate_If_Exists = 1
