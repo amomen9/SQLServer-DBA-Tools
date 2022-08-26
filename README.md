@@ -289,13 +289,13 @@ memberships of the owner of the job.
 EXECUTE sqladministrationdb..sp_execute_external_tsql 
 		  @Change_Directory_To_CD = ''
 		 ,@InputFiles = ''--N'D:\CandoMigration\test\3).sql'	-- Semicolon delimited list of script files to execute.
-		 ,@InputFolder = '"C:\Users\Administrator\Desktop\test"'--'D:\CandoMigration\test'
+		 ,@InputFolder = '"C:\Users\Administrator\Desktop\test"'
 		 ,@PreCommand = 'exec sp_configure ''show advanced options'',1; reconfigure; exec sp_configure ''cost threshold for parallelism'',25; reconfigure; exec sp_configure ''show advanced options'',0; reconfigure;'--'select 1987'
 		 --,@PostCommand = 'exec sp_configure ''show advanced options'',0; reconfigure;'--'select ''jook'''
 		 ,@FileName_REGEX_Filter_PowerShell = '*.sql'
 		 ,@Include_Subdirectories = 1
-		 ,@Server = NULL		-- Server name/IP + instance name. Include port if applicable
-		 ,@AuthenticationType = NULL -- any value which does not include the word 'sql' means Windows Authentication
+		 ,@Server = NULL						-- Server name/IP + instance name. Include port if applicable
+		 ,@AuthenticationType = NULL 			-- any value which does not include the word 'sql' means Windows Authentication
 		 ,@UserName = NULL
 		 ,@Password = NULL
 		 --,@DefaultDatabase = 'SQLAdministrationDB'
