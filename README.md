@@ -67,18 +67,17 @@ EXEC sp_restore_latest_backups
 										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
 
 	@Backup_root_or_path = --'%userprofile%\desktop',
-					N'D:\Database Backup\',
-					--N'\\172.16.40.35\Backup\Backup\Database',
+					N'D:\Database Backup\',					
 					--N'"D:\Database Backup\NW_Full_backup_0240.bak"',
-										-- (*Mandatory) Root location for backup files.
-										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
+										-- (*Mandatory) Root location for backup files. You can also specify a single file.
+										-- Possible options: ''|'Some Path'. '' or NULL means target server's default
 
 	------ Begin file processing speed-up parameters: ---------------------------------------------------------------------------
 	-- These parameters are not mandatory, anyhow you need to carefully read the instructions before you can use them.
 	-- For less than 300 files in your repository, these parameters will be ignored.
 	@BackupFileName_naming_convention = --'',
 										N'[{"BackupType": "FUL","NamingConvention":"DBName_BackupType_ServerName_TIMESTAMP.ext","Separator":"_","Transform":"STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''"}, {"BackupType": "ALL","NamingConvention":"DBName_BackupType_TIMESTAMP.ext","Separator":"_","Transform":"STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''"}]',
-										--'DBName_BackupType_TIMESTAMP.ext',	
+										--N'DBName_BackupType_TIMESTAMP.ext',	
 										/*
 										-- (Optional) Causes file scouring to speed up, if you have too many files in the directory, (for less than 400 files it's unnecessary)
 										-- JSON format. You can define multiple conventions. Every JSON collection is a convention definition.
@@ -108,27 +107,23 @@ EXEC sp_restore_latest_backups
 										-- (Optional) Use this filter to speed file scouring up, if you have too many files in the directory.
 	
 	@BackupFinishDate_StartDATETIME = '',
-										--'2022.02.01 00:00:00',
+										
 										-- (Optional)
 	@BackupFinishDate_EndDATETIME = '',
-										--'2022.04.01 23:59:59',
+										
 										-- (Optional)
 	@USE_SQLAdministrationDB_Database = 1,				
 										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside SQLAdministrationDB database for faster access to backup file records and their details.
 	
 	@Exclude_system_databases = 1,		-- (Optional) set to 1 to avoid system databases' backups
-	@Exclude_DBName_Filter = N'  %adventure%,  %JobVisionDW%',					
+	@Exclude_DBName_Filter = N'  %adventure%,  %DW%',					
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded. You
 										-- can also include wildcard characters "%" and "_" for each entry. The escape carachter for these wildcards is "\"
 										-- The @Exclude_DBName_Filter outpowers @Include_DBName_Filter.
   
-	@Include_DBName_Filter = --'SQLAdministrationDB',
-							--'dbWarden', 
-							--N'nOrthwind',
-							N'sqladministrationdb',
-							--N'',
+	@Include_DBName_Filter = N'',
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019 and excludes others. Note that space at the begining and end of the names
@@ -140,10 +135,10 @@ EXEC sp_restore_latest_backups
 	
 	------------ Begin Log backup restore related parameters: -------------------------------------------------
 	@Restore_Log_Backups = 1,			-- (Optional)
-	@LogBackup_root_or_path = N'\\172.16.40.35\Backup\Backup\Database',
+	@LogBackup_root_or_path = N'',
 										-- (Optional) If left undefined, the script will assume that the log backups root is the same as the full
 										-- backups' root
-	@StopAt = '2022.08.17 20:35:18',--'2022.08.12 09:25:25',
+	@StopAt = '2022.08.17 20:35:18',
 										-- (Optional)
 	------------ End Log backup restore related parameters: ---------------------------------------------------
 	
@@ -169,12 +164,7 @@ EXEC sp_restore_latest_backups
 										-- (Optional, but error will be raised for backups of partially contained databases if 'contained database authentication' has not been activated,
 										-- you try to restore backups of partially contained databases and this option has not been turned to 1 on the target server)
 	@Stop_On_Error = 0,					-- (Optional) Stop restoring databases should a retore fails
-	--@Retention_Policy_Enabled = 0,
-	--									-- (Optional) Enable or disable removing (purging) the old backups according to the defined
-	--									-- policy
-	----,@Retention_Policy = @Retention_Policy
-	--									-- (Optional) Setup a policy for retaining your past backups 
-	@ShrinkDatabase_policy = -0,		-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
+	@ShrinkDatabase_policy = 0,			-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
 	@ShrinkLogFile_policy = -2,			-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking.
 										-- Using @ShrinkDatabase_policy and @ShrinkLogFile_policy may be redundant for log file if the same option for both is specified.
 	@RebuildLogFile_policy = '2MB:64MB:1024MB',	
