@@ -514,8 +514,8 @@ https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloadi
 	<dd> </dd>
 	<dd>
 	This SP takes the start and end dates and creates DimDate table within the database that this SP is being created in. The DimDate table
-can have several cultures altogether besides Gregorian Calendar. The sample culture is Persian. The sample culture has its own non-clustered
-index including all the necessary columns
+can have several cultures altogether besides Gregorian Calendar. The sample culture here is Persian. It has its own non-clustered
+index including all the necessary columns with the main index key of DateKey_Persian to be referenced by the foreign keys of other tables.
 	</dd>
 	<dd> </dd>
 	<dd><b>Example:</b></dd>
