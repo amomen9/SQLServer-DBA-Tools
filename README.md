@@ -581,7 +581,7 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 	<dd> </dd>	
 </dl>
 
-```
+```Batchfile
 rem "for the batch file's arguments refer to the readme file."
 "\\Server\c$\Users\a.momen\Directory\Install SQL Server.cmd" H $@PA$$W0RD 2 #####-#####-#####-#####-##### 4 
 ```
