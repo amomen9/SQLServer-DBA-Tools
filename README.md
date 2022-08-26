@@ -25,7 +25,7 @@ please read them below.
 <dl>
  
 
-<dt>7. sp_restore_latest_backups</dt>
+<dt>1. sp_restore_latest_backups</dt>
   <br/>
 	<dd> </dd>
 	<dd>
@@ -42,50 +42,147 @@ please read them below.
 </dl>
 
 ```
-exec sp_restore_latest_backups 
+EXEC sp_restore_latest_backups 
 
-	@Drop_Database_if_Exists = 0,
-					-- Turning this feature on is not recommended because 'replace' option of the restore command, transactionally drops the
-					-- existing database first and then restores the backup. That means if restore fails, drop also will not commit, a procedure
-					-- which cannot be implemented by the tsql programmer (alter database, drop database, restore database commands cannot be put into a user
-					-- transaction). But if you want a clean restore (Currently I don't know what the difference between 'restore with replace' and 'drop and restore'
-					-- is except for what i said which is an advantage of 'restore with replace'), set this parameter to 1, however it's risky and not
-					-- recommended because if the restore operation fails, the drop operation cannot be reverted and you will lose the existing database. If you
-					-- don't set this parameter to 1, the 'replace' option of the restore command will be used anyway. 
-					-- Note: if you want to use this parameter only to relocate database files 'replace' command does this for you and you don't need to use this
-					-- parameter. Generally, use this parameter as a last resort on a manual execution basis.
+	@Destination_Database_Name_suffix = N'_test',
+  										-- (Optional) You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
+  										-- the database will be restored on its own. 
+	@Destination_Database_Name_prefix = N'',
+  										-- (Optional) You can specify the destination database names' prefix here. If the destination database name is equal to the backup database name,
+  										-- the database will be restored on its own. 
+	@Destination_DatabaseName = N'',	-- This option only works if you have only one database to restore, otherwise it will be ignored. Prefix and suffix options will also be applied.
+	@Ignore_Existant = 0,			
+										-- (Optional) Ignore restoring databases that already exist on target. If set to 0, the existant will be replaced.
+	@Destination_Database_DataFiles_Location = 'D:\Database Data',
+										--'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\',			
+  										-- (Optional) This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
+  										-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
+										-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
+										-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
+										-- has an identical structure as your original server, for example it's a clone of it.
+										-- if this parameter is set to 'same', the '@Destination_Database_LogFile_Location' parameter will be ignored.
+										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
+	@Destination_Database_LogFile_Location = 'D:\Database Log',	
+										-- (Optional) If @Destination_Database_DataFiles_Location parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
+										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
 
-	@Destination_Database_Name_suffix = N'',
-					-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
-					-- the database will be restored on its own. Leave empty to do so.
-	@Destination_Database_DataFiles_Location = 'same',			
-					-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
-					-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
-					-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
-					-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
-					-- has an identical structure as your original server, for example it's a clone of it.
-					-- if this parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
-					-- Setting this variable to 'same' also means forcing @Drop_Database_if_Exists to 1
-					-- Possible options: 'SAME'|''. '' or NULL means target server's default
-	@Destination_Database_LogFile_Location = 'D:\test\testLog',	
-					-- if @Destination_Database_DataFiles_Location parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
-	@Backup_root = N'e:\TestBackup',		
-					-- Root location for backup files.
-	@IncludeSubdirectories = 1,
-					-- Choose whether to include subdirectories or not while the script is searching for backup files.
+	@Backup_root_or_path = --'%userprofile%\desktop',
+					N'D:\Database Backup\',
+					--N'\\172.16.40.35\Backup\Backup\Database',
+					--N'"D:\Database Backup\NW_Full_backup_0240.bak"',
+										-- (*Mandatory) Root location for backup files.
+										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
+
+	------ Begin file processing speed-up parameters: ---------------------------------------------------------------------------
+	-- These parameters are not mandatory, anyhow you need to carefully read the instructions before you can use them.
+	-- For less than 300 files in your repository, these parameters will be ignored.
+	@BackupFileName_naming_convention = --'',
+										N'[{"BackupType": "FUL","NamingConvention":"DBName_BackupType_ServerName_TIMESTAMP.ext","Separator":"_","Transform":"STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''"}, {"BackupType": "ALL","NamingConvention":"DBName_BackupType_TIMESTAMP.ext","Separator":"_","Transform":"STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''"}]',
+										--'DBName_BackupType_TIMESTAMP.ext',	
+										/*
+										-- (Optional) Causes file scouring to speed up, if you have too many files in the directory, (for less than 400 files it's unnecessary)
+										-- JSON format. You can define multiple conventions. Every JSON collection is a convention definition.
+										-- Use the exact keywords for the following:
+										--		1. BackupType: {"LOG" | "DIF" | "FUL" | "ALL"} for the backup type of the specific naming convention,
+										--		2. NamingConvention: File name: "DBName" for database name, "TIMESTAMP" for backup start date, ".ext" for backup extension, "ServerName" for
+										--			Server's Name etc. in the file's name. DBName and TIMESTAMP are mandatory. If you do not include .ext, the sp will assume that your backup
+										--			files do not have extension.
+										--		3. Separator: File name keywords' separator ("_" in the example) 
+										--		4. Transform: Transform inline function to transform the timestamp part of your file names' string into standard datetime format. Use the keyword "TIMESTAMP" inside 
+										--			this transform.(You do not need to include CONVERT or CAST functions) 
+										-- This script compares the dates to find intended backups.
+										-- Example: 
+										--			'TLog:DBName_BackupType_ServerName_TIMESTAMP.ext:_:STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''; DBName_BackupType_TIMESTAMP.ext:_:STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00'''
+										-- Note: DBName and TIMESTAMP are mandatory if this option is used.
+										
+										*/
+										-- Our company's naming convention: dbWarden_FULL_BI-DB_202206010018.bak
+	
+	@Skip_Files_That_Do_Not_Match_Naming_Convention = 1,
+										-- After processing the file names, some files may remain that have not matched the defined naming convention(s) and consequently
+										-- their database name, TIMESTAMP or other details have not been detected. These files can be scanned using reading of their headers
+										-- , which is slower (default behavior), or skipped if this option is set to 1.
+	------ End file processing speed-up parameters: -----------------------------------------------------------------------------
+	
+	@BackupFileName_RegexFilter = '',				
+										-- (Optional) Use this filter to speed file scouring up, if you have too many files in the directory.
+	
+	@BackupFinishDate_StartDATETIME = '',
+										--'2022.02.01 00:00:00',
+										-- (Optional)
+	@BackupFinishDate_EndDATETIME = '',
+										--'2022.04.01 23:59:59',
+										-- (Optional)
+	@USE_SQLAdministrationDB_Database = 1,				
+										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside SQLAdministrationDB database for faster access to backup file records and their details.
+	
+	@Exclude_system_databases = 1,		-- (Optional) set to 1 to avoid system databases' backups
+	@Exclude_DBName_Filter = N'  %adventure%,  %JobVisionDW%',					
+										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
+										-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
+										-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded. You
+										-- can also include wildcard characters "%" and "_" for each entry. The escape carachter for these wildcards is "\"
+										-- The @Exclude_DBName_Filter outpowers @Include_DBName_Filter.
+  
+	@Include_DBName_Filter = --'SQLAdministrationDB',
+							--'dbWarden', 
+							--N'nOrthwind',
+							N'sqladministrationdb',
+							--N'',
+										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
+										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
+										-- in the name like AdventureWorks2019 and excludes others. Note that space at the begining and end of the names
+										-- will be disregarded. You can also include wildcard character "%" and "_" for each entry. The escape carachter for 
+										-- these wildcards is "\".
+									
+
+	@IncludeSubdirectories = 1,			-- (Optional) Choose whether to include subdirectories or not while the script is searching for backup files.
+	
+	------------ Begin Log backup restore related parameters: -------------------------------------------------
+	@Restore_Log_Backups = 1,			-- (Optional)
+	@LogBackup_root_or_path = N'\\172.16.40.35\Backup\Backup\Database',
+										-- (Optional) If left undefined, the script will assume that the log backups root is the same as the full
+										-- backups' root
+	@StopAt = '2022.08.17 20:35:18',--'2022.08.12 09:25:25',
+										-- (Optional)
+	------------ End Log backup restore related parameters: ---------------------------------------------------
+	
 	@Keep_Database_in_Restoring_State = 0,						
-					-- If equals to 1, the database will be kept in restoring state
-	@Take_tail_of_log_backup = 0,
-																
+										-- (Optional) If equals to 1, the database will be kept in restoring state
+	@Take_tail_of_log_backup_of_existing_database = 0,
+										-- (Optional, important)						
 	@DataFileSeparatorChar = '_',		
-					-- This parameter specifies the punctuation mark used in data files names. For example "_"
-					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
-	@Change_Target_RecoveryModel_To = 'simple',
-					-- Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
-					-- If the chosen option is simple, the log file will also shrink
-	@Set_Target_Databases_ReadOnly = 1,
-	@Delete_Backup_File = 0
-					-- Turn this feature on to delete the backup files that are successfully restored.
+										-- (Optional) This parameter specifies the punctuation mark used in data files names. For example "_"
+										-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
+	@Change_Target_RecoveryModel_To = 'same',
+										-- (Optional) Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+										
+	@Set_Target_Databases_ReadOnly = 0,
+										-- (Optional)
+	@STATS = 50,
+										-- (Optional) Report restore percentage stats in SQL Server restore process.
+	@Generate_Statements_Only = 0,
+										-- (Optional) use this to generate restore statements without executing them.
+	@Delete_Backup_File = 0,
+										-- (Optional) Turn this feature on to delete the backup files that are successfully restored. (This does not apply to transaction log backup files)
+	@Activate_Destination_Database_Containment = 1,
+										-- (Optional, but error will be raised for backups of partially contained databases if 'contained database authentication' has not been activated,
+										-- you try to restore backups of partially contained databases and this option has not been turned to 1 on the target server)
+	@Stop_On_Error = 0,					-- (Optional) Stop restoring databases should a retore fails
+	--@Retention_Policy_Enabled = 0,
+	--									-- (Optional) Enable or disable removing (purging) the old backups according to the defined
+	--									-- policy
+	----,@Retention_Policy = @Retention_Policy
+	--									-- (Optional) Setup a policy for retaining your past backups 
+	@ShrinkDatabase_policy = -0,		-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
+	@ShrinkLogFile_policy = -2,			-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking.
+										-- Using @ShrinkDatabase_policy and @ShrinkLogFile_policy may be redundant for log file if the same option for both is specified.
+	@RebuildLogFile_policy = '2MB:64MB:1024MB',	
+										-- (Optional) Possible options: NULL or Empty string: Do not rebuild | 'x:y:z' (For example, 4MB:64MB:1024MB) rebuild to SIZE = x, FILEGROWTH = y, MAXSIZE = z. If @RebuildLogFile_policy is specified, @ShrinkLogFile_policy will be ignored.
+										-- Note: There is no risk of 'Transactional inconsistency', in this stored procedure specifically, despite the warning message that Microsoft may generate and you do not need to run CHECKDB for this in particular. Also, the extra log files have been deleted.
+
+	@GrantAllPermissions_policy = -2	-- (Optional) Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account and make guest a member of db_owner group
+		
 ```
 	
 
