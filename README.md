@@ -323,7 +323,7 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 <dl>
 
  
-<dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
+<dt>6. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
   <br/>  	
 <dd>This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
 scheduled job to run at specific schedules. The DB backup file name will be in 'DBName_Date_Time + .bak' format.
@@ -350,7 +350,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 
 <dl>
 
-<dt>4. Cardinality Factor calculator sp for a table</dt>
+<dt>7. Cardinality Factor calculator sp for a table</dt>
   <br/>
 <dd>
   This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*)
@@ -369,7 +369,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
     order by 2 desc
 ```
 <dl>
-<dt>5. Drop login dependencies</dt>
+<dt>8. Drop login dependencies</dt>
   <br/>
 <dd>
   This stored procedure disables a login and revokes any dependecies (that prevent the login from being dropped) on the server 
@@ -392,7 +392,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```                               
 	
 <dl>
-<dt>6. sp_restore_latest_backups_on_other_server (using psexec)</dt>
+<dt>9. sp_restore_latest_backups_on_other_server (using psexec)</dt>
   <br/>
 <dd>
   The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
@@ -417,7 +417,7 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	@DestinationPass = 'P@$$W0rd'
 ```
 <dl>
-<dt> 9. correct checksum of a corrupt_page: (Within Educational directory)</dt>
+<dt> 10. correct checksum of a corrupt_page: (Within Educational directory)</dt>
 
 <dd>
 <p> </p>	
@@ -432,7 +432,7 @@ https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloadi
 </dl>	
 
 <dl>
-<dt> 10. create DimDate table (Within BI directory)</dt>
+<dt> 11. create DimDate table (Within BI directory)</dt>
   <br/>
 	<dd> </dd>
 	<dd>
