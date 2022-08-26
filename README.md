@@ -192,9 +192,9 @@ EXEC sp_restore_latest_backups
 
 ```  
 EXEC dbo.sp_MoveDatabases_Datafiles 
-		@DatabasesToBeMoved = '',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
-		@New_Datafile_Directory = '',			-- nvarchar(300), if left empty, data files will not be moved
-		@New_Logfile_Directory = 'E:\Database Log'								-- nvarchar(300), if left empty, log files will not be moved
+		@DatabasesToBeMoved = '',						-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
+		@New_Datafile_Directory = '',					-- nvarchar(300), if left empty, data files will not be moved
+		@New_Logfile_Directory = 'E:\Database Log'		-- nvarchar(300), if left empty, log files will not be moved
 ```
 <dl>
 
