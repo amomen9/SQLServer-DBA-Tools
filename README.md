@@ -323,6 +323,35 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 
 <dl>
 
+<dt>6. Enable CDC on a cluster's primary replica, enable CDC on a secondary replica (Within "BI\Enable CDC for clusters" directory)</dt>
+  <br/>
+<dd>
+  Enabling CDC on an AlwaysOn cluster which involves failovering is tricky. The two scripts contained within the BI directory do just that effortlessly. 
+  You need to execute "Enable CDC for clusters.sql", within which you have to specify the path for "create CDC Jobs On Secondary.sql" script.
+
+<dl>
+
+<dt>7. dbWarden scripts: (contained within dbWarden directory)</dt>
+  <br/>
+<dd>
+  dbWarden is a free SQL Server Monitoring package. Here is a useful link in introduction to dbWarden:
+  <br/>
+  https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3
+  <br/>
+  sourceforge link:
+  <br/>
+  https://sourceforge.net/projects/dbwarden/
+  <br/>
+  The scripts that currently are contained include "CPU intensive tasks for an instance (dbWarden).sql" and "Per Day-Average KPI stat for the last No of days.sql".
+</dd>  
+  
+</dl>
+
+
+
+
+<dl>
+
  
 <dt>6. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
   <br/>  	
