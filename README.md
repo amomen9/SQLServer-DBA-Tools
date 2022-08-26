@@ -225,7 +225,7 @@ memberships of the owner of the job.
 <dl>
 
 
-<dt> 11. transfer indexes to other Filegroups/Partition Schemes</dt>
+<dt> 4. transfer indexes to other Filegroups/Partition Schemes</dt>
   <br/>
 	<dd> </dd>
 	<dd>
