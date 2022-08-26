@@ -451,8 +451,9 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 	<dd> </dd>
 	<dd>
 	If you wish to install SQL Server instances on many servers, you should consider using a configuration file. A configuration file
-	makes it easier and faster for you to install instances and maintain harmonical policies among your instances. The Microsoft's
-	documentation regarding this possibility exists on the link below:
+	makes it easier and faster for you to install instances and maintain harmonical policies among your instances (You can also generate
+	your own configuration file at the end of SQL Server's ordinary step by step main visual installation setup and use it numerously
+	afterwards). The Microsoft's documentation regarding this possibility exists on the link below:
 	<br/><br/>
 	https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16
 	<br/><br/>
@@ -460,10 +461,42 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 	You just need to remember to alter these files according to your specifications and needs.
 	</dd>
 	<dd> </dd>
-	<dd><b>Example:</b></dd>
-	<dd> </dd>
-</dl>
+	<dd>
+		<ul>
+			<li> You may want to refer to the readme.txt file in the "SQL Server Unattended (Silent) Installation" itself too. </li>
+			<li> Also, you need to either provide the following missing files or remove their reference from the batch files: </li>
+				<ul>
+					<li>dbWarden_DB1_truncated_22.05.31.bak: backup file of dbWarden database</li>
+					<li>MsSqlCmdLnUtils.msi: MSI installation file for SQLCMD from Microsoft</li>
+					<li>SQLADDB_22.06.06.bak: backup file of SQLAdministrationDB database</li>
+					<li>SSMS Setup</li>
+					<li>dbWarden-Jobs.sql</li>
+				</ul>
+			<li> Please note that SQL port-firewall.bat includes changing the default port number for the default instance. If you do not intend to do that, simply remove the commands.</li>
+			<li> You must run the "Install SQL Server.cmd" batch file with administrative priviledges.</li>
+			<li> Some of the actions that this batch file carries out are the following:
+				<ul>
+					<li>Mounts SQL Server Installation .iso image file</li> 
+					<li>Installs the SQL Server instance according to the configuration file.</li>
+					<li>Installs SSMS silently</li>
+					<li>Installs SQL Server Cumulative Update silently.</li>
+					<li>Installs SQLCMD silently.</li>
+					<li>Does port/firewall configurations.</li>
+					<li>Changes "sa" login name.</li>
+					<li>Restores some preliminary databases from their backup files.</li>
+					<li>Restarts the system on user's confirmation.</li>					
+				</ul>
+			</li>
+		</ul>
 
+	</dd>	
+	<dd><b>Example:</b></dd>
+	
+</dl>
+	```
+	rem for the batch file's arguments refer to the readme file.
+	"\\Server\c$\Users\a.momen\Directory\Install SQL Server.cmd" H $@PA$$W0RD 2 #####-#####-#####-#####-##### 4 
+	```
 
 <dl>
 
