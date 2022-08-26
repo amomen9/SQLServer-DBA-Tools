@@ -202,6 +202,8 @@ EXEC dbo.sp_MoveDatabases_Datafiles
 ```
 <dl>
 
+---
+
 <dt>3. sp_JobsInfo:</dt>
 	<dd> </dd>
 	<dd>
@@ -228,6 +230,7 @@ memberships of the owner of the job.
 <p> </p>
 <dl>
 
+---
 
 <dt> 4. transfer indexes to other Filegroups/Partition Schemes</dt>
   <br/>
@@ -277,6 +280,9 @@ memberships of the owner of the job.
 ```	
 
 <dl>
+
+---
+
 <dt>5. Execute external tsql</dt>
   <br/>
 
@@ -326,6 +332,8 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 
 <dl>
 
+---
+
 <dt>6. Enable CDC on a cluster's primary replica, enable CDC on a secondary replica<br/> (Within "BI\Enable CDC for clusters" directory)</dt>
   <br/>
 <dd>
@@ -335,6 +343,8 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 </dl>
 
 <dl>
+
+---
 
 <dt>7. dbWarden scripts: (contained within dbWarden directory)</dt>
   <br/>
@@ -357,6 +367,7 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 
 <dl>
 
+--- 
  
 <dt>8. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
   <br/>  	
@@ -366,6 +377,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dl>
 
 <dl>
+
+---
+
 <dt>9. Restore Website (Within T-SQL_Backup&Restore repo directory):</dt>
   <br/>
 <dd>
@@ -384,6 +398,8 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 </dl>
 
 <dl>
+
+---
 
 <dt>10. Cardinality Factor calculator sp for a table</dt>
   <br/>
@@ -404,6 +420,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
     order by 2 desc
 ```
 <dl>
+
+---
+
 <dt>11. Drop login dependencies</dt>
   <br/>
 <dd>
@@ -427,6 +446,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 ```                               
 	
 <dl>
+
+---
+
 <dt>12. sp_restore_latest_backups_on_other_server (using psexec)</dt>
   <br/>
 <dd>
@@ -452,6 +474,9 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 	@DestinationPass = 'P@$$W0rd'
 ```
 <dl>
+
+---
+
 <dt> 13. correct checksum of a corrupt_page: (Within Educational directory)</dt>
 
 <dd>
@@ -467,6 +492,9 @@ https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloadi
 </dl>	
 
 <dl>
+
+---
+
 <dt> 14. create DimDate table (Within BI directory)</dt>
   <br/>
 	<dd> </dd>
@@ -488,6 +516,9 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 ```
 
 <dl>
+
+---
+
 <dt> 15. Typical SQL Server setup configuration file with installation batch file. (Within educational directory)</dt>
   <br/>
 	<dd> </dd>
