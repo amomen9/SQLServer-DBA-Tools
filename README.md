@@ -323,7 +323,7 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 
 <dl>
 
-<dt>6. Enable CDC on a cluster's primary replica, enable CDC on a secondary replica (Within "BI\Enable CDC for clusters" directory)</dt>
+<dt>6. Enable CDC on a cluster's primary replica, enable CDC on a secondary replica<br/> (Within "BI\Enable CDC for clusters" directory)</dt>
   <br/>
 <dd>
   Enabling CDC on an AlwaysOn cluster which involves failovering is tricky. The two scripts contained within the BI directory, do just that effortlessly. 
