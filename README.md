@@ -294,8 +294,8 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 		 --,@PostCommand = 'exec sp_configure ''show advanced options'',0; reconfigure;'--'select ''jook'''
 		 ,@FileName_REGEX_Filter_PowerShell = '*.sql'
 		 ,@Include_Subdirectories = 1
-		 ,@Server = NULL						-- Server name/IP + instance name. Include port if applicable
-		 ,@AuthenticationType = NULL 			-- any value which does not include the word 'sql' means Windows Authentication
+		 ,@Server = NULL					-- Server name/IP + instance name. Include port if applicable
+		 ,@AuthenticationType = NULL 				-- any value which does not include the word 'sql' means Windows Authentication
 		 ,@UserName = NULL
 		 ,@Password = NULL
 		 --,@DefaultDatabase = 'SQLAdministrationDB'
