@@ -267,7 +267,8 @@ memberships of the owner of the job.
 		@Email_Recipients,
 		@copy_recipients,
 		@blind_copy_recipients,
-		@Create_or_Update_IndexTransferResults_Table = 0	-- Creates or updates IndexTransferResults table within the SQLAdministrationDB database
+		@Create_or_Update_IndexTransferResults_Table = 0	
+								-- Creates or updates IndexTransferResults table within the SQLAdministrationDB database
 	
 ```	
 
