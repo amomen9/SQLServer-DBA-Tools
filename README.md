@@ -450,9 +450,12 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
   <br/>
 	<dd> </dd>
 	<dd>
-	This SP takes database names on the instance, generates the index transfer statements, and moves the specified index IDs to another
-	filegroup/partition scheme. Email report of the result can also be implemented. Please note that index creation statements do not
-	exist within "sys.all_sql_modules" or "sys.sql_modules" system catalogue views.
+	If you wish to install SQL Server instances on many servers, you should consider using a configuration file. A configuration file
+	makes it easier and faster for you to install instances and maintain harmonical policies among your instances. The Microsoft's
+	documentation regarding this possibility exists on the link below:
+	https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16
+	These batch, sql, and ini files help you do loads of sequential installation and prepration actions with one batch file execution.
+	You just need to remember to alter the files according to your specifications and needs.
 	</dd>
 	<dd> </dd>
 	<dd><b>Example:</b></dd>
