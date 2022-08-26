@@ -477,14 +477,14 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 			<li> Some of the actions that this batch file carries out are the following:
 				<ul>
 					<li>Mounts SQL Server Installation .iso image file</li> 
-					<li>Installs the SQL Server instance according to the configuration file.</li>
+					<li>Installs the SQL Server instance according to the configuration file</li>
 					<li>Installs SSMS silently</li>
-					<li>Installs SQL Server Cumulative Update silently.</li>
-					<li>Installs SQLCMD silently.</li>
-					<li>Does port/firewall configurations.</li>
-					<li>Changes "sa" login name.</li>
-					<li>Restores some preliminary databases from their backup files.</li>
-					<li>Restarts the system on user's confirmation.</li>					
+					<li>Installs SQL Server Cumulative Update silently</li>
+					<li>Installs SQLCMD silently</li>
+					<li>Does port/firewall configurations</li>
+					<li>Changes "sa" login name</li>
+					<li>Restores some preliminary databases from their backup files</li>
+					<li>Restarts the system on user's confirmation</li>					
 				</ul>
 			</li>
 		</ul>
