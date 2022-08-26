@@ -176,9 +176,27 @@ EXEC sp_restore_latest_backups
 		
 ```
 	
-
 <dl>
 
+<dt>2. sp_MoveDatabases_Datafiles</dt>
+  <br/>
+<dd>
+  Effortlessly and robustly with minimum down time, move your databases' database files to another folder and then automatically bring them back 
+  online using this stored procedure. It supports databases with FILESTREAM/IN-MEMORY filegroup as well. You can also change the location of
+  your tempdb database database files, after which a SQL Server service restart is required to put the change into effect. You can also specify
+  multiple databases. If you want to move tempdb database files, you must not include any other database.
+</dd>  
+  <dd><b>Example:</b></dd>
+</dl>
+
+
+```  
+EXEC dbo.sp_MoveDatabases_Datafiles 
+									@DatabasesToBeMoved = '',				-- enter database's name, including wildcard character %. Leaving this empty or null means all databases except some certain databases. This script can only work for tempdb in system databases. 
+									@New_Datafile_Directory = '',			-- nvarchar(300), if left empty, data files will not be moved
+                                    @New_Logfile_Directory = 'E:\Database Log'								-- nvarchar(300), if left empty, log files will not be moved
+```
+<dl>
 
 
  
