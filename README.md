@@ -1,7 +1,7 @@
 # \#SQLServer DBA Tools
 
 
-![](https://img.shields.io/badge/SQL%20Server-%23FFFFFF.svg?&style=for-the-badge&logo=Microsoft%20SQL%20Server&logoColor=red)
+![](https://img.shields.io/badge/SQL%20Server-%23FFFFFF.svg?&style=flat-square&logo=Microsoft%20SQL%20Server&logoColor=red)
 
 [![license badge]][license]
 
