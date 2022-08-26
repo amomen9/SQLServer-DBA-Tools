@@ -1,7 +1,9 @@
 # \#SQLServer DBA Tools
-T-SQL Scripts
 
 [![license badge]][license]
+
+T-SQL Scripts
+
 
 - LICENSE: <br/>
 Modified GNU GLP3 as noted, commercial usage without consent is also not allowed.
