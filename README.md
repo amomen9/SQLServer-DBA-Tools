@@ -43,7 +43,7 @@ please read them below.
 	<dd> </dd>
 </dl>
 
-```
+```TSQL
 EXEC sp_restore_latest_backups 
 
 	@Destination_Database_Name_suffix = N'_test',
