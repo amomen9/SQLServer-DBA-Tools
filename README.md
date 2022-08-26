@@ -198,6 +198,31 @@ EXEC dbo.sp_MoveDatabases_Datafiles
 ```
 <dl>
 
+<dt>3. sp_JobsInfo:</dt>
+	<dd> </dd>
+	<dd>
+This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
+optimized though because no optimization would be crucial. Part of the script (first function and the body of second function
+has been taken from the following URL written by <b>Alan Jefferson</b>:</dd>	
+	
+https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
+<p> </p>  
+<dd>	
+It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping
+jobs should generally be avoided.
+<p> </p>
+Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins
+which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role 
+memberships of the owner of the job.
+</dd>
+<p> </p>	
+	
+![Sample script output](img/Screenshot_5.png)
+
+</dl>
+  <br/>
+<p> </p>
+<dl>
 
  
 <dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
@@ -332,31 +357,6 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
 ```
-<dl>
-<dt>8. Job duration and schedules:</dt>
-	<dd> </dd>
-	<dd>
-This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not
-optimized though because no optimization would be necessary. Part of the script (first function and the body of second function
-has been taken from the following URL written by <b>Alan Jefferson</b>:</dd>	
-	
-https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules
-<p> </p>  
-<dd>	
-It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping
-jobs should generally be avoided.
-<p> </p>
-Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins
-which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role 
-memberships of the owner of the job.
-</dd>
-<p> </p>	
-	
-![Sample script output](img/Screenshot_5.png)
-
-</dl>
-  <br/>
-<p> </p>
 <dl>
 <dt> 9. correct checksum of a corrupt_page: (Within Educational directory)</dt>
 
