@@ -17,7 +17,8 @@ please read them below.
 - These scripts are mostly written in chronological order, not in order of importance.
 - General note:
 	T-SQL is not optimized when it comes to heavy workloads and may become partly the bottleneck of your tasks unless you natively compile and optimize it. This does not usually happen in OLTP systems though. You just may want to bear this in mind.
-- Some codes may not have been well cleaned and commented yet. Though they will be some time in the future. Though mostly I don't believe they are hard to understand right now.
+- Some codes may not have been well cleaned and commented yet. Though they will be some time in the future, and mostly I don't believe they are hard to understand right now, and the variables namings are helpful.
+- Some scripts contained within this repository are not mentioned in this readme file yet.
 - I love commands! Hail to commands instead of visualization!! Visualization is slow and for amateur humans, but commands are faster and more customizable.
 
 ## Contained Scripts
