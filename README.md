@@ -1,7 +1,7 @@
 # \#SQLServer DBA Tools
 
 
-
+<img alt="LinkedIn" src="https://img.shields.io/badge/SQL%20Server-%230077B5.svg?&style=for-the-badge&logo=Microsoft%20SQL%20Server&logoColor=red" />
 
 [![license badge]][license]
 
