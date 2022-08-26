@@ -456,7 +456,7 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 	<br/><br/>
 	https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16
 	<br/><br/>
-	These batch, sql, and ini files help you do loads of sequential installation and prepration actions with one batch file execution.
+	These batch, sql, and ini files help you do loads of sequential installation and preparation actions with one batch file execution.
 	You just need to remember to alter the files according to your specifications and needs.
 	</dd>
 	<dd> </dd>
