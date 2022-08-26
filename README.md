@@ -313,7 +313,8 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 				-- 3: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements
 				-- 4: Copy to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements, but don't delete source files
 				-- in options 2&3 the folders with the same name will be merged. These options work for @InputFolder only, not @InputFiles.
-		 ,@MoveTo_Folder_Name = 'old'				-- If you set @After_Successful_Execution_Policy to 2 or more, the copy or movement command will be t this folder preserving the original directory tree structure, and if you
+		 ,@MoveTo_Folder_Name = 'old'				
+				-- If you set @After_Successful_Execution_Policy to 2 or more, the copy or movement command will be t this folder preserving the original directory tree structure, and if you
 				-- leave this empty, the files will be logically moved/copied to one level up in the directory tree.
 
 ```
