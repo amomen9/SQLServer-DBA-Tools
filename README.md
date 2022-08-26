@@ -23,7 +23,77 @@ please read them below.
 ## Contained Scripts
   <br/>
 <dl>
-  
+ 
+
+<dt>7. sp_restore_latest_backups</dt>
+  <br/>
+	<dd> </dd>
+	<dd>
+	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
+  	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
+	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
+	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
+	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
+	database already exists, a tail of log backup can be taken optionally first.
+	</dd>
+	<dd> </dd>
+	<dd><b>Example:</b></dd>
+	<dd> </dd>
+</dl>
+
+```
+exec sp_restore_latest_backups 
+
+	@Drop_Database_if_Exists = 0,
+					-- Turning this feature on is not recommended because 'replace' option of the restore command, transactionally drops the
+					-- existing database first and then restores the backup. That means if restore fails, drop also will not commit, a procedure
+					-- which cannot be implemented by the tsql programmer (alter database, drop database, restore database commands cannot be put into a user
+					-- transaction). But if you want a clean restore (Currently I don't know what the difference between 'restore with replace' and 'drop and restore'
+					-- is except for what i said which is an advantage of 'restore with replace'), set this parameter to 1, however it's risky and not
+					-- recommended because if the restore operation fails, the drop operation cannot be reverted and you will lose the existing database. If you
+					-- don't set this parameter to 1, the 'replace' option of the restore command will be used anyway. 
+					-- Note: if you want to use this parameter only to relocate database files 'replace' command does this for you and you don't need to use this
+					-- parameter. Generally, use this parameter as a last resort on a manual execution basis.
+
+	@Destination_Database_Name_suffix = N'',
+					-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
+					-- the database will be restored on its own. Leave empty to do so.
+	@Destination_Database_DataFiles_Location = 'same',			
+					-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
+					-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
+					-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
+					-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
+					-- has an identical structure as your original server, for example it's a clone of it.
+					-- if this parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
+					-- Setting this variable to 'same' also means forcing @Drop_Database_if_Exists to 1
+					-- Possible options: 'SAME'|''. '' or NULL means target server's default
+	@Destination_Database_LogFile_Location = 'D:\test\testLog',	
+					-- if @Destination_Database_DataFiles_Location parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
+	@Backup_root = N'e:\TestBackup',		
+					-- Root location for backup files.
+	@IncludeSubdirectories = 1,
+					-- Choose whether to include subdirectories or not while the script is searching for backup files.
+	@Keep_Database_in_Restoring_State = 0,						
+					-- If equals to 1, the database will be kept in restoring state
+	@Take_tail_of_log_backup = 0,
+																
+	@DataFileSeparatorChar = '_',		
+					-- This parameter specifies the punctuation mark used in data files names. For example "_"
+					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
+	@Change_Target_RecoveryModel_To = 'simple',
+					-- Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+					-- If the chosen option is simple, the log file will also shrink
+	@Set_Target_Databases_ReadOnly = 1,
+	@Delete_Backup_File = 0
+					-- Turn this feature on to delete the backup files that are successfully restored.
+```
+	
+
+<dl>
+
+
+
+ 
 <dt>1. Backup Website (Within T-SQL_Backup&Restore repo directory):</dt>
   <br/>  	
 <dd>This script performs a full backup of the database and home folder files of the intended website. It can be turned into a
@@ -156,71 +226,6 @@ The home folder backup has a similar name. A checkdb will also be performed prio
 									-- also be a windows login and authorized to restore backups on the target SQL Server
 	@DestinationPass = 'P@$$W0rd'
 ```
-<dl>
-<dt>7. sp_restore_latest_backups</dt>
-  <br/>
-	<dd> </dd>
-	<dd>
-	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
-  	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
-	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
-	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
-	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
-	database already exists, a tail of log backup can be taken optionally first.
-	</dd>
-	<dd> </dd>
-	<dd><b>Example:</b></dd>
-	<dd> </dd>
-</dl>
-
-```
-exec sp_restore_latest_backups 
-
-	@Drop_Database_if_Exists = 0,
-					-- Turning this feature on is not recommended because 'replace' option of the restore command, transactionally drops the
-					-- existing database first and then restores the backup. That means if restore fails, drop also will not commit, a procedure
-					-- which cannot be implemented by the tsql programmer (alter database, drop database, restore database commands cannot be put into a user
-					-- transaction). But if you want a clean restore (Currently I don't know what the difference between 'restore with replace' and 'drop and restore'
-					-- is except for what i said which is an advantage of 'restore with replace'), set this parameter to 1, however it's risky and not
-					-- recommended because if the restore operation fails, the drop operation cannot be reverted and you will lose the existing database. If you
-					-- don't set this parameter to 1, the 'replace' option of the restore command will be used anyway. 
-					-- Note: if you want to use this parameter only to relocate database files 'replace' command does this for you and you don't need to use this
-					-- parameter. Generally, use this parameter as a last resort on a manual execution basis.
-
-	@Destination_Database_Name_suffix = N'',
-					-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
-					-- the database will be restored on its own. Leave empty to do so.
-	@Destination_Database_DataFiles_Location = 'same',			
-					-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
-					-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
-					-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
-					-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
-					-- has an identical structure as your original server, for example it's a clone of it.
-					-- if this parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
-					-- Setting this variable to 'same' also means forcing @Drop_Database_if_Exists to 1
-					-- Possible options: 'SAME'|''. '' or NULL means target server's default
-	@Destination_Database_LogFile_Location = 'D:\test\testLog',	
-					-- if @Destination_Database_DataFiles_Location parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
-	@Backup_root = N'e:\TestBackup',		
-					-- Root location for backup files.
-	@IncludeSubdirectories = 1,
-					-- Choose whether to include subdirectories or not while the script is searching for backup files.
-	@Keep_Database_in_Restoring_State = 0,						
-					-- If equals to 1, the database will be kept in restoring state
-	@Take_tail_of_log_backup = 0,
-																
-	@DataFileSeparatorChar = '_',		
-					-- This parameter specifies the punctuation mark used in data files names. For example "_"
-					-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
-	@Change_Target_RecoveryModel_To = 'simple',
-					-- Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
-					-- If the chosen option is simple, the log file will also shrink
-	@Set_Target_Databases_ReadOnly = 1,
-	@Delete_Backup_File = 0
-					-- Turn this feature on to delete the backup files that are successfully restored.
-```
-	
-
 <dl>
 <dt>8. Job duration and schedules:</dt>
 	<dd> </dd>
