@@ -25,7 +25,6 @@ please give me an email at amomen@gmail.com. I'd be appreciative
 - These scripts are for SQL Server's general purposes. For corresponding instructions for each script,
 please read them below.
 - The scripts are not pretty much optimized where they don't need to be.
-- I will gladly write scripts for you if you wish.
 - Some scripts (I believe a few) might seem simple (they are put inside the "Educational" directory), but they carry usefull tricky ideas
 - If you like the codes, please spread the word and connect me on linkedin at https://www.linkedin.com/in/ali-momen if you like.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
