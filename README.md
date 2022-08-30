@@ -293,6 +293,29 @@ memberships of the owner of the job.
 	
 ```	
 
+
+<dl>
+
+---
+
+<dt> 5. <u>Upcoming:</u> Create automated dynamically generated formatted and decorated Excel (xlsx) file without SSIS:</dt>
+  <br/>
+	<dd> </dd>
+	<dd>
+	This script creates an Excel file and formats it. It can be automated to run on special occasions. A sample of the result is the following: 
+	</dd>
+	<dd> </dd>
+	<dd><b>Example:</b></dd>
+	<dd> </dd>
+</dl>
+
+```TSQL
+Sample Code:
+```
+
+
+
+
 <dl>
 
 ---
