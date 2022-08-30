@@ -302,9 +302,12 @@ memberships of the owner of the job.
   <br/>
 	<dd> </dd>
 	<dd>
-	This script creates an Excel file and formats it. It can be automated to run on special occasions. A sample of the result is the following: 
+	This script creates an Excel file and formats it. It can be automated to run on special occasions, for instance to send with an email report as attachment. The name of the file, the dates inside of it, its formatting and everything about it can be dynamic. A sample screen clipping of the result is the following: 
 	</dd>
-	<dd> </dd>
+	<p>
+		![Sample script output](img/Screenshot_5.png)
+	</p>
+	<dd>  </dd>
 	<dd><b>Example:</b></dd>
 	<dd> </dd>
 </dl>
