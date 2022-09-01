@@ -203,9 +203,8 @@ EXEC sp_restore_latest_backups
   online using this stored procedure. It supports databases with FILESTREAM/IN-MEMORY filegroups as well. You can also change the location of
   your tempdb database database files, after which a SQL Server service restart is required to put the change into effect. You can also specify
   multiple databases. If you want to move tempdb database files, you must not include any other database. 
-  <u>Upcoming:</u> Most of the times move
-  command is used to rename files/directories. I want to add this feature to this sp.
 </dd>  
+	<dd><u>Upcoming:</u> Most of the times move command is used to rename files/directories. I want to add this feature to this sp.</dd>
   <dd><b>Example:</b></dd>
 </dl>
 
