@@ -50,36 +50,6 @@ TODO:
 USE master
 GO
 
-/* If you want to your retention policy be in table variable format you may use this. I have used JSON datatype
---============== Retention Policy Type ===================================================================
-
---DROP TYPE IF EXISTS Retention_Policy
-IF not EXISTS (SELECT 1 FROM sys.types WHERE name = 'Retention_Policy')
-	CREATE TYPE Retention_Policy AS TABLE   
-		( [From (n) Days Ago] INT NOT NULL  
-		, [To (n) Days Ago] INT NULL  
-		, [Backup Retention Interval Every (n) Days] INT NOT NULL 
-		);  
-ELSE
-	PRINT 'Warning! The Retention_Policy type already exists, it may be different than what this stored procedure needs.'
-GO
-*/
---BEGIN TRY
---	DECLARE @sql NVARCHAR(500)
---	SET @sql =
---	'
-
--- 
---CREATE OR ALTER PROC sp_dirtree_fullpath
---	@path NVARCHAR(500),
---	@regex_filter NVARCHAR(128)
---AS
---BEGIN
-	
---	SELECT 1
---END
---GO
-
 --============================================================================================
 
 CREATE OR ALTER PROC sp_PrintLong
