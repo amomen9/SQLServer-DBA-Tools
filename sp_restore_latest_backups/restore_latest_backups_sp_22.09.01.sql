@@ -5,7 +5,7 @@
 -- Create date:			<2021.03.12>
 -- Latest Update Date:	<22.04.22>
 -- Description:			<Restore Backups>
--- License:				<Please refer to the license file> 
+-- License:				<Modified GNU 3, Please refer to the license file> 
 -- =============================================
 
 /*
@@ -290,7 +290,7 @@ BEGIN
   		EXEC master.sys.sp_executesql @sql , N'@Backup_Path nvarchar(150)', @Backup_Path
 
 		INSERT #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-		select DatabaseName, LastLSN, BackupFinishDate, BackupTypeDescription, ServerName from #tmp
+		select DatabaseName, LastLSN, BackupStartDate, BackupFinishDate, BackupTypeDescription, ServerName from #tmp
 
 END
 GO
@@ -634,7 +634,7 @@ BEGIN
 					end	
 
 					
-  					select @DB_Restore_Script += CHAR(10)+REPLICATE(CHAR(9),4)+head+tail
+  					select @DB_Restore_Script += CHAR(10)+REPLICATE(CHAR(9),5)+head+tail
   					from #temp2
 
 --------------------------------------------------------------------  
@@ -716,27 +716,80 @@ BEGIN
 
 				IF @Restore_Log_Backups = 1
 				BEGIN
+					
 
+					SELECT [DiskLogBackupFilesID]
+						  ,[file]
+						  ,[DatabaseName]
+						  ,ISNULL([BackupStartDate],'') [BackupStartDate]
+						  ,[BackupFinishDate]
+						  ,[BackupTypeDescription]
+						  ,[ServerName]
+						  ,[FileExtension]
+						  ,[IsAddedDuringTheLastDiskScan]
+						  ,[IsIncluded]
+					INTO #TempLog
+					FROM SQLAdministrationDB..DiskLogBackupFiles
+					WHERE	DatabaseName = @OriginalDBName AND							
+							IsIncluded = 1 AND
+							BackupStartDate >= CONVERT(DATETIME,LEFT(CONVERT(VARCHAR(50),@BackupFinishDate,121),17)+'00')
+					ORDER BY BackupStartDate
+					
+
+					ALTER TABLE #TempLog ADD CONSTRAINT PK_TempLog PRIMARY KEY(BackupStartDate) WITH (FILLFACTOR=80)
+					
+					-- Analyzing and ascertaining the first log backup to restore:
+					DECLARE @file NVARCHAR(255),
+							@BackupFinishDateForCursor DATETIME
+					DECLARE FinishDateFinder CURSOR LOCAL FOR
+						SELECT 
+							TOP 2 [file], BackupFinishDate
+						FROM
+                        #TempLog
+						ORDER BY BackupStartDate
+					OPEN FinishDateFinder
+						FETCH NEXT FROM FinishDateFinder INTO @file, @BackupFinishDateForCursor
+						WHILE @@FETCH_STATUS = 0
+						BEGIN
+							IF @BackupFinishDateForCursor IS NULL
+							BEGIN
+								EXEC dbo.sp_BackupDetails @Backup_Path = @file -- nvarchar(1000)
+								UPDATE #TempLog 
+									SET BackupFinishDate = (SELECT TOP 1 BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9)
+								WHERE CURRENT OF FinishDateFinder
+								DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+							END
+
+							FETCH NEXT FROM FinishDateFinder INTO @file, @BackupFinishDateForCursor
+						END
+					CLOSE FinishDateFinder
+					DEALLOCATE FinishDateFinder
+
+					DELETE a FROM
+					(
+						SELECT TOP 2 * FROM #TempLog 
+					) a
+					WHERE BackupFinishDate < @BackupFinishDate
+
+					-- Analyzing and ascertaining the last log backup to restore:
 					SELECT TOP 1 
 							@LastLogBackupID			= DiskLogBackupFilesID,
 							@LastLogBackupFinishDate	= BackupFinishDate,
 							@LastLogBackupStartDate		= BackupStartDate,
 							@LastLogBackupLocation		= [file]
-					FROM SQLAdministrationDB..DiskLogBackupFiles
-					WHERE DatabaseName = @OriginalDBName AND
-							IsIncluded = 1
+					FROM #TempLog					
 					ORDER BY BackupStartDate DESC
                  
 					IF @LastLogBackupLocation IS NOT NULL
 					BEGIN					
                     
+						
 						IF @LastLogBackupFinishDate IS NULL
 						BEGIN
 							EXEC dbo.sp_BackupDetails @Backup_Path = @LastLogBackupLocation -- nvarchar(1000)
 							SELECT TOP 1 @LastLogBackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 							DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 						END
-
 
 						IF @LastLogBackupFinishDate < @StopAt
 						BEGIN
@@ -753,26 +806,34 @@ BEGIN
 							FROM SQLAdministrationDB..DiskLogBackupFiles 
 							WHERE 
 								DatabaseName = @OriginalDBName AND 
-								COALESCE(BackupStartDate,BackupFinishDate) > COALESCE(@LastLogBackupStartDate, @LastLogBackupFinishDate)							
-							ORDER BY COALESCE(BackupStartDate,BackupFinishDate)
+								BackupStartDate > @LastLogBackupStartDate
+							ORDER BY BackupStartDate
 
 
 							IF @StopAt <= @NextLogBackup_BackupStartDate
 							BEGIN
 							
-
-								UPDATE a
-								SET IsIncluded = 1
-								FROM
+								INSERT #TempLog 
 								(
-									SELECT TOP 1 IsIncluded
-									FROM SQLAdministrationDB..DiskLogBackupFiles 									
-									WHERE 
-										DatabaseName = @OriginalDBName AND 
-										COALESCE(BackupStartDate,BackupFinishDate) > COALESCE(@LastLogBackupStartDate, @LastLogBackupFinishDate)							
-									ORDER BY COALESCE(BackupStartDate,BackupFinishDate)
-								) a
-
+									[file],
+									DatabaseName,
+									BackupStartDate,
+									BackupFinishDate,
+									BackupTypeDescription,
+									ServerName,
+									FileExtension,
+									IsAddedDuringTheLastDiskScan,
+									IsIncluded
+								)
+								SELECT	@NextLogBackup_Location,
+										@OriginalDBName,
+										@NextLogBackup_BackupStartDate,
+										@NextLogBackup_BackupFinishDate,
+										'LOG',
+										NULL,
+										NULL,
+										NULL,
+										1
 							
 								SET @LastLogBackupID = @NextLogBackup_ID							
 								SET @LastLogBackupLocation = @NextLogBackup_Location
@@ -787,18 +848,14 @@ BEGIN
 						
 						END
 					
+
 						SELECT 
-								@Log_Restore_Script = STRING_AGG(CONVERT(NVARCHAR(max),'RESTORE LOG '+QUOTENAME(@Restore_DBName)+' FROM DISK=N'''+[file]+''''),' WITH NORECOVERY'+CHAR(10)),
-								@No_of_Log_Backups	= SUM(dt.increment)
+							@Log_Restore_Script = STRING_AGG(CONVERT(NVARCHAR(max),'RESTORE LOG '+QUOTENAME(@Restore_DBName)+' FROM DISK=N'''+[file]+''''),' WITH NORECOVERY'+CHAR(10)),
+							@No_of_Log_Backups	= COUNT([file])
 						FROM
-						(
-							SELECT TOP 1000000 [file], 1 increment
-							FROM SQLAdministrationDB..DiskLogBackupFiles
-							WHERE	DatabaseName = @OriginalDBName AND							
-									IsIncluded = 1 AND
-									BackupStartDate > @BackupFinishDate
-							ORDER BY COALESCE(BackupStartDate, BackupFinishDate)
-						) dt
+						#TempLog
+						
+
 
 						--**				
 						IF OBJECT_ID('SQLAdministrationDB..temp') IS NULL
@@ -894,14 +951,8 @@ BEGIN
 							SELECT 
 								CONVERT(NVARCHAR(max),'RESTORE LOG '+QUOTENAME(@Restore_DBName)+' FROM DISK=N'''+[file]+'''')							
 							FROM
-							(
-								SELECT TOP 1000000 [file]
-								FROM SQLAdministrationDB..DiskLogBackupFiles
-								WHERE	DatabaseName = @OriginalDBName AND							
-										IsIncluded = 1 AND
-										BackupStartDate > @BackupFinishDate
-								ORDER BY COALESCE(BackupStartDate, BackupFinishDate)
-							) dt
+							#TempLog
+							ORDER BY BackupStartDate
 						OPEN LogRestore
 							FETCH NEXT FROM LogRestore INTO @Log_Restore_Script
 							WHILE @@FETCH_STATUS = 0
@@ -1785,6 +1836,7 @@ BEGIN
 		(
 			DatabaseName nvarchar(128),
 			LastLSN decimal(25),
+			BackupStartDate datetime,
 			BackupFinishDate datetime,
 			BackupTypeDescription nvarchar(128),
 			ServerName NVARCHAR(128)
@@ -1948,6 +2000,7 @@ BEGIN
 
 					---------------------------------------------------------------------------------------------------------
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set DatabaseName = ISNULL((select top 1 DatabaseName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9),concat(''UnreadableBackupFile_'', LEFT(CONVERT(NVARCHAR(50),NEWID()),12))) WHERE CURRENT OF BackupDetails
+							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set BackupStartDate = (select top 1 BackupStartDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails							
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set BackupFinishDate = (select top 1 BackupFinishDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set BackupTypeDescription = (select top 1 BackupTypeDescription from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set ServerName = (select top 1 ServerName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
@@ -2048,7 +2101,7 @@ BEGIN
 			AS
 			(
 				SELECT  
-					ROW_NUMBER() OVER (PARTITION BY DatabaseName ORDER BY COALESCE(BackupFinishDate,BackupStartDate) DESC) AS [Row] ,
+					ROW_NUMBER() OVER (PARTITION BY DatabaseName ORDER BY BackupStartDate DESC) AS [Row] ,
 					DiskBackupFilesID,
 					DatabaseName AS database_name,
 					[file]
@@ -2311,6 +2364,7 @@ BEGIN
 
 						---------------------------------------------------------------------------------------------------------
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set DatabaseName = ISNULL((select top 1 DatabaseName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9),concat(''UnreadableBackupFile_'', LEFT(CONVERT(NVARCHAR(50),NEWID()),12))) WHERE CURRENT OF BackupDetails
+								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set BackupStartDate = (select top 1 BackupStartDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails								
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set BackupFinishDate = (select top 1 BackupFinishDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set BackupTypeDescription = (select top 1 BackupTypeDescription from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set ServerName = (select top 1 ServerName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
@@ -2426,7 +2480,8 @@ BEGIN
 	END
 	ELSE
 		DECLARE @Databases NVARCHAR(4000)
-		PRINT('')
+		PRINT(CHAR(10))
+		--RAISERROR('***Begining Operation:',0,1) WITH NOWAIT
 		PRINT('DATABASES TO RESTORE: ('+@Number_of_Databases_to_Restore+' Database' + IIF(@Number_of_Databases_to_Restore>1,'s','') + ')')
 		PRINT('---------------------')		
 		IF @Destination_DatabaseName<>'' AND @Number_of_Databases_to_Restore = 1
@@ -2511,7 +2566,7 @@ GO
 
 EXEC sp_restore_latest_backups 
 
-	@Destination_Database_Name_suffix = N'',
+	@Destination_Database_Name_suffix = N'_test',
   										-- (Optional) You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   										-- the database will be restored on its own. 
 	@Destination_Database_Name_prefix = N'',
@@ -2594,7 +2649,7 @@ EXEC sp_restore_latest_backups
 	@Include_DBName_Filter = --'SQLAdministrationDB',
 							--'dbWarden', 
 							--N'nOrthwind',
-							N'CandoMainDB',
+							N'CandoMainDB, CandoIdpDB',
 							--N'',
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
@@ -2610,7 +2665,7 @@ EXEC sp_restore_latest_backups
 	@LogBackup_root_or_path = N'\\172.16.40.35\Backup\Backup\Database',
 										-- (Optional) If left undefined, the script will assume that the log backups root is the same as the full
 										-- backups' root
-	@StopAt = '2022.08.28 15:23:18',--'2022.08.12 09:25:25',
+	@StopAt = '2022.08.28 01:53:18',--'2022.08.28 15:23:18',--'2022.08.12 09:25:25',
 										-- (Optional)
 	------------ End Log backup restore related parameters: ---------------------------------------------------
 	
@@ -2626,7 +2681,7 @@ EXEC sp_restore_latest_backups
 										
 	@Set_Target_Databases_ReadOnly = 0,
 										-- (Optional)
-	@STATS = 50,
+	@STATS = 30,
 										-- (Optional) Report restore percentage stats in SQL Server restore process.
 	@Generate_Statements_Only = 0,
 										-- (Optional) use this to generate restore statements without executing them.

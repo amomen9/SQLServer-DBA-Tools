@@ -50,7 +50,8 @@ please read them below.
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
 	and optionally probes for log backups for point in time recovery or restoring to a later moment than the last full backup,
 	reads the database name and backup dates from these files and restores the latest backup of every found database within the given
-	criteria. If the database already exists, a tail of log backup can be taken first.
+	criteria. If the database already exists, a tail of log backup can be taken first. Sample Standard Output of the execution is within
+	sp_restore_latest_backups directory.
 	</dd>
 	<dd> </dd>
 	<dd><b>Example:</b></dd>
