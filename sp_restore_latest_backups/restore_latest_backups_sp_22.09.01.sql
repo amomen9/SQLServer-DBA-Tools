@@ -5,13 +5,14 @@
 -- Create date:			<2021.03.12>
 -- Latest Update Date:	<22.04.22>
 -- Description:			<Restore Backups>
--- License:				<Modified GNU 3, Please refer to the license file> 
+-- License:				<Modified GNU 3, please refer to the license file.> 
 -- =============================================
 
 /*
 
 
-This script	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
+This script	restores the latest backups from backup files accessible to the server within the given criteria. As the server is most likely
+	not the original producer of these backups,
 	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
 	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
@@ -2639,7 +2640,7 @@ EXEC sp_restore_latest_backups
 										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside SQLAdministrationDB database for faster access to backup file records and their details.
 	
 	@Exclude_system_databases = 1,		-- (Optional) set to 1 to avoid system databases' backups
-	@Exclude_DBName_Filter = N'  %adventure%,  %JobVisionDW%',					
+	@Exclude_DBName_Filter = N'  %adventure%,  %NorthwindDW%',					
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded. You
@@ -2649,7 +2650,7 @@ EXEC sp_restore_latest_backups
 	@Include_DBName_Filter = --'SQLAdministrationDB',
 							--'dbWarden', 
 							--N'nOrthwind',
-							N'CandoMainDB, CandoIdpDB',
+							N'Northwind, AdventureWorks',
 							--N'',
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
