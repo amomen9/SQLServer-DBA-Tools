@@ -2687,4 +2687,3 @@ SELECT * FROM SQLAdministrationDB..DiskBackupFiles
 -- Second Run: 00:00:13
 -- Third Run: 00:00:03
 
--- restore database sqladministrationdb_test with recovery
