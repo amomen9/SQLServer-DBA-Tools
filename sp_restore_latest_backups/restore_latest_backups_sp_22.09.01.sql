@@ -43,8 +43,7 @@ Attention:
 TODO: 
 	  
 	  
-	  1. Log support
-	  2. attach detached datafiles
+	  1. attach detached datafiles
 
 */
 
