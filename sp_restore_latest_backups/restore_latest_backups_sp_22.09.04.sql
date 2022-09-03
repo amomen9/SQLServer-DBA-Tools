@@ -3,9 +3,9 @@
 -- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2021.03.12>
--- Latest Update Date:	<22.09.01>
+-- Latest Update Date:	<22.09.04>
 -- Description:			<Restore Backups>
--- License:				<Modified GNU 3, please refer to the license file.> 
+-- License:				<This script is only to be used by Ali Momen. Every other usage even in your test environments is prohibited> 
 -- =============================================
 
 /*
@@ -43,12 +43,43 @@ Attention:
 TODO: 
 	  
 	  
-	  1. attach detached datafiles
+	  1. Log support
+	  2. attach detached datafiles
 
 */
 
 USE master
 GO
+
+/* If you want to your retention policy be in table variable format you may use this. I have used JSON datatype
+--============== Retention Policy Type ===================================================================
+
+--DROP TYPE IF EXISTS Retention_Policy
+IF not EXISTS (SELECT 1 FROM sys.types WHERE name = 'Retention_Policy')
+	CREATE TYPE Retention_Policy AS TABLE   
+		( [From (n) Days Ago] INT NOT NULL  
+		, [To (n) Days Ago] INT NULL  
+		, [Backup Retention Interval Every (n) Days] INT NOT NULL 
+		);  
+ELSE
+	PRINT 'Warning! The Retention_Policy type already exists, it may be different than what this stored procedure needs.'
+GO
+*/
+--BEGIN TRY
+--	DECLARE @sql NVARCHAR(500)
+--	SET @sql =
+--	'
+
+-- 
+--CREATE OR ALTER PROC sp_dirtree_fullpath
+--	@path NVARCHAR(500),
+--	@regex_filter NVARCHAR(128)
+--AS
+--BEGIN
+	
+--	SELECT 1
+--END
+--GO
 
 --============================================================================================
 
@@ -162,19 +193,18 @@ GO
 
 --====================================================================================
 -- Checks if the file with the given path exists
-CREATE OR alter FUNCTION dbo.fn_FileExists(@path varchar(512))
+CREATE OR alter FUNCTION dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName sysname, @path varchar(512))
 RETURNS BIT
+WITH RETURNS NULL ON NULL INPUT
 AS
 BEGIN
-		DECLARE @result INT
-		EXEC master.dbo.xp_fileexist @path, @result OUTPUT
-		RETURN cast(@result as bit)
+	IF	(SELECT file_exists+file_is_a_directory FROM sys.dm_os_file_exists(@path)) = 1 AND 
+		(SELECT DB_NAME(database_id) FROM sys.master_files WHERE physical_name = @path) <> @Restore_DBName
+		RETURN 1
+	ELSE
+		RETURN 0		
+	RETURN 0
 END;
---	'
---	EXEC (@sql)
---END TRY
---BEGIN CATCH
---END CATCH
 GO
 
 --============== First SP ================================================================================
@@ -390,7 +420,7 @@ BEGIN
   ----------------------------------------------- Restoring Database:
 		BEGIN try
     		  		
-  			print('-----------------------------------------------------------------------------------------------------------')
+  			print('--=========================================================================================================')
 
 			-------------------------------------------------------------------
 
@@ -539,7 +569,7 @@ BEGIN
 					)
 					
 					INSERT #temp2 (head, tail, type, [File Exists])					
-						SELECT head, dt.tail, dt.Type, dbo.fn_FileExists(tail) from
+						SELECT head, dt.tail, dt.Type, dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName,tail) from
 						(
   						
   							select ',MOVE N''' + LogicalName + ''' TO N''' head, 
@@ -557,7 +587,7 @@ BEGIN
 							+ '\' + 
 							iif(CHARINDEX(@OriginalDBName,RIGHT(PhysicalName,CHARINDEX('\', REVERSE(PhysicalName))))<>0
 									,REPLACE(RIGHT(PhysicalName,(CHARINDEX('\', REVERSE(PhysicalName))-1)),@OriginalDBName,@Restore_DBName)
-									,@Restore_DBName+'_'+RIGHT(PhysicalName,(CHARINDEX('\', REVERSE(PhysicalName))-1)))+'''' 
+									,@Restore_DBName+'_'+RIGHT(PhysicalName,(CHARINDEX('\', REVERSE(PhysicalName))-1)))
 							-- Put SeparatorChar* or .extension after @Restore_DBName:
 
 							AS tail,
@@ -566,45 +596,25 @@ BEGIN
 
 						) dt
 
-						DECLARE @ReplaceFlag BIT
-                        DECLARE @ReplaceFlagComp NVARCHAR(500)
-						DECLARE @ReplaceFlagParams NVARCHAR(100) = '@ReplaceFlag BIT out'
-						DECLARE @ServerCollation NVARCHAR(200) = CONVERT(NVARCHAR(200),SERVERPROPERTY('Collation'))
-						--SET @ReplaceFlagComp =
-						--'
-						--	if (select 1 from sys.databases where name = '''+@Restore_DBName+''') is not null
-						--		select @ReplaceFlag = iif(count(*)<>0,0,1) from
-						--		(
-						--			select tail from #temp2 where [File Exists] = 1
-						--			except
-						--			select physical_name collate ' + @ServerCollation + ' from '+QUOTENAME(@Restore_DBName)+'.sys.database_files																		
-						--		) dt
-						--'
-
-						SET @ReplaceFlagComp =
-						'
-							if DB_ID('''+@Restore_DBName+''') is not null
-								select @ReplaceFlag = iif(count(*)<>0,0,1) from
-								(
-									select tail from #temp2 where [File Exists] = 1
-									except
-									select physical_name from sys.master_files where database_id = DB_ID('''+@Restore_DBName+''')																		
-								) dt
-						'
-
-						EXEC sys.sp_executesql @ReplaceFlagComp, @ReplaceFlagParams, @ReplaceFlag out
 
 
-					WHILE @ReplaceFlag = 0 and
-						(SELECT COUNT(*) FROM #temp2 WHERE [File Exists] = 1) <> 0 
+					WHILE EXISTS (SELECT 1 FROM #temp2 WHERE [File Exists] = 1) 
 					BEGIN
 
-						UPDATE  #temp2 SET tail = LEFT(tail,LEN(tail)-4)+'_2'+RIGHT(tail,4) 
-						UPDATE #temp2 SET [File Exists] = dbo.fn_FileExists(tail)
+						UPDATE a 
+							SET tail = LEFT(tail,LEN(tail)-4)+'_2'+RIGHT(tail,4),
+								a.[File Exists] = dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName, LEFT(tail,LEN(tail)-4)+'_2'+RIGHT(tail,4))
+						FROM 
+						(
+							SELECT TOP 1 tail, [File Exists]
+							FROM #temp2
+							WHERE [File Exists] = 1							
+						) a
+						
 					end	
 
 					
-  					select @DB_Restore_Script += CHAR(10)+REPLICATE(CHAR(9),5)+head+tail
+  					select @DB_Restore_Script += CHAR(10)+REPLICATE(CHAR(9),5)+head+tail+''''
   					from #temp2
 
 --------------------------------------------------------------------  
@@ -679,7 +689,7 @@ BEGIN
 											  
   			
   			END	
-  				PRINT '------------ DB restore statement ------------'+CHAR(10)+CHAR(10)+@DB_Restore_Script
+  				PRINT '-------- DB restore statement --------'+CHAR(10)+CHAR(10)+@DB_Restore_Script
 
 				------------- Begin generating Log Backups restore statements: ---------------------------------------------------
 
@@ -838,7 +848,7 @@ BEGIN
 						IF @Log_Restore_Script <> ''
 						BEGIN
 
-							PRINT CHAR(10)+'------- Log restore statement'+IIF(@No_of_Log_Backups>1,'s','')+'('+CONVERT(VARCHAR(3),@No_of_Log_Backups)+' backup'+IIF(@No_of_Log_Backups>1,'s','')+'): -------'+ CHAR(10)
+							PRINT CHAR(10)+'----- Log restore statement'+IIF(@No_of_Log_Backups>1,'s','')+'('+CONVERT(VARCHAR(3),@No_of_Log_Backups)+' backup'+IIF(@No_of_Log_Backups>1,'s','')+'): -----'+ CHAR(10)
 
 							IF @StopAt<@LastLogBackupFinishDate
 								SET @Log_Restore_Script+=CONVERT(NVARCHAR(MAX),' WITH STOPAT=N'''+CONVERT(VARCHAR(23),@StopAt,126)+''''+IIF(@Keep_Database_in_Restoring_State = 1,', NORECOVERY',''))
@@ -1937,10 +1947,10 @@ BEGIN
 		BEGIN 
 			
 
-			SET @message = 'Reading headers of backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed mode):'
+			SET @message = CHAR(10)+'Reading headers of backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed mode):'+CHAR(10)+'0 percent of files processed.'
             RAISERROR(@message,0,1) WITH NOWAIT
 
-			SET @Chunk_Size = 300					-- 500 files estimatedly take long enough to read, for the user to be prompted of the progress
+			SET @Chunk_Size = 200					-- 500 files estimatedly take long enough to read, for the user to be prompted of the progress
 			SET @LoopCount = CEILING(@Count_FileHeaders_to_read*1.0/@Chunk_Size)	
 			SET @count = @LoopCount
 			DECLARE @Percentage INT
@@ -2524,7 +2534,7 @@ BEGIN
 			END 
 		CLOSE RestoreResults
 		DEALLOCATE RestoreResults
-		PRINT('-----------------------------------------------------------------------------------------------------------')	
+		PRINT('--=========================================================================================================')	
 		
 END
 
@@ -2619,7 +2629,7 @@ EXEC sp_restore_latest_backups
 	@Include_DBName_Filter = --'SQLAdministrationDB',
 							--'dbWarden', 
 							--N'nOrthwind',
-							N'Northwind, AdventureWorks',
+							N'CandoMainDB, CandoIdpDB',
 							--N'',
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
@@ -2687,3 +2697,4 @@ SELECT * FROM SQLAdministrationDB..DiskBackupFiles
 -- Second Run: 00:00:13
 -- Third Run: 00:00:03
 
+-- restore database sqladministrationdb_test with recovery
