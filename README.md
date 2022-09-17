@@ -54,7 +54,8 @@ please read them below.
 	sp_restore_latest_backups directory.
 	</dd>
 	<dd><b>Applications:</b></dd>
-	<dd>1. Automation of the restoring </dd>
+	<dd>1. Automation of the restoring the backups on the development or staging servers and carrying out the post-restore operations automatically like changing the recovery model, setting the database as read-only, shrinking database files, granting high permissions to every user of the database, rebuilding log file, etc.</dd>
+	<dd>2. Granting execute access on this SP to senior developers on the development instances, so that they can renew or PITR their databases whenever they require without the need for DBAs' intervention or their direct access to the backup files/repository.</dd>
 	<dd> </dd>
 	<dd><b>Example:</b></dd>
 	<dd> </dd>
