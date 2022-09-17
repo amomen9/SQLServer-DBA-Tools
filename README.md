@@ -42,7 +42,7 @@ please read them below.
 
 <dt>1. sp_restore_latest_backups</dt>
   <br/>
-	<dd> Effortlessly restore backups in a folder tree (no matter how deep they are) to whatever point in time or to the latest log backup available on an instance either from scratch or replace the existing one.</dd>
+	<dd> Effortlessly restore backups in a folder tree (no matter how deep they are) to whatever point in time or to the latest log backup available on an instance, either from scratch or replace the existing one.</dd>
 	<dd>
 	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
