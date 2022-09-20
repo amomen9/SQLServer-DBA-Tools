@@ -3,9 +3,9 @@
 -- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2021.03.12>
--- Latest Update Date:	<22.09.04>
+-- Latest Update Date:	<22.09.20>
 -- Description:			<Restore Backups>
--- License:				<This script is only to be used by Ali Momen. Every other usage even in your test environments is prohibited> 
+-- License:				<Please refer to the license file> 
 -- =============================================
 
 /*
@@ -43,8 +43,7 @@ Attention:
 TODO: 
 	  
 	  
-	  1. Log support
-	  2. attach detached datafiles
+	  1. attach detached datafiles
 
 */
 
@@ -321,7 +320,7 @@ create or alter proc sp_complete_restore
 	@Generate_Statements_Only bit = 0,
 	-- post-restore operations
 	@Delete_Backup_File BIT = 0,
-	@Change_Target_RecoveryModel_To NVARCHAR(20) = 'same',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+	@Change_Target_RecoveryModel_To NVARCHAR(20) = 'InheritFromSource',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|InheritFromSource
 	@Set_Target_Database_ReadOnly BIT = 0,
 
 	@ShrinkDatabase_policy SMALLINT = -2,						-- Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
@@ -345,7 +344,7 @@ BEGIN
 	SET @Restore_Suffix = ISNULL(@Restore_Suffix,'')
 	SET @Restore_Prefix = ISNULL(@Restore_Prefix,'')
 	SET @Restore_DBName = @Restore_Prefix + @Restore_DBName + @Restore_Suffix
-	IF (@Change_Target_RecoveryModel_To IS NULL) OR (@Change_Target_RecoveryModel_To = '') SET @Change_Target_RecoveryModel_To = 'same'
+	IF (@Change_Target_RecoveryModel_To IS NULL) OR (@Change_Target_RecoveryModel_To = '') SET @Change_Target_RecoveryModel_To = 'InheritFromSource'
 	SET @Destination_Database_Datafiles_Location = ISNULL(@Destination_Database_Datafiles_Location,'')
 	SET @Destination_Database_LogFile_Location = ISNULL(@Destination_Database_Logfile_Location,'')
 	SET @RebuildLogFile_policy = ISNULL(@RebuildLogFile_policy,'')
@@ -373,7 +372,7 @@ BEGIN
 	RETURN 1
 	END
 	
-	IF @Change_Target_RecoveryModel_To NOT IN ('FULL','BULK-LOGGED','SIMPLE','SAME')
+	IF @Change_Target_RecoveryModel_To NOT IN ('FULL','BULK-LOGGED','SIMPLE','InheritFromSource','SameAsDestination')
 	BEGIN
 	RAISERROR('Target recovery model specified is not a recognized SQL Server recovery model.',16,1)
 	RETURN 1
@@ -555,7 +554,7 @@ BEGIN
 
 ------------------ Adding move statements:---------------------------	
 -- [File Exists] here cannot be turned into a computed column, because then you have to create the fuction inside tempdb, and when you want
--- to reexecute this script instantly the temp table most likely is not disposed yet, it takes some time for this table to be disposed
+-- to reexecute this script instantly the temp table most likely is not disposed of yet, it takes some time for this table to be disposed of
 -- (A SQL Server bug in my opinion), that's why the function
 -- cannot be recreated due to the dependancy of temp table on the function, therefore an error will be raised which is not the problem of this
 -- script and is SQL Server's itself. That's why computed column cannot be used. Suppressing the error also appeared to be not a correct decision
@@ -576,12 +575,12 @@ BEGIN
 							CASE when Type = 'L' then 
 							IIF
 							(
-								@Destination_Database_LogFile_Location <> 'same',@Destination_Database_LogFile_Location, LEFT(PhysicalName, (LEN(PhysicalName) - CHARINDEX('\',REVERSE(PhysicalName))))
+								@Destination_Database_LogFile_Location <> 'InheritFromSource',@Destination_Database_LogFile_Location, LEFT(PhysicalName, (LEN(PhysicalName) - CHARINDEX('\',REVERSE(PhysicalName))))
 							)
 							ELSE 
 							IIF
 							(
-								@Destination_Database_DataFiles_Location <> 'same',@Destination_Database_DataFiles_Location, LEFT(PhysicalName, (LEN(PhysicalName) - CHARINDEX('\',REVERSE(PhysicalName))))
+								@Destination_Database_DataFiles_Location <> 'InheritFromSource',@Destination_Database_DataFiles_Location, LEFT(PhysicalName, (LEN(PhysicalName) - CHARINDEX('\',REVERSE(PhysicalName))))
 							)
 							END
 							+ '\' + 
@@ -620,11 +619,11 @@ BEGIN
 --------------------------------------------------------------------  
 				end
 
-----------------Creating necessary directories for 'same' option ----------------------------------------------------
+----------------Creating necessary directories for 'InheritFromSource' option ----------------------------------------------------
 					IF (@Generate_Statements_Only = 0 )
 					BEGIN
 						declare @DirPath nvarchar(1000)
-						IF @Destination_Database_DataFiles_Location = 'same'
+						IF @Destination_Database_DataFiles_Location = 'InheritFromSource'
 						begin
 							DECLARE mkdir cursor for 
 								SELECT PhysicalName from #Backup_Files_List
@@ -649,7 +648,7 @@ BEGIN
 							CLOSE mkdir
 							DEALLOCATE mkdir
 						END
-						IF @Destination_Database_LogFile_Location = 'same'
+						IF @Destination_Database_LogFile_Location = 'InheritFromSource'
 						BEGIN
 							DECLARE mkdir cursor for 
 								SELECT PhysicalName from #Backup_Files_List
@@ -675,7 +674,7 @@ BEGIN
 							DEALLOCATE mkdir
                         END
 					END
---------------------End creating necessary directories for 'same' option----------------------------------------------------------------------------
+--------------------End creating necessary directories for 'InheritFromSource' option----------------------------------------------------------------------------
 
 
                 if @Keep_Database_in_Restoring_State = 1 OR @Restore_Log_Backups = 1
@@ -697,23 +696,39 @@ BEGIN
 				IF @Restore_Log_Backups = 1
 				BEGIN
 					
-
-					SELECT [DiskLogBackupFilesID]
-						  ,[file]
-						  ,[DatabaseName]
-						  ,ISNULL([BackupStartDate],'') [BackupStartDate]
-						  ,[BackupFinishDate]
-						  ,[BackupTypeDescription]
-						  ,[ServerName]
-						  ,[FileExtension]
-						  ,[IsAddedDuringTheLastDiskScan]
-						  ,[IsIncluded]
+					SELECT
+						 [DiskLogBackupFilesID]
+						,[file]
+						,[DatabaseName]
+						,ISNULL([BackupStartDate],'') [BackupStartDate]
+						,[BackupFinishDate]
+						,[BackupTypeDescription]
+						,[ServerName]
+						,[FileExtension]
+						,[IsAddedDuringTheLastDiskScan]
+						,[IsIncluded]
 					INTO #TempLog
-					FROM SQLAdministrationDB..DiskLogBackupFiles
-					WHERE	DatabaseName = @OriginalDBName AND							
-							IsIncluded = 1 AND
-							BackupStartDate >= CONVERT(DATETIME,LEFT(CONVERT(VARCHAR(50),@BackupFinishDate,121),17)+'00')
-					ORDER BY BackupStartDate
+					FROM
+					(
+						SELECT	TOP 100000000
+							 [DiskLogBackupFilesID]
+							,[file]
+							,[DatabaseName]
+							,COALESCE([BackupStartDate],[BackupFinishDate],'') [BackupStartDate]
+							,[BackupFinishDate]
+							,[BackupTypeDescription]
+							,[ServerName]
+							,[FileExtension]
+							,[IsAddedDuringTheLastDiskScan]
+							,[IsIncluded]
+							, COALESCE(LEAD([BackupStartDate]) OVER (ORDER BY [BackupStartDate]), LEAD([BackupFinishDate]) OVER (ORDER BY [BackupFinishDate]), '') [LeadBackupStartDate]
+						FROM SQLAdministrationDB..DiskLogBackupFiles
+						WHERE	DatabaseName = @OriginalDBName AND							
+								IsIncluded = 1
+						ORDER BY BackupStartDate
+					) dt
+
+					WHERE [LeadBackupStartDate] >= CONVERT(DATETIME,LEFT(CONVERT(VARCHAR(50),@BackupFinishDate,121),17)+'00')
 					
 
 					ALTER TABLE #TempLog ADD CONSTRAINT PK_TempLog PRIMARY KEY(BackupStartDate) WITH (FILLFACTOR=80)
@@ -770,8 +785,9 @@ BEGIN
 							SELECT TOP 1 @LastLogBackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 							DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 						END
+						--SELECT @StopAt --**   9999-12-31 23:59:59.000
 
-						IF @LastLogBackupFinishDate < @StopAt
+						WHILE @LastLogBackupFinishDate < @StopAt
 						BEGIN
 							DECLARE @NextLogBackup_ID INT,
 									@NextLogBackup_BackupStartDate DATETIME,
@@ -788,43 +804,44 @@ BEGIN
 								DatabaseName = @OriginalDBName AND 
 								BackupStartDate > @LastLogBackupStartDate
 							ORDER BY BackupStartDate
-
-
-							IF @StopAt <= @NextLogBackup_BackupStartDate
+							--SELECT @LastLogBackupID lid, @NextLogBackup_ID nid, @LastLogBackupStartDate lstart, @NextLogBackup_BackupStartDate nstart, @LastLogBackupFinishDate lfin, @NextLogBackup_BackupFinishDate nfin
+							--**							
+							IF @NextLogBackup_ID = @LastLogBackupID
+								BREAK
+						
+							INSERT #TempLog 
+							(
+								[file],
+								DatabaseName,
+								BackupStartDate,
+								BackupFinishDate,
+								BackupTypeDescription,
+								ServerName,
+								FileExtension,
+								IsAddedDuringTheLastDiskScan,
+								IsIncluded
+							)
+							SELECT	@NextLogBackup_Location,
+									@OriginalDBName,
+									@NextLogBackup_BackupStartDate,
+									@NextLogBackup_BackupFinishDate,
+									'LOG',
+									NULL,
+									NULL,
+									NULL,
+									1
+							
+							IF @NextLogBackup_BackupFinishDate IS NULL
 							BEGIN
-							
-								INSERT #TempLog 
-								(
-									[file],
-									DatabaseName,
-									BackupStartDate,
-									BackupFinishDate,
-									BackupTypeDescription,
-									ServerName,
-									FileExtension,
-									IsAddedDuringTheLastDiskScan,
-									IsIncluded
-								)
-								SELECT	@NextLogBackup_Location,
-										@OriginalDBName,
-										@NextLogBackup_BackupStartDate,
-										@NextLogBackup_BackupFinishDate,
-										'LOG',
-										NULL,
-										NULL,
-										NULL,
-										1
-							
-								SET @LastLogBackupID = @NextLogBackup_ID							
-								SET @LastLogBackupLocation = @NextLogBackup_Location
-								IF @NextLogBackup_BackupFinishDate IS NULL
-								BEGIN
-									EXEC dbo.sp_BackupDetails @Backup_Path = @LastLogBackupLocation -- nvarchar(1000)
-									SELECT TOP 1 @LastLogBackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-									DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-								END
-
+								EXEC dbo.sp_BackupDetails @Backup_Path = @NextLogBackup_Location -- nvarchar(1000)
+								SELECT TOP 1 @NextLogBackup_BackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+								DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 							END
+							SET @LastLogBackupID			= @NextLogBackup_ID							
+							SET @LastLogBackupLocation		= @NextLogBackup_Location
+							SET @LastLogBackupStartDate		= @NextLogBackup_BackupStartDate
+							SET @LastLogBackupFinishDate	= @NextLogBackup_BackupFinishDate
+							
 						
 						END
 					
@@ -865,7 +882,7 @@ BEGIN
 					END
 					ELSE
                     BEGIN
-						SET @message = CHAR(10)+'--Warning!!! @Restore_Log_Backups option was set to 1 but no log backups where found for the database "'+@OriginalDBName+'" with the given criteria. ```The database will remain in restoring state```'+CHAR(10)
+						SET @message = CHAR(10)+'--Warning!!! @Restore_Log_Backups option was set to 1 but no log backups where found for the database "'+@OriginalDBName+'" with the given criteria. ###The database will remain in restoring state###'+CHAR(10)
 						PRINT @message
 					END
 
@@ -1064,7 +1081,7 @@ BEGIN
 				BEGIN
 					RAISERROR ('** Begin postrestore operations: **',0,1) WITH NOWAIT
 					DECLARE @temp5 varchar(4000) = ''
-					IF (@Change_Target_RecoveryModel_To <> 'same')
+					IF (@Change_Target_RecoveryModel_To <> 'InheritFromSource')
 						SET @temp5 = 'ALTER DATABASE ' + QUOTENAME(@Restore_DBName) + ' SET RECOVERY ' + @Change_Target_RecoveryModel_To + CHAR(10)
 				
 
@@ -1383,7 +1400,7 @@ CREATE OR ALTER PROC sp_restore_latest_backups
 																-- in NW_1.mdf or "$" in NW$1.mdf
 
   @STATS TINYINT = 50,											-- Set this to specify stats parameter of restore statements											
-  @Change_Target_RecoveryModel_To NVARCHAR(20) = 'same',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+  @Change_Target_RecoveryModel_To NVARCHAR(20) = 'InheritFromSource',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|InheritFromSource
   @Set_Target_Databases_ReadOnly BIT = 0,
   @Delete_Backup_File BIT = 0,
 																-- Turn this feature on to delete the backup files that are successfully restored.
@@ -1481,7 +1498,7 @@ BEGIN
   end
   --SET @Temp_Working_Directory = ISNULL(@Temp_Working_Directory,'')
   SET @DataFileSeparatorChar = ISNULL(@DataFileSeparatorChar,'_')
-  SET @Change_Target_RecoveryModel_To = ISNULL(@Change_Target_RecoveryModel_To,'same')
+  SET @Change_Target_RecoveryModel_To = ISNULL(@Change_Target_RecoveryModel_To,'InheritFromSource')
   SET @Email_Failed_Restores_To = ISNULL(@Email_Failed_Restores_To,'')
   SET @Backup_root_or_path = REPLACE(@Backup_root_or_path,'"','')
   SET @Destination_Database_DataFiles_Location = REPLACE(@Destination_Database_DataFiles_Location,'"','')
@@ -1628,7 +1645,7 @@ BEGIN
 					UPDATE DiskLogBackupFiles
 					SET IsIncluded = 1
 			'
-			IF @Restore_Log_Backups = 1
+			IF @Restore_Log_Backups = 1 OR OBJECT_ID('SQLAdministrationDB..DiskLogBackupFiles') IS NULL
 				EXEC (@sql)
 			
 			----------- creating DiskLogBackupFiles table indexes:
@@ -2557,16 +2574,18 @@ EXEC sp_restore_latest_backups
 										-- (Optional) Ignore restoring databases that already exist on target. If set to 0, the existant will be replaced.
 	@Destination_Database_DataFiles_Location = 'D:\Database Data',
 										--'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\',			
-  										-- (Optional) This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
+  										-- (Optional) Possible options: 'InheritFromSource'|''|'Some Path'|'SameAsDestination'. '' or NULL means target server's default.										
+										-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
   										-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
-										-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
+										-- the datafiles will be restored to destination servers default directory. If given 'InheritFromSource', the script will try to put datafiles to
 										-- exactly the same path as the original server. One of the situations that you can benefit from this, is if your destination server
-										-- has an identical structure as your original server, for example it's a clone of it.
-										-- if this parameter is set to 'same', the '@Destination_Database_LogFile_Location' parameter will be ignored.
-										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
+										-- has an identical disk layout as your original server, for example it's a clone of it. 
+										-- IF set to 'SameAsDestination' and the database already exists, the database will be replaced, but the database files will be placed were they
+										-- were used to be on the target server.
+										-- if this parameter is set to 'InheritFromSource', the '@Destination_Database_LogFile_Location' parameter will be ignored.
 	@Destination_Database_LogFile_Location = 'D:\Database Log',	
-										-- (Optional) If @Destination_Database_DataFiles_Location parameter is set to same, the '@Destination_Database_LogFile_Location' parameter will be ignored.
-										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
+										-- (Optional) If @Destination_Database_DataFiles_Location parameter is set to 'InheritFromSource', the '@Destination_Database_LogFile_Location' parameter will be ignored.
+										-- Possible options: 'InheritFromSource'|''|'Some Path'. '' or NULL means target server's default
 
 	@Backup_root_or_path = --'%userprofile%\desktop',
 					--N'D:\Database Backup\',
@@ -2629,7 +2648,7 @@ EXEC sp_restore_latest_backups
 	@Include_DBName_Filter = --'SQLAdministrationDB',
 							--'dbWarden', 
 							--N'nOrthwind',
-							N'CandoMainDB, CandoIdpDB',
+							N'CandoNotificationDB',
 							--N'',
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
@@ -2641,11 +2660,12 @@ EXEC sp_restore_latest_backups
 	@IncludeSubdirectories = 1,			-- (Optional) Choose whether to include subdirectories or not while the script is searching for backup files.
 	
 	------------ Begin Log backup restore related parameters: -------------------------------------------------
-	@Restore_Log_Backups = 1,			-- (Optional)
+	@Restore_Log_Backups = 0,			-- (Optional)
 	@LogBackup_root_or_path = N'\\172.16.40.35\Backup\Backup\Database',
 										-- (Optional) If left undefined, the script will assume that the log backups root is the same as the full
 										-- backups' root
-	@StopAt = '2022.08.28 01:53:18',--'2022.08.28 15:23:18',--'2022.08.12 09:25:25',
+	@StopAt = --'',
+				'2022.09.12 02:53:18',--'2022.08.28 15:23:18',--'2022.08.12 09:25:25',
 										-- (Optional)
 	------------ End Log backup restore related parameters: ---------------------------------------------------
 	
@@ -2656,14 +2676,14 @@ EXEC sp_restore_latest_backups
 	@DataFileSeparatorChar = '_',		
 										-- (Optional) This parameter specifies the punctuation mark used in data files names. For example "_"
 										-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
-	@Change_Target_RecoveryModel_To = 'same',
-										-- (Optional) Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
+	@Change_Target_RecoveryModel_To = 'InheritFromSource',
+										-- (Optional) Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|InheritFromSource|SameAsDestination
 										
 	@Set_Target_Databases_ReadOnly = 0,
 										-- (Optional)
 	@STATS = 30,
 										-- (Optional) Report restore percentage stats in SQL Server restore process.
-	@Generate_Statements_Only = 0,
+	@Generate_Statements_Only = 1,
 										-- (Optional) use this to generate restore statements without executing them.
 	@Delete_Backup_File = 0,
 										-- (Optional) Turn this feature on to delete the backup files that are successfully restored. (This does not apply to transaction log backup files)
@@ -2691,6 +2711,9 @@ GO
 --SELECT * FROM SQLAdministrationDB.dbo.RestoreHistory ORDER BY RestoreHistoryID DESC
 SELECT * FROM msdb..restorehistory ORDER BY restore_history_id DESC
 SELECT * FROM SQLAdministrationDB..DiskBackupFiles
+SELECT * FROM SQLAdministrationDB..RestoreHistory
+
+--SELECT DISTINCT DiskBackupFilesID from SQLAdministrationDB..RestoreHistory WHERE DiskBackupFilesID NOT IN (SELECT DiskBackupFilesID FROM SQLAdministrationDB..DiskBackupFiles)
 
 -- Results after "SQLAdministrationDB Caching of Files" optimization for about 6000 backup files:
 -- First Run: 00:20:51
