@@ -733,18 +733,17 @@ BEGIN
 							,[FileExtension]
 							,[IsAddedDuringTheLastDiskScan]
 							,[IsIncluded]
-							, COALESCE(LEAD([BackupStartDate]) OVER (ORDER BY [BackupStartDate]), LEAD([BackupFinishDate]) OVER (ORDER BY [BackupFinishDate]), '9999-12-31 23:59:59.000') [LeadBackupStartDate]
+							, COALESCE(LEAD([BackupStartDate]) OVER (ORDER BY [BackupStartDate]), '9999-12-31 23:59:59.000') [LeadBackupStartDate]
 						FROM SQLAdministrationDB..DiskLogBackupFiles
 						WHERE	DatabaseName = @OriginalDBName AND							
 								IsIncluded = 1
 						ORDER BY BackupStartDate
 					) dt
-
 					WHERE [LeadBackupStartDate] >= CONVERT(DATETIME,LEFT(CONVERT(VARCHAR(50),@BackupFinishDate,121),17)+'00')
 
 					ALTER TABLE #TempLog ADD CONSTRAINT PK_TempLog PRIMARY KEY(BackupStartDate) WITH (FILLFACTOR=80)
 					
-
+					
 					-- Analyzing and ascertaining the first log backup to restore:
 					DECLARE @file NVARCHAR(255)
 					DECLARE FinishDateFinder CURSOR LOCAL FOR
@@ -771,14 +770,13 @@ BEGIN
 						END
 					CLOSE FinishDateFinder
 					DEALLOCATE FinishDateFinder
-
+					
 
 					DELETE a FROM
 					(
 						SELECT TOP 2 * FROM #TempLog 
 					) a
-					WHERE a.LastLSN < @BackupLastLSN
-
+					WHERE a.LastLSN < @BackupLastLSN					
 
 
 					-- Analyzing and ascertaining the last log backup to restore:
