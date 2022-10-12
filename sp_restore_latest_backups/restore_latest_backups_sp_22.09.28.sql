@@ -1588,7 +1588,7 @@ BEGIN
   DECLARE @SQL NVARCHAR(max)
   DECLARE @Count_FileHeaders_to_read INT
   DECLARE @LoopCount INT
-  DECLARE @Chunk_Size INT
+  DECLARE @Chunk_Size INT = 200					-- 200 files estimatedly take long enough to read, for the user to be prompted of the progress
 
   IF @Exclude_system_databases = 1
   BEGIN
@@ -1920,7 +1920,7 @@ BEGIN
 
 
 		CREATE TABLE #BackupNamePartIndexes (id INT IDENTITY PRIMARY KEY NOT NULL, BackupNamePartIndex TINYINT)
-		IF @BackupFileName_naming_convention <> '' AND @Count_FileHeaders_to_read > 400
+		IF @BackupFileName_naming_convention <> '' AND @Count_FileHeaders_to_read > (2*@Chunk_Size)
 		BEGIN
 			DECLARE @Convention NVARCHAR(128),
 					@Separator	NVARCHAR(5),
@@ -2039,7 +2039,7 @@ BEGIN
 			SET @message = CHAR(10)+'Reading headers of backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed mode):'+CHAR(10)+'0 percent of files processed.'
             RAISERROR(@message,0,1) WITH NOWAIT
 
-			SET @Chunk_Size = 200					-- 500 files estimatedly take long enough to read, for the user to be prompted of the progress
+			
 			SET @LoopCount = CEILING(@Count_FileHeaders_to_read*1.0/@Chunk_Size)	
 			SET @count = @LoopCount
 			DECLARE @Percentage INT
@@ -2302,7 +2302,7 @@ BEGIN
 			'
 			EXEC sys.sp_executesql @SQL, N'@Count_FileHeaders_to_read int out', @Count_FileHeaders_to_read OUT
 			
-			IF @BackupFileName_naming_convention <> '' AND @Count_FileHeaders_to_read > 400
+			IF @BackupFileName_naming_convention <> '' AND @Count_FileHeaders_to_read > (2*@Chunk_Size)
 			BEGIN
 				
 				DECLARE FileScannerByConvention CURSOR FOR
@@ -2403,7 +2403,7 @@ BEGIN
 				SET @message = 'Reading headers of Log backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed mode):'
 				RAISERROR(@message,0,1) WITH NOWAIT
 
-				SET @Chunk_Size = 300					-- 500 files estimatedly take long enough to read, for the user to be prompted of the progress
+				
 				SET @LoopCount = CEILING(@Count_FileHeaders_to_read*1.0/@Chunk_Size)	
 				SET @count = @LoopCount
 				
@@ -2430,7 +2430,7 @@ BEGIN
 						---------------------------------------------------------------------------------------------------------
 
 								execute sp_BackupDetails @Backup_Path
-
+								print @Backup_Path
 						---------------------------------------------------------------------------------------------------------
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set DatabaseName = ISNULL((select top 1 DatabaseName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9),concat(''UnreadableBackupFile_'', LEFT(CONVERT(NVARCHAR(50),NEWID()),12))) WHERE CURRENT OF BackupDetails
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set BackupStartDate = (select top 1 BackupStartDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails								
