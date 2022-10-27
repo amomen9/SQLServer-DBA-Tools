@@ -44,8 +44,6 @@ TODO:
 	  
 	  
 	  1. attach detached datafiles
-	  2. predict low storage space and show the message in stderr
-	  3. smart percentage
 
 */
 
@@ -81,42 +79,6 @@ GO
 --	SELECT 1
 --END
 --GO
-
---============================================================================================
-
-CREATE OR ALTER FUNCTION ufn_ElapsedTime(@StartTime DATETIME)
-RETURNS VARCHAR(43)
-WITH 
-	SCHEMABINDING,
-	RETURNS NULL ON NULL INPUT
-AS
-BEGIN
-	DECLARE @ExecutionTime_INT BIGINT,
-			@ExecutionTime_VARCHAR VARCHAR(20),
-			@Microsecond VARCHAR(6),
-			@Second VARCHAR(2),
-			@Minute VARCHAR(2),
-			@Hour VARCHAR(2),
-			@Day VARCHAR(4)
-
-	SET @ExecutionTime_INT = DATEDIFF(MICROSECOND,@StartTime,SYSDATETIME())
-	SET @Microsecond = RIGHT(@ExecutionTime_INT,6)
-	SET @Microsecond = REPLICATE('0',6-LEN(@Microsecond)) + @Microsecond
-	SET @ExecutionTime_INT /= 1000000 
-	SET @Second = @ExecutionTime_INT % 60
-	SET @Second = REPLICATE('0',2-LEN(@Second)) + @Second
-	SET @ExecutionTime_INT/=60
-	SET @Minute = @ExecutionTime_INT % 60
-	SET @Minute = REPLICATE('0',2-LEN(@Minute)) + @Minute
-	SET @ExecutionTime_INT/=60
-	SET @Hour = @ExecutionTime_INT % 24
-	SET @Hour = REPLICATE('0',2-LEN(@Hour)) + @Hour
-	SET @ExecutionTime_INT/=24
-	IF LEN(@ExecutionTime_INT)=1 SET @Day = '0'+CONVERT(VARCHAR(1),@ExecutionTime_INT)	
-	-- 20 characters + 
-	RETURN @Day+':'+@Hour+':'+@Minute+':'+@Second+'.'+@Microsecond+' (dddd:HH:mm:ss.micros)'
-END
-GO
 
 --============================================================================================
 
@@ -2085,7 +2047,7 @@ BEGIN
 		BEGIN 
 			
 
-			SET @message = CHAR(10)+'Reading headers of backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed but more accurate mode):'+CHAR(10)+'0 percent of files processed.'
+			SET @message = CHAR(10)+'Reading headers of backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower but more accurate speed mode):'+CHAR(10)+'0 percent of files processed.'
             RAISERROR(@message,0,1) WITH NOWAIT
 
 			
@@ -2449,7 +2411,7 @@ BEGIN
 			IF @Skip_Files_Not_Matching_Naming_Convention = 0 AND @Count_FileHeaders_to_read > 0
 			BEGIN 
 
-				SET @message = 'Reading headers of Log backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed but more accurate mode):'
+				SET @message = 'Reading headers of Log backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower but more accurate speed mode):'
 				RAISERROR(@message,0,1) WITH NOWAIT
 
 				
@@ -2597,7 +2559,7 @@ BEGIN
 		RETURN 1
 	END
 	----- Show elapsed time:
-	SET @message = 'Elapsed time: ' + dbo.ufn_ElapsedTime(@OperationStartTime)
+	SET @message = CHAR(10) + 'Elapsed time: ' + dbo.ufn_ElapsedTime(@OperationStartTime)
 	RAISERROR(@message,0,1) WITH NOWAIT
 	
 	DECLARE @Databases NVARCHAR(4000)
