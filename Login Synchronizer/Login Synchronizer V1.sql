@@ -19,7 +19,7 @@ CREATE OR ALTER PROC SyncLogins
 	@Purpose VARCHAR(50) = 'Production',
 	--@Permission_Type INT = 0,
 	@Login_Status BIT = 1
-WITH EXEC AS 'JobVision\SQLServer'
+
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -100,12 +100,17 @@ BEGIN
 					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = N'''+@PasswordPlain+''', CHECK_POLICY = OFF, CHECK_EXPIRATION=OFF
 			'
 			IF @Login_Status = 1
-				SET @SQL
+				SET @SQL +=
+				'
 					GRANT CONNECT SQL TO '+QUOTENAME(@LoginName)+'
 					ALTER LOGIN '+QUOTENAME(@LoginName)+' ENABLE
-					DENY CONNECT SQL TO [A.Hashemi]
-					ALTER LOGIN [A.Hashemi] DISABLE
+				'
 			ELSE
+				SET @SQL +=
+				'
+					DENY CONNECT SQL TO '+QUOTENAME(@LoginName)+'
+					ALTER LOGIN '+QUOTENAME(@LoginName)+' DISABLE
+				'			
 				
 			BEGIN TRY
 				EXEC(@SQL)
@@ -142,7 +147,7 @@ BEGIN
 	CLOSE PasswordLoginUpdater
 	DEALLOCATE PasswordLoginUpdater
 
-	--SELECT * FROM sys.servers
+
 
 	DECLARE LoginScriptGenerator CURSOR LOCAL FOR
 		SELECT 
@@ -163,6 +168,19 @@ BEGIN
 				ELSE
 					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, CHECK_POLICY = OFF
 			'
+			IF @Login_Status = 1
+				SET @SQL +=
+				'
+					GRANT CONNECT SQL TO '+QUOTENAME(@LoginName)+'
+					ALTER LOGIN '+QUOTENAME(@LoginName)+' ENABLE
+				'
+			ELSE
+				SET @SQL +=
+				'
+					DENY CONNECT SQL TO '+QUOTENAME(@LoginName)+'
+					ALTER LOGIN '+QUOTENAME(@LoginName)+' DISABLE
+				'			
+
 			DECLARE ExecutorPerServer CURSOR LOCAL FOR
 				SELECT ServerName+','+CONVERT(NVARCHAR(50),Port) FROM SQLAdministrationDB..Servers WHERE MegaProject='JV' AND IsActive=1 AND ServerName<>'DB1'
 			OPEN ExecutorPerServer
@@ -229,6 +247,19 @@ BEGIN
 				IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = ''''''+'''+@LoginName+'''+'''''')
 					CREATE LOGIN '+QUOTENAME(@LoginName)+' FROM WINDOWS
 			'
+			IF @Login_Status = 1
+				SET @SQL +=
+				'
+					GRANT CONNECT SQL TO '+QUOTENAME(@LoginName)+'
+					ALTER LOGIN '+QUOTENAME(@LoginName)+' ENABLE
+				'
+			ELSE
+				SET @SQL +=
+				'
+					DENY CONNECT SQL TO '+QUOTENAME(@LoginName)+'
+					ALTER LOGIN '+QUOTENAME(@LoginName)+' DISABLE
+				'			
+
 			DECLARE ExecutorPerServer2 CURSOR LOCAL FOR
 				SELECT ServerName+','+CONVERT(NVARCHAR(50),Port) FROM SQLAdministrationDB..Servers WHERE MegaProject='JV' AND IsActive=1 AND ServerName<>'DB1'
 			OPEN ExecutorPerServer2
