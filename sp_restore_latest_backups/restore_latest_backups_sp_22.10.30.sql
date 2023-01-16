@@ -11,41 +11,37 @@
 /*
 
 
-This script	restores the latest backups from backup files accessible to the server within the given criteria. As the server is most likely
+This script	restores latest backups from the backups' repository filtered by the given criteria. As the server is most likely
 	not the original producer of these backups,
 	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
-	reads the database name and backup finish dates from these files and restores the latest backup of every found database. If the
+	 and restores the latest backup of every chosen database. If the
 	database already exists, a tail of log backup can be taken optionally first. If the name of the database cannot be obtained from the
-	backup file, the script names the target database as 'UnreadableBackupFile+<a random number>'. Such backup will most likely fail to restore.
+	backup file, the script names the target database as 'UnreadableBackupFile+<a random string>'. Such backups will most likely fail to restore.
 
-System requirements:
-SQL Server Compatibility: This script is designed to comply with SQL Server 2016 and later. Earlier versions are compatible if some
-of the features are removed. The versions 2016 and 2017 are most likely supported. I have tested this on 2019
+SQL Server version requirement:
+This script is designed to comply with SQL Server 2019 and later. Earlier versions are compatible if some
+of the features are removed. The versions 2016 and 2017 are also most likely supported. I have tested this on 2019
 
 Attention: 		
-	1. Please make sure SQL service has required permission to the paths you specify. Otherwise the script will fail. If the output paths do not
+	1. Please make sure SQL service has required permissions to the paths you specify. Otherwise the script will fail. If the output paths do not
 	exist, the script automatically creates them.
-	2. If you restore the database to a new name and it already exists, some errors might occur. This script does
-	not handle such a case.
-	3. As leaving xp_cmdshell enabled has security risks, especially for the backup jobs which are meant to be scheduled
-	to be triggered at special times, and compressing or decompressing files is time-consuming, this script does not wait for
-	the compression or extraction process to complete and then disable xp_cmdshell. It launches a parallel script implicitly
-	to disable xp_cmdshell immidiately after it starts. In other words, xp_cmdshell only remains enabled for a very short
-	time. It was less than 0.3 second on my computer.
-	4. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
-	the current session, before restoring the database. The database will be returned to MULTI_USER at the end.
-	5. Warning!! Appending backups to each other is not recommended and this script is not designed to handle such case.
-	6. If the database is to be restored on its own, the script first tries to kill any conncetions to the database
-	using 'ALTER DATABASE' statement. If it is in restoring state or any other state which will not allow ALTER DATABASE
-	statement, SQL Server raises an error which is normal and is not an obstacle.
+	2. If the database is to be restored on its own, this script automatically kills all sessions connected to the database except
+	the current session, before restoring the database. The database will be returned to MULTI_USER state at the end.
+	3. Appending backup files to each other is not recommended and this script is not designed to handle such case.
+	4. This scripts keeps the list of backup files in the SQLAdministrationDB database, for full backup files,	for both history and caching
+	purposes, but for log backup files only for caching purposes. 
 
 TODO: 
 	  
-	  
-	  1. attach detached datafiles
-	  2. predict low storage space and show the message in stderr
-	  3. smart percentage
+	  -. Work on included 1 instead of 0
+	  -. Merge include and exclude queries
+	  -. Restore Order
+	  -. smart progress percentage
+	  -. restore datafiles to multiple places
+	  -. Add differential Support
+	  -. attach detached datafiles
+	  -. make SQLAdministrationDB optional
 
 */
 
@@ -83,9 +79,11 @@ GO
 --GO
 
 --============================================================================================
+-- To me, second precision amount is perfectly enough, but I included millisecond here too. If you get
+-- DATEDIFF overflow error, reduce the precision to second.
 
 CREATE OR ALTER FUNCTION ufn_ElapsedTime(@StartTime DATETIME)
-RETURNS VARCHAR(43)
+RETURNS VARCHAR(40)
 WITH 
 	SCHEMABINDING,
 	RETURNS NULL ON NULL INPUT
@@ -93,16 +91,16 @@ AS
 BEGIN
 	DECLARE @ExecutionTime_INT BIGINT,
 			@ExecutionTime_VARCHAR VARCHAR(20),
-			@Microsecond VARCHAR(6),
+			@Millisecond VARCHAR(6),
 			@Second VARCHAR(2),
 			@Minute VARCHAR(2),
 			@Hour VARCHAR(2),
 			@Day VARCHAR(4)
 
-	SET @ExecutionTime_INT = DATEDIFF(MICROSECOND,@StartTime,SYSDATETIME())
-	SET @Microsecond = RIGHT(@ExecutionTime_INT,6)
-	SET @Microsecond = REPLICATE('0',6-LEN(@Microsecond)) + @Microsecond
-	SET @ExecutionTime_INT /= 1000000 
+	SET @ExecutionTime_INT = DATEDIFF(MILLISECOND,@StartTime,SYSDATETIME())
+	SET @Millisecond = RIGHT(@ExecutionTime_INT,3)
+	SET @Millisecond = REPLICATE('0',3-LEN(@Millisecond)) + @Millisecond
+	SET @ExecutionTime_INT /= 10000 
 	SET @Second = @ExecutionTime_INT % 60
 	SET @Second = REPLICATE('0',2-LEN(@Second)) + @Second
 	SET @ExecutionTime_INT/=60
@@ -114,7 +112,7 @@ BEGIN
 	SET @ExecutionTime_INT/=24
 	IF LEN(@ExecutionTime_INT)=1 SET @Day = '0'+CONVERT(VARCHAR(1),@ExecutionTime_INT)	
 	-- 20 characters + 
-	RETURN @Day+':'+@Hour+':'+@Minute+':'+@Second+'.'+@Microsecond+' (dddd:HH:mm:ss.micros)'
+	RETURN @Day+':'+@Hour+':'+@Minute+':'+@Second+'.'+@Millisecond+' (dddd:hh:mm:ss.millis)'
 END
 GO
 
@@ -606,19 +604,20 @@ BEGIN
 -- cannot be recreated due to the dependancy of temp table on the function, therefore an error will be raised which is not the problem of this
 -- script and is SQL Server's itself. That's why computed column cannot be used. Suppressing the error also appeared to be not a correct decision
 
-					CREATE TABLE #temp2 
-					(
+					CREATE TABLE #TempTargetDBFiles 
+					(						
+						FileID BIGINT NOT NULL,
 						head NVARCHAR(500) NOT NULL,
 						tail NVARCHAR(1000) NOT NULL,
 						type CHAR(1),
 						[File Exists] bit
 					)
 					
-					INSERT #temp2 (head, tail, type, [File Exists])					
-						SELECT head, dt.tail, dt.Type, dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName,tail) from
+					INSERT #TempTargetDBFiles (FileID ,head , tail, type, [File Exists])					
+						SELECT dt.FileID, head, dt.tail, dt.Type, dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName,tail) from
 						(
   						
-  							select ',MOVE N''' + LogicalName + ''' TO N''' head, 
+  							select FileID, ',MOVE N''' + LogicalName + ''' TO N''' head, 
 							CASE when Type = 'L' then 
 							IIF
 							(
@@ -644,7 +643,7 @@ BEGIN
 
 
 
-					WHILE EXISTS (SELECT 1 FROM #temp2 WHERE [File Exists] = 1) 
+					WHILE EXISTS (SELECT 1 FROM #TempTargetDBFiles WHERE [File Exists] = 1) 
 					BEGIN
 
 						UPDATE a 
@@ -653,7 +652,7 @@ BEGIN
 						FROM 
 						(
 							SELECT TOP 1 tail, [File Exists]
-							FROM #temp2
+							FROM #TempTargetDBFiles
 							WHERE [File Exists] = 1							
 						) a
 						
@@ -661,7 +660,7 @@ BEGIN
 
 					
   					select @DB_Restore_Script += CHAR(10)+REPLICATE(CHAR(9),5)+head+tail+''''
-  					from #temp2
+  					from #TempTargetDBFiles
 
 --------------------------------------------------------------------  
 				end
@@ -735,11 +734,59 @@ BEGIN
 											  
   			
   			END	
-  				PRINT '-------- DB restore statement --------'+CHAR(10)+CHAR(10)+@DB_Restore_Script
+  				PRINT '-------- DB restore statement --------'+CHAR(10)+CHAR(10)+@DB_Restore_Script+CHAR(10)
+
+				
+				--------- Checking free disk space availability for database restore: ----------------------------------
+				SET @message = ''
+				SELECT @message +=	(
+										SELECT STRING_AGG(dt.Error,CHAR(10))
+										FROM
+										(
+											SELECT
+											CONVERT(VARCHAR,CONVERT(BIGINT,SUM(bf.Size)/1024/1024))+' MB free disk space is required on ''' + fd.fixed_drive_path + ''', while ' + CONVERT(VARCHAR,MIN(fd.free_space_in_bytes)/1024/1024) + ' MB exists.' Error					
+											FROM #TempTargetDBFiles tf JOIN #Backup_Files_List bf
+											ON bf.FileID = tf.FileID
+											JOIN
+											(
+												SELECT 
+													fd0.fixed_drive_path,
+													fd0.free_space_in_bytes+ISNULL(dt2.Size,0) free_space_in_bytes
+												FROM
+												sys.dm_os_enumerate_fixed_drives fd0
+												LEFT JOIN 
+												(	
+													SELECT
+														LEFT(physical_name,CHARINDEX(':',physical_name)+1) [DriveLetter],
+														SUM(CONVERT(BIGINT,size)*8192) Size
+													FROM
+													sys.master_files
+													WHERE DB_NAME(database_id) = @Restore_DBName
+													GROUP BY LEFT(physical_name,CHARINDEX(':',physical_name)+1)
+												) dt2
+												ON fd0.fixed_drive_path = dt2.DriveLetter
+											) fd
+											ON tf.tail LIKE (fd.fixed_drive_path+'%')
+											GROUP BY fd.fixed_drive_path
+											HAVING SUM(bf.Size) > MIN(fd.free_space_in_bytes)
+										) dt									
+									)
+				IF @message <> ''
+				BEGIN
+					IF @Generate_Statements_Only = 1
+					BEGIN
+						SET @message= 'Warning!!!'+CHAR(10)+@message+CHAR(10)+'The restore statement was generated, but there is not available free disk space to restore the database for the paths you selected.'
+						PRINT @message
+					END
+					ELSE
+					BEGIN
+						SET @message= @message
+						RAISERROR(@message,15,1)
+					END
+                END
+			
 
 				------------- Begin generating Log Backups restore statements: ---------------------------------------------------
-
-
 				IF @Restore_Log_Backups = 1
 				BEGIN
 					
@@ -928,17 +975,80 @@ BEGIN
 												
 							EXEC dbo.sp_PrintLong @Log_Restore_Script
 							PRINT ''
-						END						
+						END
+						
+
+						--------- Getting the FILELIST detail of the last log backup: ----------------------------
+						SET @sql = 'RESTORE FILELISTONLY FROM DISK = @Backup_Path'
+						BEGIN TRY
+							TRUNCATE TABLE #Backup_Files_List
+  							INSERT INTO #Backup_Files_List
+  							EXEC master.sys.sp_executesql @sql , N'@Backup_Path nvarchar(150)', @LastLogBackupLocation
+						END TRY
+						BEGIN CATCH
+							RAISERROR('Your Log Backup file is probably corrupt, encrypted without the corresponding certificate on your server, not recognizable by this version of SQL Server, or not a database backup file. Restore will not continue.',16,1)
+						END CATCH
+
+						--------- Checking free disk space availability for the last log restore: ----------------------------------
+						SELECT * FROM sys.dm_os_enumerate_fixed_drives
+						SET @message = ''
+						SELECT @message +=	(
+												SELECT STRING_AGG(dt.Error,CHAR(10))
+												FROM
+												(
+													SELECT
+													CONVERT(VARCHAR,CONVERT(BIGINT,SUM(bf.Size)/1024/1024))+' MB free disk space is required on ''' + fd.fixed_drive_path + ''', while ' + CONVERT(VARCHAR,MIN(fd.free_space_in_bytes)/1024/1024) + ' MB exists.' Error					
+													FROM #TempTargetDBFiles tf JOIN #Backup_Files_List bf
+													ON bf.FileID = tf.FileID
+													JOIN
+													(
+														SELECT 
+															fd0.fixed_drive_path,
+															fd0.free_space_in_bytes+ISNULL(dt2.Size,0) free_space_in_bytes
+														FROM
+														sys.dm_os_enumerate_fixed_drives fd0
+														LEFT JOIN 
+														(	
+															SELECT
+																LEFT(physical_name,CHARINDEX(':',physical_name)+1) [DriveLetter],
+																SUM(CONVERT(BIGINT,size)*8192) Size
+															FROM
+															sys.master_files
+															WHERE DB_NAME(database_id) = @Restore_DBName
+															GROUP BY LEFT(physical_name,CHARINDEX(':',physical_name)+1)
+														) dt2
+														ON fd0.fixed_drive_path = dt2.DriveLetter
+													) fd
+													ON tf.tail LIKE (fd.fixed_drive_path+'%')
+													GROUP BY fd.fixed_drive_path
+													HAVING SUM(bf.Size) > MIN(fd.free_space_in_bytes)
+												) dt
+											)
+						IF @message <> ''
+						BEGIN
+							IF @Generate_Statements_Only = 1
+							BEGIN
+								SET @message= 'Warning!!!'+CHAR(10)+@message+CHAR(10)+'The log restore statement(s) was generated, but there is not available free disk space to restore the database for the paths you selected.'
+								PRINT @message
+							END
+							ELSE
+							BEGIN
+								SET @message= @message+CHAR(10)+'However, you can restore the database without some of the log backups, as it currently fits on your disk. To do so, set @Restore_Log_Backups to 0 and rerun the script.'
+								RAISERROR(@message,15,1)
+							END
+						END
+
+
 					END
 					ELSE
                     BEGIN
-						SET @message = CHAR(10)+'--Warning!!! @Restore_Log_Backups option was set to 1 but no log backups where found for the database "'+@OriginalDBName+'" with the given criteria. ###The database will remain in restoring state###'+CHAR(10)
+						SET @message = CHAR(10)+'--Warning!!! @Restore_Log_Backups option was set to 1 but no log backups where found for the database "'+@OriginalDBName+'" with the given criteria.'+IIF(@Force_Recovery_If_No_Log_Backups_Found=1,'',' ###The database will remain in restoring state###')+CHAR(10)
 						PRINT @message
 					END
 
-                END
-
+                END				
 				------------- End generating Log Backups restore statements ------------------------------------------------------
+				
 				IF (@Generate_Statements_Only = 0)
 				BEGIN
 					IF (@USE_SQLAdministrationDB_Database = 1)
@@ -1029,7 +1139,7 @@ BEGIN
 						EXEC(@temp1)
 					END 
 					-- Execute the prepared restore script:
-  					EXEC sys.sp_executesql @DB_Restore_Script, N'@Degree_of_Parallelism int out', @Degree_of_Parallelism out
+  					EXEC sys.sp_executesql @DB_Restore_Script, N'@Degree_of_Parallelism int out', @Degree_of_Parallelism OUT
 					SET @message = 'Elapsed time: ' + dbo.ufn_ElapsedTime(@OperationStartTime)
 					RAISERROR(@message,0,1) WITH NOWAIT
 
@@ -1049,7 +1159,7 @@ BEGIN
 
 						DECLARE LogRestore CURSOR LOCAL FOR
 							SELECT 
-								CONVERT(NVARCHAR(max),'RESTORE LOG '+QUOTENAME(@Restore_DBName)+' FROM DISK=N'''+[file]+'''')							
+								CONVERT(NVARCHAR(MAX),'RESTORE LOG '+QUOTENAME(@Restore_DBName)+' FROM DISK=N'''+[file]+'''')							
 							FROM
 							#TempLog
 							ORDER BY BackupStartDate
@@ -1058,7 +1168,7 @@ BEGIN
 							WHILE @@FETCH_STATUS = 0
 							BEGIN
 								
-								PRINT '--------'+CONVERT(VARCHAR(3),@count)+'--------'
+								PRINT '-------- '+CONVERT(VARCHAR(3),@count)+'/'+CONVERT(VARCHAR(3),@No_of_Log_Backups)+' --------'
 
 								IF @count < @No_of_Log_Backups
 									SET @Log_Restore_Script += ' WITH NORECOVERY'
@@ -1157,7 +1267,7 @@ BEGIN
 						'
 						EXEC sys.sp_executesql @temp1, N'@identity int, @Degree_of_Parallelism int, @StopAt datetime', @identity, @Degree_of_Parallelism, @StopAt
                     END
-					PRINT(char(10)+'** End '+ @Restore_DBName +' Database Restore **')
+					PRINT(CHAR(10)+'** End '+ @Restore_DBName +' Database Restore **')
 					
 
 
@@ -1170,7 +1280,7 @@ BEGIN
 				IF (@@error = 0 AND @Delete_Backup_File = 1)
 				BEGIN
 					
-					DECLARE @ErrorNo int
+					DECLARE @ErrorNo INT
 					EXEC xp_delete_files @Backup_Location
 					
 					IF(@@ERROR <> 0)
@@ -1183,10 +1293,10 @@ BEGIN
 
 				
   				--=== Postrestore operations:      		
-  				if @Generate_Statements_Only = 0 AND (SELECT state FROM sys.databases WHERE name = @Restore_DBName) = 0 
+  				IF @Generate_Statements_Only = 0 AND (SELECT state FROM sys.databases WHERE name = @Restore_DBName) = 0 
 				BEGIN
-					RAISERROR ('** Begin postrestore operations: **',0,1) WITH NOWAIT
-					DECLARE @temp5 varchar(4000) = ''
+					RAISERROR ('** Begining postrestore operations: **',0,1) WITH NOWAIT
+					DECLARE @temp5 VARCHAR(4000) = ''
 					IF (@Change_Target_RecoveryModel_To <> 'InheritFromSource')
 						SET @temp5 = 'ALTER DATABASE ' + QUOTENAME(@Restore_DBName) + ' SET RECOVERY ' + @Change_Target_RecoveryModel_To + CHAR(10)
 				
@@ -1226,7 +1336,7 @@ BEGIN
 							SELECT  @SIZE			= (SELECT value FROM cte WHERE row = 1),
 									@MAXSIZE		= (SELECT value FROM cte WHERE row = 2),
 									@FILEGROWTH		= (SELECT value FROM cte WHERE row = 3)
-							SELECT TOP 1 @DirPath = tail FROM #temp2 WHERE type = 'L'
+							SELECT TOP 1 @DirPath = tail FROM #TempTargetDBFiles WHERE type = 'L'
 							SET @DirPath = left(@DirPath, (len(@DirPath)-charindex('\',REVERSE(@DirPath))))
 							PRINT ''
 							SET @NewLog_path = @DirPath + '\' + @Restore_DBName + '_$$$newLog.ldf'
@@ -1247,7 +1357,7 @@ BEGIN
 							-- Now deleting the privious log files iteratively:
 							DECLARE @Log_Path NVARCHAR(512)
 							DECLARE delete_log CURSOR FOR
-								SELECT tail FROM #temp2 WHERE type = 'L'
+								SELECT tail FROM #TempTargetDBFiles WHERE type = 'L'
 							OPEN delete_log
 								FETCH NEXT FROM delete_log INTO @Log_Path
 								WHILE @@FETCH_STATUS = 0
@@ -1425,7 +1535,7 @@ BEGIN
 					EXEC (@temp1)								  
                 END
 				SET @ErrNo = ERROR_NUMBER()
-				set @message = 'Fatal error (Error Line='+CONVERT(VARCHAR(10),ERROR_LINE())+'): '+IIF(@ErrNo=50000,'','System')+' Message:'+CHAR(10)+ 'Msg '+CONVERT(VARCHAR(50),@ErrNo)+', Level '+CONVERT(VARCHAR(50),@Severity)+', State '+CONVERT(VARCHAR(50),@State)+', Line '+CONVERT(VARCHAR(50),ERROR_LINE())+CHAR(10)+
+				set @message = 'Fatal error: '+IIF(@ErrNo=50000,'','System Message:'+CHAR(10)+ 'Msg '+CONVERT(VARCHAR(50),@ErrNo)+', Level '+CONVERT(VARCHAR(50),@Severity)+', State '+CONVERT(VARCHAR(50),@State)+', Line '+CONVERT(VARCHAR(50),ERROR_LINE()))+CHAR(10)+
 								ERROR_MESSAGE()	
 				raiserror(@message, @Severity, @State)
 				
@@ -1696,13 +1806,15 @@ BEGIN
 						[BackupTypeDescription] nvarchar(128),
 						ServerName NVARCHAR(128),
 						FileExtension VARCHAR(5),
-						IsAddedDuringTheLastDiskScan BIT,
+						IsAddedDuringTheLastDiskScan BIT NOT NULL DEFAULT 0,
 						IsIncluded BIT NOT NULL DEFAULT 1,
+						IsDeleted BIT NOT NULL DEFAULT 0,
 						CONSTRAINT [PK_DiskBackupFiles_FILE] PRIMARY KEY ([FILE],[IsIncluded]) WITH FILLFACTOR = 70
 					)
 				ELSE
 					UPDATE DiskBackupFiles
 					SET IsIncluded = 1
+					WHERE IsDeleted = 0
 			'
 			EXEC (@sql)
 
@@ -1712,22 +1824,28 @@ BEGIN
 			'
 				use SQLAdministrationDB
 
-				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan'')
-					CREATE INDEX IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan	ON SQLAdministrationDB..DiskBackupFiles (IsAddedDuringTheLastDiskScan)
+				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan_Filtered'')
+					CREATE INDEX IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan_Filtered		ON SQLAdministrationDB..DiskBackupFiles (IsAddedDuringTheLastDiskScan)
 					INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
+					WHERE IsDeleted = 0
 					WITH(FILLFACTOR = 70)
 
-				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_DatabaseName'')
-					CREATE INDEX IX_DiskBackupFiles_DatabaseName						ON SQLAdministrationDB..DiskBackupFiles (DatabaseName,BackupFinishDate,BackupStartDate) 
+				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_DatabaseName_Filtered'')
+					CREATE INDEX IX_DiskBackupFiles_DatabaseName_Filtered						ON SQLAdministrationDB..DiskBackupFiles (DatabaseName,BackupFinishDate,BackupStartDate) 
 					INCLUDE([file],IsIncluded,DiskBackupFilesID,BackupTypeDescription)
+					WHERE DatabaseName IS NOT NULL
 					WITH(FILLFACTOR = 70)
 
 				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_DiskBackupFilesID'')
-					CREATE INDEX IX_DiskBackupFiles_DiskBackupFilesID						ON SQLAdministrationDB..DiskBackupFiles (DiskBackupFilesID) 
+					CREATE INDEX IX_DiskBackupFiles_DiskBackupFilesID							ON SQLAdministrationDB..DiskBackupFiles (DiskBackupFilesID) 
 					INCLUDE(BackupFinishDate,[file])
 					WITH(FILLFACTOR = 70)
 
-				
+				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_IsDeleted_Filtered'')
+					CREATE INDEX IX_DiskBackupFiles_IsDeleted_Filtered							ON SQLAdministrationDB..DiskBackupFiles (IsDeleted)
+					INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
+					WHERE IsAddedDuringTheLastDiskScan = 0
+					WITH(FILLFACTOR = 70)
 
 			'
 			EXEC(@SQL)
@@ -1751,11 +1869,13 @@ BEGIN
 						FileExtension VARCHAR(5),
 						IsAddedDuringTheLastDiskScan BIT,
 						IsIncluded BIT NOT NULL DEFAULT 1,
+						--IsDeleted BIT NOT NULL DEFAULT 0,
 						CONSTRAINT [PK_DiskLogBackupFiles_FILE] PRIMARY KEY ([FILE],[IsIncluded]) WITH FILLFACTOR = 70
 					)
 				ELSE
 					UPDATE DiskLogBackupFiles
 					SET IsIncluded = 1
+					--WHERE IsDeleted = 0
 			'
 			IF @Restore_Log_Backups = 1 OR OBJECT_ID('SQLAdministrationDB..DiskLogBackupFiles') IS NULL
 				EXEC (@sql)
@@ -1767,13 +1887,14 @@ BEGIN
 				use SQLAdministrationDB
 
 				--IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_IsAddedDuringTheLastDiskScan'')
-				--	CREATE INDEX IX_DiskLogBackupFiles_IsAddedDuringTheLastDiskScan	ON SQLAdministrationDB..DiskLogBackupFiles (IsAddedDuringTheLastDiskScan)
+				--	CREATE INDEX IX_DiskLogBackupFiles_IsAddedDuringTheLastDiskScan					ON SQLAdministrationDB..DiskLogBackupFiles (IsAddedDuringTheLastDiskScan)
 				--	INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
 				--	WITH(FILLFACTOR = 70)
 
-				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DatabaseName'')
-					CREATE INDEX IX_DiskLogBackupFiles_DatabaseName						ON SQLAdministrationDB..DiskLogBackupFiles (DatabaseName,BackupStartDate,BackupFinishDate) 
+				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DatabaseName_Filtered'')
+					CREATE INDEX IX_DiskLogBackupFiles_DatabaseName_Filtered						ON SQLAdministrationDB..DiskLogBackupFiles (DatabaseName,BackupStartDate,BackupFinishDate) 
 					INCLUDE([file],IsIncluded,DiskLogBackupFilesID,BackupTypeDescription,FileExtension,IsAddedDuringTheLastDiskScan,ServerName)
+					WHERE DatabaseName IS NOT NULL
 					WITH(FILLFACTOR = 70)
 				
 				--IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DatabaseName_isIncluded'')
@@ -1782,7 +1903,7 @@ BEGIN
 				--	WITH(FILLFACTOR = 70)
 			
 				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DiskLogBackupFilesID_DatabaseName'')
-					CREATE INDEX IX_DiskLogBackupFiles_DiskLogBackupFilesID_DatabaseName						ON SQLAdministrationDB..DiskLogBackupFiles (DiskLogBackupFilesID,DatabaseName) 					
+					CREATE INDEX IX_DiskLogBackupFiles_DiskLogBackupFilesID_DatabaseName			ON SQLAdministrationDB..DiskLogBackupFiles (DiskLogBackupFilesID,DatabaseName) 					
 					WITH(FILLFACTOR = 70)
 
 			'
@@ -1839,7 +1960,8 @@ BEGIN
 			ServerName NVARCHAR(128),
 			FileExtension VARCHAR(5),
 			IsAddedDuringTheLastDiskScan AS (CONVERT(BIT,1)),
-			IsIncluded BIT NOT NULL DEFAULT 1
+			IsIncluded BIT NOT NULL DEFAULT 1,
+			IsDeleted AS (CONVERT(BIT,0))
 		)
 		
 		------------ Begin file operations: (Backups) ----------------------------------------------------------------
@@ -1941,7 +2063,8 @@ BEGIN
 					dc.ServerName,
 					dc.FileExtension,
 					dc.IsAddedDuringTheLastDiskScan,
-					dc.IsIncluded
+					dc.IsIncluded,
+					dc.IsDeleted
 				FROM #DirContents dc LEFT JOIN SQLAdministrationDB..DiskBackupFiles dbf
 				ON dbf.[file] = dc.[file]
 				WHERE dbf.[file] IS NULL
@@ -2143,10 +2266,6 @@ BEGIN
 			RAISERROR(@message,0,1) WITH NOWAIT
 
 		END
----------- Begin Purge Operation --------------------------------------------------------------------------
-
-
----------- End Purge Operation ----------------------------------------------------------------------------
 
 		----- Applying Fiters: @Exclude_DBName_Filter, and @Include_DBName_Filter filters-----------------------------------------
 		BEGIN TRY
@@ -2191,12 +2310,12 @@ BEGIN
 				IF @BackupFinishDate_StartDATETIME <> ''1900.01.01 00:00:00''
 					UPDATE ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' 
 					SET IsIncluded = 0
-					WHERE COALESCE(BackupFinishDate, BackupStartDate) < @BackupFinishDate_StartDATETIME
+					WHERE IsDeleted = 0 AND COALESCE(BackupFinishDate, BackupStartDate) < @BackupFinishDate_StartDATETIME
 
 				IF @BackupFinishDate_EndDATETIME <> ''9999.12.31 23:59:59''
 					UPDATE ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' 
 					SET IsIncluded = 0
-					WHERE COALESCE(BackupFinishDate, BackupStartDate) > @BackupFinishDate_EndDATETIME
+					WHERE IsDeleted = 0 AND COALESCE(BackupFinishDate, BackupStartDate) > @BackupFinishDate_EndDATETIME
 
 			'
 
@@ -2255,6 +2374,7 @@ BEGIN
 					FileExtension VARCHAR(5),
 					IsAddedDuringTheLastDiskScan AS (CONVERT(BIT,1)),
 					IsIncluded BIT NOT NULL DEFAULT 1
+					--,IsDeleted AS (CONVERT(BIT,0))
 				)
 
 				IF (SELECT file_exists+file_is_a_directory FROM sys.dm_os_file_exists(@LogBackup_root_or_path)) = 0
@@ -2335,6 +2455,7 @@ BEGIN
 						dc.FileExtension,
 						dc.IsAddedDuringTheLastDiskScan,
 						dc.IsIncluded
+						--,dc.IsDeleted
 					FROM #DirContentsLog dc LEFT JOIN SQLAdministrationDB..DiskLogBackupFiles dbf
 					ON dbf.[file] = dc.[file]
 					WHERE dbf.[file] IS NULL
@@ -2578,7 +2699,7 @@ BEGIN
 		END
 		ELSE
 		BEGIN
-			EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
+			EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;			
 		END
 		------------ End file operations (Log Backups) -------------------------------------------------------------------
 
@@ -2804,21 +2925,21 @@ EXEC sp_restore_latest_backups
 	@DataFileSeparatorChar = '_',		
 										-- (Optional) This parameter specifies the punctuation mark used in data files names. For example "_"
 										-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
-	@Change_Target_RecoveryModel_To = 'InheritFromSource',
+	@Change_Target_RecoveryModel_To = 'simple',
 										-- (Optional) Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|InheritFromSource|SameAsDestination
 										
 	@Set_Target_Databases_ReadOnly = 0,
 										-- (Optional)
-	@STATS = 30,
+	@STATS = 10,
 										-- (Optional) Report restore percentage stats in SQL Server restore process. Only for database restore not log files restore.
-	@Generate_Statements_Only = 1,
+	@Generate_Statements_Only = 0,
 										-- (Optional) use this to generate restore statements without executing them.
 	@Delete_Backup_File = 0,
 										-- (Optional) Turn this feature on to delete the backup files that are successfully restored. (This does not apply to transaction log backup files)
 	@Activate_Destination_Database_Containment = 1,
 										-- (Optional, but error will be raised for backups of partially contained databases if 'contained database authentication' has not been activated,
 										-- you try to restore backups of partially contained databases and this option has not been turned to 1 on the target server)
-	@Stop_On_Error = 0,					-- (Optional) Stop restoring databases should a retore fails
+	@Stop_On_Error = 0,					-- (Optional) Stop restoring databases should a retore fail
 	--@Retention_Policy_Enabled = 0,
 	--									-- (Optional) Enable or disable removing (purging) the old backups according to the defined
 	--									-- policy
@@ -2827,21 +2948,22 @@ EXEC sp_restore_latest_backups
 	@ShrinkDatabase_policy = -2,		-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
 	@ShrinkLogFile_policy = -2,			-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking.
 										-- Using @ShrinkDatabase_policy and @ShrinkLogFile_policy may be redundant for log file if the same option for both is specified.
-	@RebuildLogFile_policy = '32MB:128MB:1024MB',	
+	@RebuildLogFile_policy = '',--'32MB:128MB:1024MB',	
 										-- (Optional) Possible options: NULL or Empty string: Do not rebuild | 'x:y:z' (For example, 4MB:64MB:1024MB) rebuild to SIZE = x, FILEGROWTH = y, MAXSIZE = z. If @RebuildLogFile_policy is specified, @ShrinkLogFile_policy will be ignored.
 										-- Note: There is no risk of 'Transactional inconsistency', in this stored procedure specifically, despite the warning message that Microsoft may generate and you do not need to run CHECKDB for this in particular. Also, the extra log files have been deleted.
 
-	@GrantAllPermissions_policy = 1	-- (Optional) Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account, remove every user from the database, and make guest a member of db_owner group:
+	@GrantAllPermissions_policy = -2	-- (Optional) Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account, remove every user from the database, and make guest a member of db_owner group:
 									-- The "2" option is theorically correct, but there seems to be a SQL Server bug that I have seen cases that despite the fact that I dropped SQL Server users on that database, the users still authenticated with their previous user names and not
 									-- 'guest' account.
 		
 GO
 
 
+--SELECT * FROM SQLAdministrationDB.dbo.RestoreHistory ORDER BY RestoreHistoryID DESC
 SELECT * FROM msdb..restorehistory ORDER BY restore_history_id DESC
 SELECT * FROM SQLAdministrationDB..DiskBackupFiles
 SELECT * FROM SQLAdministrationDB..DiskLogBackupFiles WHERE [file] LIKE '%JvTalentPoolDB%'
-SELECT * FROM SQLAdministrationDB..RestoreHistory ORDER BY RestoreHistoryID DESC
+SELECT * FROM SQLAdministrationDB..RestoreHistory
 
 
 
@@ -2851,4 +2973,25 @@ SELECT * FROM SQLAdministrationDB..RestoreHistory ORDER BY RestoreHistoryID DESC
 -- First Run: 00:20:51
 -- Second Run: 00:00:13
 -- Third Run: 00:00:03
+
+-- restore database sqladministrationdb_test with recovery
+
+
+DROP PROC dbo.sp_PrintLong
+GO
+DROP FUNCTION dbo.ufn_CheckNameValidation
+GO
+DROP FUNCTION dbo.ufn_StringTokenizer
+GO
+DROP FUNCTION dbo.fn_FileExistsForAnotherDatabase
+GO
+DROP PROCEDURE sp_BackupDetails
+GO
+DROP PROCEDURE dbo.sp_complete_restore
+GO
+DROP PROCEDURE dbo.sp_restore_latest_backups
+GO
+DROP FUNCTION dbo.ufn_ElapsedTime
+GO
+
 
