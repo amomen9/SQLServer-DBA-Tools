@@ -554,7 +554,7 @@ GO
 	--UPDATE SQLAdministrationDB..Servers SET ServerName = REPLACE(ServerName,CHAR(13),'')
 
 --SELECT * FROM sys.server_principals
---SELECT * FROM dbo.InstanceLogins
+--SELECT * FROM dbo.InstanceLogins where sync_enabled=1
 
 --EXEC SQLAdministrationDB.sys.sp_MS_marksystemobject @objname = 'dbo.SyncLogins'
 --SELECT * FROM SQLAdministrationDB..SpExHistory
