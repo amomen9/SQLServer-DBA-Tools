@@ -88,7 +88,7 @@ CREATE OR ALTER PROC SyncLogins
 	@Plain_Password NVARCHAR(512) = '',
 	@Purpose VARCHAR(50) = 'Production',
 	--@Permission_Type INT = 0,
-	@Login_Status BIT = 1,
+	@Login_Status BIT = NULL,
 	@MegaProject NVARCHAR(10) = 'JV',
 	@sync_enabled BIT = 1
 WITH EXEC AS 'JobVision\SQLServer'
@@ -101,7 +101,7 @@ BEGIN
 	SET @Authentication_Type = ISNULL(@Authentication_Type,'')
 	SET @Plain_Password = ISNULL(@Plain_Password,'')
 	--SET @Permission_Type = ISNULL(@Permission_Type,0)
-	SET @Login_Status = ISNULL(@Login_Status,1)
+	--SET @Login_Status = ISNULL(@Login_Status,1)
 	SET @Purpose = ISNULL(@Purpose,'')
 	IF	@Authentication_Type NOT IN ('','SQL','WINDOWS') BEGIN RAISERROR('Authentication_Type entered must be one of SQL | WINDOWS',16,1) RETURN 1 END
 	IF	@Purpose NOT IN ('Test','Production','') BEGIN RAISERROR('Invalid value specified for @Purpose. Valid values are Test | Production.',16,1) RETURN 1 END
@@ -198,7 +198,8 @@ BEGIN
 			@PasswordPlain NVARCHAR(500),
 			@PasswordHash VARCHAR(200),
 			@SID VARCHAR(100),
-			@LinkedServer sysname
+			@LinkedServer sysname,
+			@is_disabled bit
 	
 	DECLARE @PRINT_or_RAISERROR INT,
 			@ErrMsg NVARCHAR(500),
@@ -226,7 +227,7 @@ BEGIN
 				ELSE
 					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = N'''+@PasswordPlain+''', CHECK_POLICY = OFF, CHECK_EXPIRATION=OFF
 			'
-			IF @Login_Status = 1
+			IF ISNULL(@Login_Status,~@is_disabled) = 1
 				SET @SQL +=
 				'
 					USE master
@@ -278,18 +279,23 @@ BEGIN
 	
 	--== End updating logins on Primary Server ==================================================================
 
+
+
+
+
 	--== Creating/Updating logins on other servers: =============================================================
 	---- SQL Logins:
 	DECLARE LoginScriptGenerator CURSOR LOCAL FOR
 		SELECT 
 			name,
 			CONVERT(VARCHAR(200),PasswordHash,1),
-			CONVERT(VARCHAR(100),il.SID,1)
+			CONVERT(VARCHAR(100),il.SID,1),
+			sp.is_disabled
 		FROM sys.server_principals sp JOIN dbo.InstanceLogins il
 		ON sp.name COLLATE DATABASE_DEFAULT = il.LoginName
 		WHERE /*name LIKE 'App%1%' AND*/ il.AuthenticationType = 'SQL' AND PasswordHash IS NOT NULL AND sync_enabled = 1
 	OPEN LoginScriptGenerator
-		FETCH NEXT FROM LoginScriptGenerator INTO @LoginName, @PasswordHash, @SID
+		FETCH NEXT FROM LoginScriptGenerator INTO @LoginName, @PasswordHash, @SID, @is_disabled
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
 			SET @SQL = 
@@ -340,7 +346,7 @@ BEGIN
 							CREATE LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, SID = '+@SID+', CHECK_POLICY=OFF, CHECK_EXPIRATION=OFF
 						END
 			'
-			IF @Login_Status = 1
+			IF ISNULL(@Login_Status,~@is_disabled) = 1
 				SET @SQL +=
 				'
 						USE master
@@ -409,7 +415,7 @@ BEGIN
 			DEALLOCATE ExecutorPerServer
 
 
-			FETCH NEXT FROM LoginScriptGenerator INTO @LoginName, @PasswordHash, @SID
+			FETCH NEXT FROM LoginScriptGenerator INTO @LoginName, @PasswordHash, @SID, @is_disabled
 		END
 	CLOSE LoginScriptGenerator
 	DEALLOCATE LoginScriptGenerator
@@ -420,7 +426,7 @@ BEGIN
 	DECLARE LoginScriptGenerator2 CURSOR LOCAL FOR
 		SELECT name FROM sys.server_principals sp JOIN dbo.InstanceLogins il
 		ON il.LoginName=sp.name COLLATE DATABASE_DEFAULT
-		WHERE sp.name LIKE 'JobVision\App%' AND sync_enabled = 1
+		WHERE sp.name LIKE 'JobVision\%' AND sync_enabled = 1
 	OPEN LoginScriptGenerator2
 		FETCH NEXT FROM LoginScriptGenerator2 INTO @LoginName
 		WHILE @@FETCH_STATUS = 0
@@ -432,7 +438,7 @@ BEGIN
 					IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = ''''''+'''+@LoginName+'''+'''''')
 						CREATE LOGIN '+QUOTENAME(@LoginName)+' FROM WINDOWS
 			'
-			IF @Login_Status = 1
+			IF ISNULL(@Login_Status,~@is_disabled) = 1
 				SET @SQL +=
 				'
 						USE master
