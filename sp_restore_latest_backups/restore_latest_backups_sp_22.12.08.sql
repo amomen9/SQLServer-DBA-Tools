@@ -1,9 +1,11 @@
+USE master
+GO
 
 -- =============================================
 -- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2021.03.12>
--- Latest Update Date:	<22.09.04>
+-- Latest Update Date:	<23.02.02>
 -- Description:			<Restore Backups>
 -- License:				<Please refer to the license file> 
 -- =============================================
@@ -20,8 +22,8 @@ This script	restores latest backups from the backups' repository filtered by the
 	backup file, the script names the target database as 'UnreadableBackupFile+<a random string>'. Such backups will most likely fail to restore.
 
 SQL Server version requirement:
-This script is designed to comply with SQL Server 2019 and later. Earlier versions are compatible if some
-of the features are removed. The versions 2016 and 2017 are also most likely supported. I have tested this on 2019
+This script is designed to comply with SQL Server 2019 and later. The versions 2016 and 2017 are also most likely supported.
+Earlier versions are compatible if some of the features are removed. I have tested this on 2019
 
 Attention: 		
 	1. Please make sure SQL service has required permissions to the paths you specify. Otherwise the script will fail. If the output paths do not
@@ -31,11 +33,17 @@ Attention:
 	3. Appending backup files to each other is not recommended and this script is not designed to handle such case.
 	4. This scripts keeps the list of backup files in the SQLAdministrationDB database, for full backup files,	for both history and caching
 	purposes, but for log backup files only for caching purposes. 
+	5. Note in this script that if your resource directory is on the local server, you should not specify one directory path as local and an another
+	one as UNC, otherwise errors might occur for "live restore operation"
 
 TODO: 
 	  
-	  -. Work on included 1 instead of 0
-	  -. Merge include and exclude queries
+	  -. Elapsed time										done
+	  -. Restore a live backup								done
+	  -. Work on included 1 instead of 0					done
+	  -. Delete Temp Tail of Log Backups					done
+	  -. Become platform independent						Suspended (Is backward compatibility more important or platform independency for SQL Server?)
+	  -. Merge include and exclude queries					rejected
 	  -. Restore Order
 	  -. smart progress percentage
 	  -. restore datafiles to multiple places
@@ -43,47 +51,17 @@ TODO:
 	  -. attach detached datafiles
 	  -. make SQLAdministrationDB optional
 
+
 */
 
-USE master
-GO
 
-/* If you want to your retention policy be in table variable format you may use this. I have used JSON datatype
---============== Retention Policy Type ===================================================================
-
---DROP TYPE IF EXISTS Retention_Policy
-IF not EXISTS (SELECT 1 FROM sys.types WHERE name = 'Retention_Policy')
-	CREATE TYPE Retention_Policy AS TABLE   
-		( [From (n) Days Ago] INT NOT NULL  
-		, [To (n) Days Ago] INT NULL  
-		, [Backup Retention Interval Every (n) Days] INT NOT NULL 
-		);  
-ELSE
-	PRINT 'Warning! The Retention_Policy type already exists, it may be different than what this stored procedure needs.'
-GO
-*/
---BEGIN TRY
---	DECLARE @sql NVARCHAR(500)
---	SET @sql =
---	'
-
--- 
---CREATE OR ALTER PROC sp_dirtree_fullpath
---	@path NVARCHAR(500),
---	@regex_filter NVARCHAR(128)
---AS
---BEGIN
-	
---	SELECT 1
---END
---GO
 
 --============================================================================================
--- To me, second precision amount is perfectly enough, but I included millisecond here too. If you get
--- DATEDIFF overflow error, reduce the precision to second.
+-- To me, "second" precision amount is perfectly enough, but if you want to include millisecond 
+-- you may manage them here too. But please beware of DATEDIFF overflow error
 
 CREATE OR ALTER FUNCTION ufn_ElapsedTime(@StartTime DATETIME)
-RETURNS VARCHAR(40)
+RETURNS VARCHAR(33)
 WITH 
 	SCHEMABINDING,
 	RETURNS NULL ON NULL INPUT
@@ -91,16 +69,16 @@ AS
 BEGIN
 	DECLARE @ExecutionTime_INT BIGINT,
 			@ExecutionTime_VARCHAR VARCHAR(20),
-			@Millisecond VARCHAR(6),
+			@Millisecond VARCHAR(3),
 			@Second VARCHAR(2),
 			@Minute VARCHAR(2),
 			@Hour VARCHAR(2),
 			@Day VARCHAR(4)
 
-	SET @ExecutionTime_INT = DATEDIFF(MILLISECOND,@StartTime,SYSDATETIME())
-	SET @Millisecond = RIGHT(@ExecutionTime_INT,3)
-	SET @Millisecond = REPLICATE('0',3-LEN(@Millisecond)) + @Millisecond
-	SET @ExecutionTime_INT /= 10000 
+	SET @ExecutionTime_INT = DATEDIFF(SECOND,@StartTime,SYSDATETIME())
+	--SET @Millisecond = RIGHT(@ExecutionTime_INT,3)
+	--SET @Millisecond = REPLICATE('0',3-LEN(@Millisecond)) + @Millisecond
+	--SET @ExecutionTime_INT /= 10000 
 	SET @Second = @ExecutionTime_INT % 60
 	SET @Second = REPLICATE('0',2-LEN(@Second)) + @Second
 	SET @ExecutionTime_INT/=60
@@ -112,43 +90,78 @@ BEGIN
 	SET @ExecutionTime_INT/=24
 	IF LEN(@ExecutionTime_INT)=1 SET @Day = '0'+CONVERT(VARCHAR(1),@ExecutionTime_INT)	
 	-- 20 characters + 
-	RETURN @Day+':'+@Hour+':'+@Minute+':'+@Second+'.'+@Millisecond+' (dddd:hh:mm:ss.millis)'
+	RETURN @Day+':'+@Hour+':'+@Minute+':'+@Second+ISNULL('.'+@Millisecond,'')+' (dddd:hh:mm:ss)'
 END
 GO
 
 --============================================================================================
 
-CREATE OR ALTER PROC sp_PrintLong
-@String NVARCHAR(MAX)
+CREATE OR ALTER PROC usp_PrintLong
+	@String NVARCHAR(MAX),
+	@Max_Chunk_Size SMALLINT = 4000
 AS
 BEGIN
+	SET NOCOUNT ON
+	SET @Max_Chunk_Size = ISNULL(@Max_Chunk_Size,4000)
+	IF @Max_Chunk_Size > 4000 OR @Max_Chunk_Size<50 BEGIN RAISERROR('Wrong @Max_Chunk_Size cannot be bigger than 4000. A value less than 50 for this parameter is also not supported.',16,1) RETURN 1 END
 	DECLARE @NewLineLocation INT,
 			@TempStr NVARCHAR(4000),
 			@Length INT,
-			@carriage BIT
+			@carriage BIT,
+			@SeparatorNewLineFlag BIT,
+			@Temp_Max_Chunk_Size INT
+
+	CREATE TABLE #MinSeparator
+	(
+		id INT IDENTITY PRIMARY KEY NOT NULL,
+		Separator VARCHAR(2),
+		SeparatorReversePosition INT
+	)
 
 	WHILE @String <> ''
 	BEGIN
-		IF LEN(@String)<=4000
+		IF LEN(@String)<=@Max_Chunk_Size
 		BEGIN 
 			PRINT @String
 			BREAK
 		END 
 		ELSE
-        BEGIN 
-			SET @TempStr = SUBSTRING(@String,1,4000)
+        BEGIN
+			SET @Temp_Max_Chunk_Size = @Max_Chunk_Size
+			StartWithChunk:
+			SET @TempStr = SUBSTRING(@String,1,@Temp_Max_Chunk_Size)
 			SELECT @NewLineLocation = CHARINDEX(CHAR(10),REVERSE(@TempStr))
+			DECLARE @MinSeparator INT
+
+			TRUNCATE TABLE #MinSeparator
+			INSERT #MinSeparator
+			(
+			    Separator,
+			    SeparatorReversePosition
+			)
+			VALUES ('.', CHARINDEX('.',REVERSE(@TempStr))), (')', CHARINDEX(')',REVERSE(@TempStr))), ('(', CHARINDEX('(',REVERSE(@TempStr))), (',', CHARINDEX(',',REVERSE(@TempStr))), ('-', CHARINDEX('-',REVERSE(@TempStr))), ('*', CHARINDEX('*',REVERSE(@TempStr))), ('/', CHARINDEX('/',REVERSE(@TempStr))), ('+', CHARINDEX('+',REVERSE(@TempStr))), (CHAR(32), CHARINDEX(CHAR(32),REVERSE(@TempStr))), (CHAR(9), CHARINDEX(CHAR(9),REVERSE(@TempStr)))
+			SELECT @MinSeparator = MIN(SeparatorReversePosition) FROM #MinSeparator WHERE SeparatorReversePosition<>0
+
+			IF @NewLineLocation=0 AND @MinSeparator IS NOT NULL
+			BEGIN
+				SET @SeparatorNewLineFlag = 0				
+				SET @NewLineLocation = @MinSeparator
+			END
+			ELSE
+				IF @NewLineLocation<>0	SET @SeparatorNewLineFlag = 1
+			
+			IF @NewLineLocation = 0 OR @NewLineLocation=@Max_Chunk_Size BEGIN SET @Temp_Max_Chunk_Size+=50 GOTO StartWithChunk END
 
 			IF CHARINDEX(CHAR(13),REVERSE(@TempStr)) - @NewLineLocation = 1
 				SET @carriage = 1
 			ELSE
 				SET @carriage = 0
 
-			SET @TempStr = LEFT(@TempStr,(4000-@NewLineLocation)-CONVERT(INT,@carriage))
+			SET @TempStr = LEFT(@TempStr,(@Temp_Max_Chunk_Size-@NewLineLocation)-CONVERT(INT,@carriage))
 
 			PRINT @TempStr
 		
-			SET @Length = LEN(@String)-LEN(@TempStr)-CONVERT(INT,@carriage)-1
+			SET @Length = LEN(@String)-LEN(@TempStr)-CONVERT(INT,@carriage)-1+CONVERT(INT,~@SeparatorNewLineFlag)
 			SET @String = RIGHT(@String,@Length)
 			
 		END 
@@ -228,7 +241,7 @@ GO
 
 --====================================================================================
 -- Checks if the file with the given path exists
-CREATE OR alter FUNCTION dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName sysname, @path varchar(512))
+CREATE OR alter FUNCTION dbo.ufn_FileExistsForAnotherDatabase(@Restore_DBName sysname, @path varchar(512))
 RETURNS BIT
 WITH RETURNS NULL ON NULL INPUT
 AS
@@ -245,7 +258,7 @@ GO
 --============== First SP ================================================================================
 
 -- This SP is called by the main SP
-create or alter procedure sp_BackupDetails 
+create or alter procedure usp_BackupDetails 
 	@Backup_Path nvarchar(1000) = N'E:\Backup\test_read-only\NW_FG-Archive_Full_0244.bak'
 As
 BEGIN
@@ -308,16 +321,23 @@ BEGIN
     
 		)
 
-		IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) > 11 -- Equal to or greater than SQL 2012 
+		IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) > 11 -- Equal to or greater than SQL 2014 
   		BEGIN
   			ALTER TABLE #tmp ADD Containment tinyint NULL
   		END
-  		IF cast(cast(SERVERPROPERTY('ProductVersion') as char(2)) as float) > 12 -- Equal to or greater than 2014
+  		IF cast(cast(SERVERPROPERTY('ProductVersion') as char(2)) as float) > 12 -- Equal to or greater than 2016
   		BEGIN
   			ALTER TABLE #tmp ADD KeyAlgorithm nvarchar(32),
 								EncryptorThumbprint varbinary(20),
 								EncryptorType nvarchar(32)
   		END
+		
+		IF cast(cast(SERVERPROPERTY('ProductVersion') as char(2)) as float) > 15 -- Equal to or greater than 2022
+  		BEGIN
+			ALTER TABLE #tmp ADD [LastValidRestoreTime] datetime,
+								 [TimeZone] smallint,
+								 [CompressionAlgorithm] nvarchar(32)
+		END
 
 		-- N'E:\Backup\test_read-only\NW_readwrite_0316.bak' -- N'E:\Backup\test_read-only\NW_dif.dif' -- N'E:\Backup\test_read-only\NW_Full_backup_0240.bak' -- 
   		Declare @sql nvarchar(max) = 'RESTORE HEADERONLY FROM DISK = @Backup_Path'
@@ -333,8 +353,8 @@ GO
 --======= Second SP =====================================================================================================
 
 --- This SP is called by the main SP:
-create or alter proc sp_complete_restore
-	@Drop_Buffers_Before_Restore BIT = 0,
+create or alter proc usp_complete_restore
+	@Drop_SQLSBuffers_Before_Restore BIT = 0,
 	@Drop_Database_if_Exists BIT = 0,
 	@DiskBackupFilesID INT,
 	@USE_SQLAdministrationDB_Database BIT = 0,					-- Create or Update SQLAdministrationDB and DiskBackupFiles and RestoreHistory tables inside SQLAdministrationDB database for faster access to backup file records
@@ -365,7 +385,8 @@ create or alter proc sp_complete_restore
 	@ShrinkLogFile_policy SMALLINT = -2,						-- Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking 
 	@RebuildLogFile_policy VARCHAR(64) = '',					-- Possible options: NULL or Empty string: Do not rebuild | 'x:y:z' (For example, 4MB:64MB:1024MB) rebuild to SIZE = x, FILEGROWTH = y, MAXSIZE = z. If @RebuildLogFile_policy is specified, @ShrinkLogFile_policy will be ignored.
 	@GrantAllPermissions_policy SMALLINT = -2,					-- Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account and make guest a member of db_owner group
-	@OperationStartTime DATETIME = ''
+	@OperationStartTime DATETIME = '',
+	@Script_to_Execute_After_Restore NVARCHAR(MAX)
 	
 AS
 BEGIN
@@ -374,7 +395,7 @@ BEGIN
 	DECLARE @OriginalDBName sysname = @Restore_DBName
 	DECLARE @ErrMsg NVARCHAR(256)
 	DECLARE @DatabaseReplaceFlag BIT = 0
-	IF  @GrantAllPermissions_policy NOT IN (-2,1,2) RAISERROR('Invalid option for @GrantAllPermissions_policy was specified.',16,1)
+	IF  @GrantAllPermissions_policy NOT IN (-2,1,2,3) RAISERROR('Invalid option for @GrantAllPermissions_policy was specified.',16,1)
 	SET @GrantAllPermissions_policy = ISNULL(@GrantAllPermissions_policy,-2)
 	SET @ShrinkDatabase_policy = ISNULL(@ShrinkDatabase_policy,-2)
 	SET @ShrinkLogFile_policy = ISNULL(@ShrinkLogFile_policy,-2)
@@ -387,6 +408,8 @@ BEGIN
 	SET @Destination_Database_LogFile_Location = ISNULL(@Destination_Database_Logfile_Location,'')
 	SET @RebuildLogFile_policy = ISNULL(@RebuildLogFile_policy,'')
 	SET @StopAt = ISNULL(@StopAt,'9999-12-31 23:59:59')
+	SET @Script_to_Execute_After_Restore = ISNULL(@Script_to_Execute_After_Restore,'')
+
 
 	DECLARE @Back_DateandTime nvarchar(20) = (select replace(convert(date, GetDate()),'-','.') + '_' + substring(replace(convert(nvarchar(10),convert(time, GetDate())), ':', ''),1,4) )
 	Declare @DB_Restore_Script nvarchar(4000) = ''
@@ -404,7 +427,7 @@ BEGIN
 			@LastLogBackupStartDate DATETIME,
 			@LastLogBackupLastLSN DECIMAL(25,0),
 			@BackupLastLSN DECIMAL(25,0),
-			@No_of_Log_Backups INT
+			@No_of_Log_Backups INT = 0
 
 	IF ISNULL(@OriginalDBName,'') = ''
 	BEGIN
@@ -429,13 +452,13 @@ BEGIN
 
 	IF @Restore_Log_Backups = 1 
 	BEGIN
-		SELECT @BackupFinishDate = BackupFinishDate FROM SQLAdministrationDB..DiskBackupFiles WHERE DiskBackupFilesID = @DiskBackupFilesID
+		--SELECT @BackupFinishDate = BackupFinishDate FROM SQLAdministrationDB..DiskBackupFiles WHERE DiskBackupFilesID = @DiskBackupFilesID
 		--IF @BackupFinishDate IS NULL
 		--BEGIN
-		EXEC dbo.sp_BackupDetails @Backup_Path = @Backup_Location -- nvarchar(1000)
+		EXEC dbo.usp_BackupDetails @Backup_Path = @Backup_Location -- nvarchar(1000)
 		SELECT TOP 1 @BackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 		SELECT TOP 1 @BackupLastLSN = LastLSN FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-		DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+		TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 		--END		
 			
 		IF @StopAt < @BackupFinishDate
@@ -453,10 +476,10 @@ BEGIN
 			) dt
 			ORDER BY dt.BackupStartDate
 
-			EXEC dbo.sp_BackupDetails @Backup_Path = @Backup_Location -- nvarchar(1000)
+			EXEC dbo.usp_BackupDetails @Backup_Path = @Backup_Location -- nvarchar(1000)
 			SELECT TOP 1 @BackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 			SELECT TOP 1 @BackupLastLSN = LastLSN FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-			DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+			TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 
         END
     END
@@ -482,7 +505,7 @@ BEGIN
 					
 
   				------------------------------ check if the database has SIMPLE or PseudoSIMPLE recovery model:
-  				declare @temp1 nvarchar(max)  
+  				declare @temp1 nvarchar(max)						
   				declare @dbinfo table (ParentObject nvarchar(100), Object nvarchar(100), Field nvarchar(100), [VALUE] nvarchar(100))
 				DECLARE @DBCCStatement NVARCHAR(200) = 'dbcc dbinfo ('+ QUOTENAME(@Restore_DBName) +') with tableresults, NO_INFOMSGS'
   				insert @dbinfo
@@ -614,7 +637,7 @@ BEGIN
 					)
 					
 					INSERT #TempTargetDBFiles (FileID ,head , tail, type, [File Exists])					
-						SELECT dt.FileID, head, dt.tail, dt.Type, dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName,tail) from
+						SELECT dt.FileID, head, dt.tail, dt.Type, dbo.ufn_FileExistsForAnotherDatabase(@Restore_DBName,tail) from
 						(
   						
   							select FileID, ',MOVE N''' + LogicalName + ''' TO N''' head, 
@@ -648,7 +671,7 @@ BEGIN
 
 						UPDATE a 
 							SET tail = LEFT(tail,LEN(tail)-4)+'_2'+RIGHT(tail,4),
-								a.[File Exists] = dbo.fn_FileExistsForAnotherDatabase(@Restore_DBName, LEFT(tail,LEN(tail)-4)+'_2'+RIGHT(tail,4))
+								a.[File Exists] = dbo.ufn_FileExistsForAnotherDatabase(@Restore_DBName, LEFT(tail,LEN(tail)-4)+'_2'+RIGHT(tail,4))
 						FROM 
 						(
 							SELECT TOP 1 tail, [File Exists]
@@ -722,16 +745,13 @@ BEGIN
 					END
 --------------------End creating necessary directories for 'InheritFromSource' option----------------------------------------------------------------------------
 
+  				
+				SELECT @DB_Restore_Script += ', NOUNLOAD, REPLACE' + IIF(@STATS = 0,'',(', STATS = ' + CONVERT(varchar(3),@STATS))) 
 
                 if @Keep_Database_in_Restoring_State = 1 OR @Restore_Log_Backups = 1
   					set @DB_Restore_Script += ', NORECOVERY'
   					
-  				
-
-  				select @DB_Restore_Script += ', NOUNLOAD, REPLACE' + IIF(@STATS = 0,'',(', STATS = ' + CONVERT(varchar(3),@STATS))) 
-						
-						
-											  
+  																											  
   			
   			END	
   				PRINT '-------- DB restore statement --------'+CHAR(10)+CHAR(10)+@DB_Restore_Script+CHAR(10)
@@ -744,7 +764,7 @@ BEGIN
 										FROM
 										(
 											SELECT
-											CONVERT(VARCHAR,CONVERT(BIGINT,SUM(bf.Size)/1024/1024))+' MB free disk space is required on ''' + fd.fixed_drive_path + ''', while ' + CONVERT(VARCHAR,MIN(fd.free_space_in_bytes)/1024/1024) + ' MB exists.' Error					
+											'--'+CONVERT(VARCHAR,CONVERT(BIGINT,SUM(bf.Size)/1024/1024))+' MB free disk space is required on ''' + fd.fixed_drive_path + ''', while ' + CONVERT(VARCHAR,MIN(fd.free_space_in_bytes)/1024/1024) + ' MB exists.' Error					
 											FROM #TempTargetDBFiles tf JOIN #Backup_Files_List bf
 											ON bf.FileID = tf.FileID
 											JOIN
@@ -775,7 +795,7 @@ BEGIN
 				BEGIN
 					IF @Generate_Statements_Only = 1
 					BEGIN
-						SET @message= 'Warning!!!'+CHAR(10)+@message+CHAR(10)+'The restore statement was generated, but there is not available free disk space to restore the database for the paths you selected.'
+						SET @message= '--Warning!!!'+CHAR(10)+@message+CHAR(10)+'--The restore statement was generated, but there is not available free disk space to restore the database for the paths you selected.'
 						PRINT @message
 					END
 					ELSE
@@ -797,11 +817,11 @@ BEGIN
 						,[DatabaseName]
 						,ISNULL([BackupStartDate],'') [BackupStartDate]
 						,[BackupFinishDate]
-						,CONVERT(DECIMAL(25,0),0) LastLSN
+						,CONVERT(DECIMAL(25,0),NULL) LastLSN
 						,[BackupTypeDescription]
 						,[ServerName]
 						,[FileExtension]
-						,[IsAddedDuringTheLastDiskScan]
+						--,[IsAddedDuringTheLastDiskScan]
 						,[IsIncluded]
 						,dt.LeadBackupStartDate
 					INTO #TempLog
@@ -816,7 +836,7 @@ BEGIN
 							,[BackupTypeDescription]
 							,[ServerName]
 							,[FileExtension]
-							,[IsAddedDuringTheLastDiskScan]
+							--,[IsAddedDuringTheLastDiskScan]
 							,[IsIncluded]
 							, COALESCE(LEAD([BackupStartDate]) OVER (ORDER BY [BackupStartDate]), '9999-12-31 23:59:59.000') [LeadBackupStartDate]
 						FROM SQLAdministrationDB..DiskLogBackupFiles
@@ -825,6 +845,7 @@ BEGIN
 						ORDER BY BackupStartDate
 					) dt
 					WHERE [LeadBackupStartDate] >= CONVERT(DATETIME,LEFT(CONVERT(VARCHAR(50),@BackupFinishDate,121),17)+'00')
+
 
 					ALTER TABLE #TempLog ADD CONSTRAINT PK_TempLog PRIMARY KEY(BackupStartDate) WITH (FILLFACTOR=80)
 					
@@ -843,12 +864,12 @@ BEGIN
 						BEGIN
 							--IF @BackupFinishDateForCursor IS NULL
 							--BEGIN
-							EXEC dbo.sp_BackupDetails @Backup_Path = @file -- nvarchar(1000)
+							EXEC dbo.usp_BackupDetails @Backup_Path = @file -- nvarchar(1000)
 							UPDATE #TempLog 
 								SET BackupFinishDate	= (SELECT TOP 1 BackupFinishDate	FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9),
 									LastLSN				= (SELECT TOP 1 LastLSN				FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9)
 							WHERE CURRENT OF FinishDateFinder
-							DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+							TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 							--END
 
 							FETCH NEXT FROM FinishDateFinder INTO @file
@@ -862,7 +883,6 @@ BEGIN
 						SELECT TOP 2 * FROM #TempLog 
 					) a
 					WHERE a.LastLSN < @BackupLastLSN					
-
 
 					-- Analyzing and ascertaining the last log backup to restore:
 					SELECT TOP 1 
@@ -879,9 +899,9 @@ BEGIN
 						
 						IF @LastLogBackupFinishDate IS NULL
 						BEGIN
-							EXEC dbo.sp_BackupDetails @Backup_Path = @LastLogBackupLocation -- nvarchar(1000)
+							EXEC dbo.usp_BackupDetails @Backup_Path = @LastLogBackupLocation -- nvarchar(1000)
 							SELECT TOP 1 @LastLogBackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-							DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+							TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 						END
 
 
@@ -915,7 +935,7 @@ BEGIN
 								BackupTypeDescription,
 								ServerName,
 								FileExtension,
-								IsAddedDuringTheLastDiskScan,
+								--IsAddedDuringTheLastDiskScan,
 								IsIncluded
 							)
 							SELECT	@NextLogBackup_Location,
@@ -925,14 +945,14 @@ BEGIN
 									'LOG',
 									NULL,
 									NULL,
-									NULL,
+									--NULL,
 									1
 							
 							IF @NextLogBackup_BackupFinishDate IS NULL
 							BEGIN
-								EXEC dbo.sp_BackupDetails @Backup_Path = @NextLogBackup_Location -- nvarchar(1000)
+								EXEC dbo.usp_BackupDetails @Backup_Path = @NextLogBackup_Location -- nvarchar(1000)
 								SELECT TOP 1 @NextLogBackup_BackupFinishDate = BackupFinishDate FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
-								DELETE FROM #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+								TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 							END
 							SET @LastLogBackupID			= @NextLogBackup_ID							
 							SET @LastLogBackupLocation		= @NextLogBackup_Location
@@ -973,7 +993,7 @@ BEGIN
 								--SET @StopAt = NULL
 							END
 												
-							EXEC dbo.sp_PrintLong @Log_Restore_Script
+							EXEC dbo.usp_PrintLong @Log_Restore_Script
 							PRINT ''
 						END
 						
@@ -990,14 +1010,13 @@ BEGIN
 						END CATCH
 
 						--------- Checking free disk space availability for the last log restore: ----------------------------------
-						SELECT * FROM sys.dm_os_enumerate_fixed_drives
 						SET @message = ''
 						SELECT @message +=	(
 												SELECT STRING_AGG(dt.Error,CHAR(10))
 												FROM
 												(
 													SELECT
-													CONVERT(VARCHAR,CONVERT(BIGINT,SUM(bf.Size)/1024/1024))+' MB free disk space is required on ''' + fd.fixed_drive_path + ''', while ' + CONVERT(VARCHAR,MIN(fd.free_space_in_bytes)/1024/1024) + ' MB exists.' Error					
+													'--'+CONVERT(VARCHAR,CONVERT(BIGINT,SUM(bf.Size)/1024/1024))+' MB free disk space is required on ''' + fd.fixed_drive_path + ''', while ' + CONVERT(VARCHAR,MIN(fd.free_space_in_bytes)/1024/1024) + ' MB exists.' Error					
 													FROM #TempTargetDBFiles tf JOIN #Backup_Files_List bf
 													ON bf.FileID = tf.FileID
 													JOIN
@@ -1028,7 +1047,7 @@ BEGIN
 						BEGIN
 							IF @Generate_Statements_Only = 1
 							BEGIN
-								SET @message= 'Warning!!!'+CHAR(10)+@message+CHAR(10)+'The log restore statement(s) was generated, but there is not available free disk space to restore the database for the paths you selected.'
+								SET @message= '--Warning!!!'+CHAR(10)+@message+CHAR(10)+'--The log restore statement(s) was generated, but there is not available free disk space to restore the database for the paths you selected.'
 								PRINT @message
 							END
 							ELSE
@@ -1042,7 +1061,7 @@ BEGIN
 					END
 					ELSE
                     BEGIN
-						SET @message = CHAR(10)+'--Warning!!! @Restore_Log_Backups option was set to 1 but no log backups where found for the database "'+@OriginalDBName+'" with the given criteria.'+IIF(@Force_Recovery_If_No_Log_Backups_Found=1,'',' ###The database will remain in restoring state###')+CHAR(10)
+						SET @message = CHAR(10)+'--Warning!!! @Restore_Log_Backups option was set to 1 but no log backups where found for the database "'+@OriginalDBName+'" with the given criteria.'+IIF(@Force_Recovery_If_No_Log_Backups_Found=1,' The database will be recoverd because @Force_Recovery_If_No_Log_Backups_Found was set to 1.',' ###The database will remain in restoring state###')+CHAR(10)
 						PRINT @message
 					END
 
@@ -1133,13 +1152,28 @@ BEGIN
                     
 					RAISERROR('** Begining database restore... **',0,1) WITH NOWAIT
 					PRINT ''
-					IF @Drop_Buffers_Before_Restore = 1
+					IF @Drop_SQLSBuffers_Before_Restore = 1
 					BEGIN
 						SET @temp1 = 'CHECKPOINT'+CHAR(10)+'EXEC sys.sp_flush_log'+CHAR(10)+'DBCC DROPCLEANBUFFERS() WITH no_infomsgs'
 						EXEC(@temp1)
 					END 
 					-- Execute the prepared restore script:
   					EXEC sys.sp_executesql @DB_Restore_Script, N'@Degree_of_Parallelism int out', @Degree_of_Parallelism OUT
+					
+					IF @Force_Recovery_If_No_Log_Backups_Found = 1 AND @No_of_Log_Backups = 0 AND @Restore_Log_Backups = 1
+					BEGIN
+						SET @temp1 = 'RESTORE DATABASE '+QUOTENAME(@Restore_DBName)+' WITH RECOVERY'
+						EXEC(@temp1)
+					END
+
+					
+					IF (SELECT state FROM sys.databases WHERE name = @Restore_DBName) = 0
+					BEGIN
+						SET @temp1 ='ALTER DATABASE '+QUOTENAME(@Restore_DBName)+' SET SINGLE_USER WITH ROLLBACK IMMEDIATE'
+						EXECUTE(@temp1)
+					END
+
+
 					SET @message = 'Elapsed time: ' + dbo.ufn_ElapsedTime(@OperationStartTime)
 					RAISERROR(@message,0,1) WITH NOWAIT
 
@@ -1300,6 +1334,8 @@ BEGIN
 					IF (@Change_Target_RecoveryModel_To <> 'InheritFromSource')
 						SET @temp5 = 'ALTER DATABASE ' + QUOTENAME(@Restore_DBName) + ' SET RECOVERY ' + @Change_Target_RecoveryModel_To + CHAR(10)
 				
+					SET @Script_to_Execute_After_Restore = 'USE '+QUOTENAME(@Restore_DBName)+CHAR(10)+@Script_to_Execute_After_Restore
+					EXEC(@Script_to_Execute_After_Restore)
 
 					-- Begining shrink/log rebuild operations, if user requests:
 					SET @temp5 = 'declare @SQL nvarchar(500)'+CHAR(10)
@@ -1413,16 +1449,19 @@ BEGIN
   					EXEC (@temp5)
 
 					-----========= Begin grant permissions:
-					IF @GrantAllPermissions_policy = 1
+					IF @GrantAllPermissions_policy = 1	-- Add every current user to db_owner group
 					BEGIN
 					
-						SET @temp5 = 'PRINT ''--===Begining the Grant all permissions(1) op:''' + CHAR(10) +
+						SET @temp5 = 'PRINT ''--===Begining the Grant all permissions(value 1) op:''' + CHAR(10) +
 						'
 							use '+quotename(@Restore_DBName)+'
 							DECLARE @sql NVARCHAR(max)	
 							DECLARE @USERNAME sysname 
 							DECLARE InnerDB CURSOR FOR
-								SELECT name FROM sys.database_principals WHERE principal_id BETWEEN 4 AND 16380 AND (CHARINDEX(''.'',name)<>0) AND type IN (''s'',''u'')
+								SELECT name FROM sys.database_principals 
+								WHERE	principal_id BETWEEN 6 AND 16380 AND
+										--(CHARINDEX(''.'',name)<>0) AND 
+										type IN (''s'',''u'')
 							OPEN InnerDB
 								FETCH NEXT FROM InnerDB INTO @USERNAME
 								WHILE @@FETCH_STATUS = 0
@@ -1452,20 +1491,14 @@ BEGIN
 									END
 								CLOSE InnerDB
 								DEALLOCATE InnerDB
-								-- Just because one of my colleagues once asked me:
-								IF exists (select 1 from sys.database_principals where name = ''db_developer'')
-								BEGIN
-									SET @sql = ''GRANT CONTROL TO db_developer''
-									EXEC(@sql)
-								END
 						'
 						EXEC(@temp5)
 					END
 
-					IF @GrantAllPermissions_policy = 2
+					IF @GrantAllPermissions_policy = 2	-- Remove every db user, turn on guest account and make it a member of db_owner role
 					BEGIN
 					
-						SET @temp5 = 'PRINT ''--===Begining the Grant all permissions(2) op:''' + CHAR(10) +
+						SET @temp5 = 'PRINT ''--===Begining the Grant all permissions(value 2) op:''' + CHAR(10) +
 						'
 							use '+quotename(@Restore_DBName)+'
 							GRANT CONNECT TO [GUEST]
@@ -1473,7 +1506,10 @@ BEGIN
 							DECLARE @sql NVARCHAR(max)	
 							DECLARE @USERNAME sysname 
 							DECLARE InnerDB CURSOR FOR
-								SELECT name FROM sys.database_principals WHERE principal_id BETWEEN 4 AND 16380 AND (CHARINDEX(''.'',name)<>0) AND type IN (''s'',''u'')
+								SELECT name FROM sys.database_principals
+								WHERE	principal_id BETWEEN 6 AND 16380 AND 
+										--(CHARINDEX(''.'',name)<>0) AND 
+										type IN (''s'',''u'')
 							OPEN InnerDB
 								FETCH NEXT FROM InnerDB INTO @USERNAME
 								WHILE @@FETCH_STATUS = 0
@@ -1503,18 +1539,59 @@ BEGIN
 									END
 								CLOSE InnerDB
 								DEALLOCATE InnerDB
-								-- Just because one of my colleagues once asked me:
-								IF exists (select 1 from sys.database_principals where name = ''db_developer'')
-								BEGIN
-									SET @sql = ''GRANT CONTROL TO db_developer''
-									EXEC(@sql)
-								END
 						'
 						EXEC(@temp5)
 					END
 
-					-----========= End grant permissions
+					IF @GrantAllPermissions_policy = 3
+					BEGIN
+						SET @temp5 = 'PRINT ''--===Begining the Grant all permissions(value 3) op:''' + CHAR(10) +
+						'
+							use '+quotename(@Restore_DBName)+'
+							GRANT CONNECT TO [GUEST]
+							ALTER ROLE [db_owner] ADD MEMBER [GUEST]
+							DECLARE @sql NVARCHAR(max)	
+							DECLARE @USERNAME sysname 
+							DECLARE InnerDB CURSOR FOR
+								SELECT name FROM sys.database_principals
+								WHERE	principal_id BETWEEN 6 AND 16380 AND
+										--(CHARINDEX(''.'',name)<>0) AND 
+										type IN (''s'',''u'')
+							OPEN InnerDB
+								FETCH NEXT FROM InnerDB INTO @USERNAME
+								WHILE @@FETCH_STATUS = 0
+								BEGIN
+										declare @ErrMsg nvarchar(max)
+		
+										BEGIN try
+			
+											set @sql =
+											''
+									
+												ALTER ROLE [db_owner] ADD MEMBER ''+QUOTENAME(@USERNAME)+''
+									
+												--drop user ''+QUOTENAME(@USERNAME)+''
 				
+											''
+											exec (@sql)
+
+										END TRY
+										BEGIN CATCH
+											set @ErrMsg = db_name()+''::''+@USERNAME+''::''+ERROR_MESSAGE()
+											raiserror(@ErrMsg,16,1)
+										END CATCH
+	
+
+										FETCH NEXT FROM InnerDB INTO @USERNAME
+									END
+								CLOSE InnerDB
+								DEALLOCATE InnerDB
+						'
+						EXEC(@temp5)
+					END
+					-----========= End grant permissions
+					
+
 					SET @temp5 = 'ALTER DATABASE ' + QUOTENAME(@Restore_DBName) + ' SET MULTI_USER' + CHAR(10) +
 								  'PRINT CHAR(10)+''|The database is ready for use.|'''
 					EXEC(@temp5)
@@ -1536,7 +1613,7 @@ BEGIN
                 END
 				SET @ErrNo = ERROR_NUMBER()
 				set @message = 'Fatal error: '+IIF(@ErrNo=50000,'','System Message:'+CHAR(10)+ 'Msg '+CONVERT(VARCHAR(50),@ErrNo)+', Level '+CONVERT(VARCHAR(50),@Severity)+', State '+CONVERT(VARCHAR(50),@State)+', Line '+CONVERT(VARCHAR(50),ERROR_LINE()))+CHAR(10)+
-								ERROR_MESSAGE()	
+								+ERROR_MESSAGE()	
 				raiserror(@message, @Severity, @State)
 				
 				
@@ -1562,199 +1639,203 @@ GO
 
 -- Main (Third) SP:
 
-CREATE OR ALTER PROC sp_restore_latest_backups 
+CREATE OR ALTER PROC usp_restore_latest_backups 
 
-  @Drop_Buffers_Before_Restore BIT = 0,
-  @Ignore_Existant BIT = 0,										
+	@Drop_SQLSBuffers_Before_Restore BIT = 0,
+	@Ignore_Existant BIT = 0,										
 																-- ignore restoring databases that already exist on target
-  @Destination_Database_Name_suffix nvarchar(128) = N'',
-  																-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
-  																-- the database will be restored on its own.
-  @Destination_Database_Name_prefix NVARCHAR(128) = N'',
-  @Destination_DatabaseName sysname = N'',						-- This option only works if you have only one database to restore, and prefix and suffix options will also be applied.
-  @Destination_Database_DataFiles_Location nvarchar(300) = '',			
-  																-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
-  																-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
-  @Destination_Database_LogFile_Location nvarchar(300) = '',
+	@Destination_Database_Name_suffix nvarchar(128) = N'',
+																	-- You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
+																	-- the database will be restored on its own.
+	@Destination_Database_Name_prefix NVARCHAR(128) = N'',
+	@Destination_DatabaseName sysname = N'',						-- This option only works if you have only one database to restore, and prefix and suffix options will also be applied.
+	@Destination_Database_DataFiles_Location nvarchar(300) = '',			
+																	-- This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
+																	-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'
+	@Destination_Database_LogFile_Location nvarchar(300) = '',
 
-  @Backup_root_or_path nvarchar(300),			-- Root location for backup files.
-  
-  
-  @BackupFileName_naming_convention NVARCHAR(4000) = '',
-  @Skip_Files_Not_Matching_Naming_Convention BIT = 0,
-  @BackupFileName_RegexFilter NVARCHAR(128) = '',				-- Use this filter to speed file scouring up, if you have too many files in the directory.
-  
-  @BackupFinishDate_StartDATETIME DATETIME = '1900.01.01 00:00:00',
-  @BackupFinishDate_EndDATETIME DATETIME = '9999.12.31 23:59:59',
-  @USE_SQLAdministrationDB_Database BIT = 0,					-- Create or Update SQLAdministrationDB and DiskBackupFiles and RestoreHistory tables inside SQLAdministrationDB database for faster access to backup file records
+	@Backup_root_or_path nvarchar(300),			-- Root location for backup files.
+	
+	
+	@BackupFileName_naming_convention NVARCHAR(4000) = '',
+	@Skip_Files_Not_Matching_Naming_Convention BIT = 0,
+	@BackupFileName_RegexFilter NVARCHAR(128) = '',				-- Use this filter to speed file scouring up, if you have too many files in the directory.
+	
+	@BackupFinishDate_StartDATETIME DATETIME = '1900.01.01 00:00:00',
+	@BackupFinishDate_EndDATETIME DATETIME = '9999.12.31 23:59:59',
+	@USE_SQLAdministrationDB_Database BIT = 0,					-- Create or Update SQLAdministrationDB and DiskBackupFiles and RestoreHistory tables inside SQLAdministrationDB database for faster access to backup file records
 																-- and their details. This is useful when your backup repository is very large, containing too many files. Using this feature does not speed up file scouring operations at the first run,
 																-- but next times the runtime will be decreased remarkably because it evades RESTORE HEADERONLY for previously processed files.
-  @Exclude_system_databases BIT = 1,
+	@Exclude_system_databases BIT = 1,
 
-  @Exclude_DBName_Filter NVARCHAR(1000) = N'master',				-- Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
+	@Exclude_DBName_Filter NVARCHAR(1000) = N'master',				-- Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 																-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
 																-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded
-  
-  @Include_DBName_Filter NVARCHAR(1000) = N'',					-- Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
+	
+	@Include_DBName_Filter NVARCHAR(1000) = N'',					-- Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 																-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
 																-- in the name like AdventureWorks2019 and excludes others. Note that space at the begining and end of the names
 																-- will be disregarded.
 
-  @IncludeSubdirectories BIT = 1,								-- Choosing whether to include subdirectories or not while the script is searching for backup files.  
-  
-  
-  @Restore_Log_Backups BIT = 0,
-  @Force_Recovery_If_No_Log_Backups_Found bit = 0,
-  @LogBackup_root_or_path NVARCHAR(300) = '',
-  @LogBackupFileName_RegexFilter NVARCHAR(128) = '',
-  @StopAt DATETIME = '9999-12-31 23:59:59',						-- For point in time recovery, set the exact point in time, to which you want to redo your database logs.
-  
-  
-  
-  @Keep_Database_in_Restoring_State bit = 0,					-- If equals to 1, the database will be kept in restoring state
-  @Take_tail_of_log_backup_of_existing_database bit = 1,
-  @DataFileSeparatorChar nvarchar(2) = '_',						-- This parameter specifies the punctuation mark used in data files names. For example "_"
+	@IncludeSubdirectories BIT = 1,								-- Choosing whether to include subdirectories or not while the script is searching for backup files.	
+	
+	
+	@Restore_Log_Backups BIT = 0,
+	@Force_Recovery_If_No_Log_Backups_Found bit = 0,
+	@LogBackup_root_or_path NVARCHAR(300) = '',
+	@LogBackupFileName_RegexFilter NVARCHAR(128) = '',
+	@StopAt DATETIME = '9999-12-31 23:59:59',						-- For point in time recovery, set the exact point in time, to which you want to redo your database logs.
+	@Live_Restore_LogBackup_Temporary_Location NVARCHAR(300) = '',
+
+
+	
+	@Keep_Database_in_Restoring_State bit = 0,					-- If equals to 1, the database will be kept in restoring state
+	@Take_tail_of_log_backup_of_existing_database bit = 1,
+	@DataFileSeparatorChar nvarchar(2) = '_',						-- This parameter specifies the punctuation mark used in data files names. For example "_"
 																-- in NW_1.mdf or "$" in NW$1.mdf
 
-  @STATS TINYINT = 50,											-- Set this to specify stats parameter of restore statements											
-  @Change_Target_RecoveryModel_To NVARCHAR(17) = 'InheritFromSource',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|InheritFromSource
-  @Set_Target_Databases_ReadOnly BIT = 0,
-  @Delete_Backup_File BIT = 0,
+	@STATS TINYINT = 50,											-- Set this to specify stats parameter of restore statements											
+	@Change_Target_RecoveryModel_To NVARCHAR(17) = 'InheritFromSource',		-- Possible options: FULL|BULK-LOGGED|SIMPLE|InheritFromSource
+	@Set_Target_Databases_ReadOnly BIT = 0,
+	@Delete_Backup_File BIT = 0,
 																-- Turn this feature on to delete the backup files that are successfully restored.
-  @Generate_Statements_Only bit = 1,
-  @Email_Failed_Restores_To NVARCHAR(128) = NULL,
-  @Activate_Destination_Database_Containment BIT = 1,
-  @Set_Destination_FILESTREAM_Feature_To TINYINT = 2,
-  @Stop_On_Error INT = 0,
-  @ShrinkDatabase_policy SMALLINT = -2,							-- Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
-  @ShrinkLogFile_policy SMALLINT = -2,							-- Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking 
-  @RebuildLogFile_policy VARCHAR(24) = '',						-- Possible options: NULL or Empty string: Do not rebuild | 'x:y:z' (For example, 4MB:64MB:1024MB) rebuild to SIZE = x, FILEGROWTH = y, MAXSIZE = z. If @RebuildLogFile_policy is specified, @ShrinkLogFile_policy will be ignored.
-  @GrantAllPermissions_policy SMALLINT = -2						-- Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account and make guest a member of db_owner group
+	@Generate_Statements_Only bit = 1,
+	@Email_Failed_Restores_To NVARCHAR(128) = NULL,
+	@Activate_Destination_Database_Containment BIT = 1,
+	@Set_Destination_FILESTREAM_Feature_To TINYINT = 2,
+	@Stop_On_Error INT = 0,
+	@ShrinkDatabase_policy SMALLINT = -2,							-- Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
+	@ShrinkLogFile_policy SMALLINT = -2,							-- Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking 
+	@RebuildLogFile_policy VARCHAR(24) = '',						-- Possible options: NULL or Empty string: Do not rebuild | 'x:y:z' (For example, 4MB:64MB:1024MB) rebuild to SIZE = x, FILEGROWTH = y, MAXSIZE = z. If @RebuildLogFile_policy is specified, @ShrinkLogFile_policy will be ignored.
+	@GrantAllPermissions_policy SMALLINT = -2,						-- Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account and make guest a member of db_owner group
+	@Script_to_Execute_After_Restore NVARCHAR(MAX) = ''
 --WITH ENCRYPTION--, EXEC AS 'dbo'
 AS
 BEGIN
-  SET NOCOUNT ON
-
+	SET NOCOUNT ON
+	
 	DECLARE @OperationStartTime DATETIME = SYSDATETIME()
 
-  ---------------------------- Standardization of Customizable Variables:
-    
-  IF @Generate_Statements_Only = 1 SET @Delete_Backup_File = 0
+	---------------------------- Standardization of Customizable Variables:
+		
+	IF @Generate_Statements_Only = 1 SET @Delete_Backup_File = 0
 
-  IF RIGHT(TRIM(@Destination_Database_Datafiles_Location), 1) = '\' 
-  	SET @Destination_Database_Datafiles_Location = 
-  	left(TRIM(@Destination_Database_Datafiles_Location),(len(@Destination_Database_Datafiles_Location)-1))
-  
-  IF RIGHT(TRIM(@Backup_root_or_path), 1) = '\' 
-  	SET @Backup_root_or_path = 
-  	left(TRIM(@Backup_root_or_path),(len(@Backup_root_or_path)-1))
-  
-  IF RIGHT(TRIM(@LogBackup_root_or_path), 1) = '\' 
-  	SET @LogBackup_root_or_path = 
-  	left(TRIM(@LogBackup_root_or_path),(len(@LogBackup_root_or_path)-1))
-  
-  --IF RIGHT(@Temp_Working_Directory, 1) = '\' 
-  --	SET @Temp_Working_Directory = 
-  --	left(@Temp_Working_Directory,(len(@Temp_Working_Directory)-1))
-  
-  SET @Destination_Database_DataFiles_Location = ISNULL(@Destination_Database_DataFiles_Location,'')  
-  IF @Destination_Database_DataFiles_Location = ''
-    SET @Destination_Database_DataFiles_Location = convert(nvarchar(300),SERVERPROPERTY('InstanceDefaultDataPath'))
-  
-  SET @Destination_Database_LogFile_Location = ISNULL(@Destination_Database_LogFile_Location,'')
-  IF @Destination_Database_LogFile_Location = ''
-    SET @Destination_Database_LogFile_Location = convert(nvarchar(300),SERVERPROPERTY('InstanceDefaultLogPath'))  
-    	
+	IF RIGHT(TRIM(@Destination_Database_Datafiles_Location), 1) = '\' 
+		SET @Destination_Database_Datafiles_Location = 
+		left(TRIM(@Destination_Database_Datafiles_Location),(len(@Destination_Database_Datafiles_Location)-1))
+	
+	IF RIGHT(TRIM(@Backup_root_or_path), 1) = '\' 
+		SET @Backup_root_or_path = 
+		left(TRIM(@Backup_root_or_path),(len(@Backup_root_or_path)-1))
+	
+	IF RIGHT(TRIM(@LogBackup_root_or_path), 1) = '\' 
+		SET @LogBackup_root_or_path = 
+		left(TRIM(@LogBackup_root_or_path),(len(@LogBackup_root_or_path)-1))
+	
+	--IF RIGHT(@Temp_Working_Directory, 1) = '\' 
+	--	SET @Temp_Working_Directory = 
+	--	left(@Temp_Working_Directory,(len(@Temp_Working_Directory)-1))
+	
+	SET @Destination_Database_DataFiles_Location = ISNULL(@Destination_Database_DataFiles_Location,'')	
+	IF @Destination_Database_DataFiles_Location = ''
+		SET @Destination_Database_DataFiles_Location = convert(nvarchar(300),SERVERPROPERTY('InstanceDefaultDataPath'))
+	
+	SET @Destination_Database_LogFile_Location = ISNULL(@Destination_Database_LogFile_Location,'')
+	IF @Destination_Database_LogFile_Location = ''
+		SET @Destination_Database_LogFile_Location = convert(nvarchar(300),SERVERPROPERTY('InstanceDefaultLogPath'))	
+			
 	SET @Backup_root_or_path = isNULL(@Backup_root_or_path,'')
 	IF @Backup_root_or_path = ''
 		EXEC master.dbo.xp_instance_regread 
-            N'HKEY_LOCAL_MACHINE', 
-            N'Software\Microsoft\MSSQLServer\MSSQLServer',N'BackupDirectory', 
-            @Backup_root_or_path OUTPUT,  
-            'no_output'  
+						N'HKEY_LOCAL_MACHINE', 
+						N'Software\Microsoft\MSSQLServer\MSSQLServer',N'BackupDirectory', 
+						@Backup_root_or_path OUTPUT,	
+						'no_output'	
 		
 
-  
-  IF RIGHT(@Destination_Database_DataFiles_Location, 1) = '\' 
-	SET @Destination_Database_DataFiles_Location = left(@Destination_Database_DataFiles_Location,(len(@Destination_Database_DataFiles_Location)-1))
-
-  IF RIGHT(@Destination_Database_LogFile_Location, 1) = '\' 
-	SET @Destination_Database_LogFile_Location = left(@Destination_Database_LogFile_Location,(len(@Destination_Database_LogFile_Location)-1))
 	
-  
-  SET @Force_Recovery_If_No_Log_Backups_Found = ISNULL(@Force_Recovery_If_No_Log_Backups_Found,0)
-  SET @Drop_Buffers_Before_Restore = ISNULL(@Drop_Buffers_Before_Restore,0)
-  SET @Exclude_DBName_Filter = ISNULL(@Exclude_DBName_Filter,'')
-  SET @Exclude_system_databases = ISNULL(@Exclude_system_databases,0)
-  SET @Include_DBName_Filter = ISNULL(@Include_DBName_Filter,'')    
-  SET @IncludeSubdirectories = ISNULL(@IncludeSubdirectories,1)
-  SET @Keep_Database_in_Restoring_State = ISNULL(@Keep_Database_in_Restoring_State,0)
-  SET @Take_tail_of_log_backup_of_existing_database = ISNULL(@Take_tail_of_log_backup_of_existing_database,1)
-  SET @Set_Target_Databases_ReadOnly = ISNULL(@Set_Target_Databases_ReadOnly,0)
-  SET @Delete_Backup_File = ISNULL(@Delete_Backup_File,0)
-  SET @Destination_Database_Name_suffix = ISNULL(@Destination_Database_Name_suffix,'')
-  SET @StopAt = iif(@StopAt is null or @StopAt = '' or @Restore_Log_Backups = 0,'9999.12.31 23:59:59',@StopAt)
-  SET @BackupFinishDate_EndDATETIME = iif(@BackupFinishDate_EndDATETIME is null or @BackupFinishDate_EndDATETIME = '', '9999.12.31 23:59:59', @BackupFinishDate_EndDATETIME)
-  IF  @StopAt < @BackupFinishDate_StartDATETIME RAISERROR('@StopAt cannot be less than @BackupFinishDate_StartDATETIME. Check your inputs.',16,1)
-  IF  @Skip_Files_Not_Matching_Naming_Convention = 1 AND @BackupFileName_naming_convention = '' RAISERROR('Both @Skip_Files_Not_Matching_Naming_Convention is set to 1 and @BackupFileName_naming_convention is not defined.',16,1)
+	IF RIGHT(@Destination_Database_DataFiles_Location, 1) = '\' SET @Destination_Database_DataFiles_Location = left(@Destination_Database_DataFiles_Location,(len(@Destination_Database_DataFiles_Location)-1))
+	IF RIGHT(@Destination_Database_LogFile_Location, 1) = '\'	SET @Destination_Database_LogFile_Location = left(@Destination_Database_LogFile_Location,(len(@Destination_Database_LogFile_Location)-1))
+	IF RIGHT(@Live_Restore_LogBackup_Temporary_Location, 1) = '\'	SET @Live_Restore_LogBackup_Temporary_Location = left(@Live_Restore_LogBackup_Temporary_Location,(len(@Live_Restore_LogBackup_Temporary_Location)-1))	
+	
+	SET @Force_Recovery_If_No_Log_Backups_Found = ISNULL(@Force_Recovery_If_No_Log_Backups_Found,0)
+	SET @Drop_SQLSBuffers_Before_Restore = ISNULL(@Drop_SQLSBuffers_Before_Restore,0)
+	SET @Exclude_DBName_Filter = ISNULL(@Exclude_DBName_Filter,'')
+	SET @Live_Restore_LogBackup_Temporary_Location = ISNULL(@Live_Restore_LogBackup_Temporary_Location,'')
+	SET @Exclude_system_databases = ISNULL(@Exclude_system_databases,0)
+	SET @Include_DBName_Filter = ISNULL(@Include_DBName_Filter,'')		
+	SET @IncludeSubdirectories = ISNULL(@IncludeSubdirectories,1)
+	SET @Keep_Database_in_Restoring_State = ISNULL(@Keep_Database_in_Restoring_State,0)
+	SET @Take_tail_of_log_backup_of_existing_database = ISNULL(@Take_tail_of_log_backup_of_existing_database,1)
+	SET @Set_Target_Databases_ReadOnly = ISNULL(@Set_Target_Databases_ReadOnly,0)
+	SET @Delete_Backup_File = ISNULL(@Delete_Backup_File,0)
+	SET @Destination_Database_Name_suffix = ISNULL(@Destination_Database_Name_suffix,'')
+	SET @StopAt = iif(@StopAt is null or @StopAt = '' or @Restore_Log_Backups = 0,'9999.12.31 23:59:59',@StopAt)
+	SET @BackupFinishDate_EndDATETIME = iif(@BackupFinishDate_EndDATETIME is null or @BackupFinishDate_EndDATETIME = '', '9999.12.31 23:59:59', @BackupFinishDate_EndDATETIME)
+	SET @Script_to_Execute_After_Restore = ISNULL(@Script_to_Execute_After_Restore,'')
+	IF	@StopAt < @BackupFinishDate_StartDATETIME RAISERROR('@StopAt cannot be less than @BackupFinishDate_StartDATETIME. Check your inputs.',16,1)
+	IF	@Skip_Files_Not_Matching_Naming_Convention = 1 AND @BackupFileName_naming_convention = '' RAISERROR('Both @Skip_Files_Not_Matching_Naming_Convention is set to 1 and @BackupFileName_naming_convention is not defined.',16,1)
 
 
-  IF  @Restore_Log_Backups = 1 SET @BackupFinishDate_EndDATETIME = @StopAt
-  
-  IF  @BackupFinishDate_EndDATETIME<@BackupFinishDate_StartDATETIME RAISERROR ('@BackupFinishDate_EndDATETIME cannot be less than @BackupFinishDate_StartDATETIME.',16,1)
-  
+	IF	@Restore_Log_Backups = 1 SET @BackupFinishDate_EndDATETIME = @StopAt
+	
+	IF	@BackupFinishDate_EndDATETIME<@BackupFinishDate_StartDATETIME RAISERROR ('@BackupFinishDate_EndDATETIME cannot be less than @BackupFinishDate_StartDATETIME.',16,1)
+	
 
-  SET @Skip_Files_Not_Matching_Naming_Convention = ISNULL(@Skip_Files_Not_Matching_Naming_Convention,0)
-  SET @LogBackup_root_or_path = ISNULL(@LogBackup_root_or_path,'')
-  IF  @LogBackup_root_or_path = '' SET @LogBackup_root_or_path = @Backup_root_or_path
+	SET @Skip_Files_Not_Matching_Naming_Convention = ISNULL(@Skip_Files_Not_Matching_Naming_Convention,0)
+	SET @LogBackup_root_or_path = ISNULL(@LogBackup_root_or_path,'')
+	IF	@LogBackup_root_or_path = '' SET @LogBackup_root_or_path = @Backup_root_or_path
 
-  set @LogBackupFileName_RegexFilter = isnull(@LogBackupFileName_RegexFilter,'')
-  IF  @Restore_Log_Backups=1 AND @LogBackup_root_or_path='' RAISERROR ('@Restore_Log_Backups is set to 1 but @LogBackup_root_or_path was not specified.',16,1)
+	set @LogBackupFileName_RegexFilter = isnull(@LogBackupFileName_RegexFilter,'')
+	IF	@Restore_Log_Backups=1 AND @LogBackup_root_or_path='' RAISERROR ('@Restore_Log_Backups is set to 1 but @LogBackup_root_or_path was not specified.',16,1)
 
-  SET @BackupFileName_naming_convention = ISNULL(@BackupFileName_naming_convention,'')
+	SET @BackupFileName_naming_convention = ISNULL(@BackupFileName_naming_convention,'')
 
-  IF  @BackupFileName_naming_convention <> '' AND (CHARINDEX('DBName',@BackupFileName_naming_convention)=0 OR CHARINDEX('TIMESTAMP',@BackupFileName_naming_convention)=0)
-  begin
+	IF	@BackupFileName_naming_convention <> '' AND (CHARINDEX('DBName',@BackupFileName_naming_convention)=0 OR CHARINDEX('TIMESTAMP',@BackupFileName_naming_convention)=0)
+	begin
 	RAISERROR('@BackupFileName_naming_convention is used, but either DBName or TIMESTAMP is not specified.',16,1)
 	RETURN 1
-  end
-  --SET @Temp_Working_Directory = ISNULL(@Temp_Working_Directory,'')
-  SET @DataFileSeparatorChar = ISNULL(@DataFileSeparatorChar,'_')
-  SET @Change_Target_RecoveryModel_To = ISNULL(@Change_Target_RecoveryModel_To,'InheritFromSource')
-  SET @Email_Failed_Restores_To = ISNULL(@Email_Failed_Restores_To,'')
-  SET @Backup_root_or_path = REPLACE(@Backup_root_or_path,'"','')
-  SET @Destination_Database_DataFiles_Location = REPLACE(@Destination_Database_DataFiles_Location,'"','')
-  SET @Destination_Database_LogFile_Location = REPLACE(@Destination_Database_LogFile_Location,'"','')
-  SET @Stop_On_Error = ISNULL(@Stop_On_Error,0)
-  --SET @Destination_Database_Datafile_suffix = ISNULL(@Destination_Database_Datafile_suffix,'')
-  SET @RebuildLogFile_policy = ISNULL(@RebuildLogFile_policy,'')
-  SET @BackupFileName_RegexFilter = ISNULL(@BackupFileName_RegexFilter,'')
-  
-  SET @BackupFinishDate_StartDATETIME = ISNULL(@BackupFinishDate_StartDATETIME,'1900.01.01 00:00:00')
-  SET @BackupFinishDate_EndDATETIME = ISNULL(@BackupFinishDate_EndDATETIME,'9999.12.31 23:59:59')
-  SET @USE_SQLAdministrationDB_Database = ISNULL(@USE_SQLAdministrationDB_Database,0)				
-  SET @Destination_DatabaseName = ISNULL(@Destination_DatabaseName,'')
+	end
+	--SET @Temp_Working_Directory = ISNULL(@Temp_Working_Directory,'')
+	SET @DataFileSeparatorChar = ISNULL(@DataFileSeparatorChar,'_')
+	SET @Change_Target_RecoveryModel_To = ISNULL(@Change_Target_RecoveryModel_To,'InheritFromSource')
+	SET @Email_Failed_Restores_To = ISNULL(@Email_Failed_Restores_To,'')
+	SET @Backup_root_or_path = REPLACE(@Backup_root_or_path,'"','')
+	SET @Destination_Database_DataFiles_Location = REPLACE(@Destination_Database_DataFiles_Location,'"','')
+	SET @Destination_Database_LogFile_Location = REPLACE(@Destination_Database_LogFile_Location,'"','')
+	SET @Stop_On_Error = ISNULL(@Stop_On_Error,0)
+	--SET @Destination_Database_Datafile_suffix = ISNULL(@Destination_Database_Datafile_suffix,'')
+	SET @Force_Recovery_If_No_Log_Backups_Found = ISNULL(@Force_Recovery_If_No_Log_Backups_Found,0)
+	SET @RebuildLogFile_policy = ISNULL(@RebuildLogFile_policy,'')
+	SET @BackupFileName_RegexFilter = ISNULL(@BackupFileName_RegexFilter,'')
+	
+	SET @BackupFinishDate_StartDATETIME = ISNULL(@BackupFinishDate_StartDATETIME,'1900.01.01 00:00:00')
+	--SET @BackupFinishDate_EndDATETIME = ISNULL(@BackupFinishDate_EndDATETIME,'9999.12.31 23:59:59')
+	SET @USE_SQLAdministrationDB_Database = ISNULL(@USE_SQLAdministrationDB_Database,0)				
+	SET @Destination_DatabaseName = ISNULL(@Destination_DatabaseName,'')
 
-  --------------- Other Variables: !!!! Warning: Please do not modify these variables !!!!
-  
-  Declare @Backup_Location nvarchar(255)
-  DECLARE @DiskBackupFilesID INT
-  Declare @count int = 0				-- Checks if a backup exists for the source database name '@DBName'
-  declare @message nvarchar(1000)
-  DECLARE @ErrLevel TINYINT
-  DECLARE @ErrState TINYINT  
-  declare @Backup_Path nvarchar(1000), @DatabaseName nvarchar(128)
-  DECLARE @SQL NVARCHAR(max)
-  DECLARE @Count_FileHeaders_to_read INT
-  DECLARE @LoopCount INT
-  DECLARE @Chunk_Size INT = 200					-- 200 files estimatedly take long enough to read, for the user to be prompted of the progress
+	--------------- Other Variables: !!!! Warning: Please do not modify these variables !!!!
+	
+	Declare @Backup_Location nvarchar(255)
+	DECLARE @DiskBackupFilesID INT
+	Declare @count int = 0				-- Checks if a backup exists for the source database name '@DBName'
+	declare @message nvarchar(1000) = 'Target Server: '+@@SERVERNAME+CHAR(10)+'-----------------------------------------------------------------------------------------------------------'+CHAR(10)
+	DECLARE @ErrLevel TINYINT
+	DECLARE @ErrState TINYINT	
+	declare @Backup_Path nvarchar(1000), @DatabaseName nvarchar(128)
+	DECLARE @SQL NVARCHAR(max)
+	DECLARE @Count_FileHeaders_to_read INT
+	DECLARE @LoopCount INT
+	DECLARE @Chunk_Size INT = 50					-- 50 files estimatedly take long enough to read, for the user to be prompted of the progress
 
-  IF @Exclude_system_databases = 1
-  BEGIN
+	RAISERROR(@message,0,1) WITH NOWAIT
+
+	IF @Exclude_system_databases = 1
+	BEGIN
 	IF @Exclude_DBName_Filter <> ''
 		SET @Exclude_DBName_Filter+=','
 	SET @Exclude_DBName_Filter+='master,msdb,model'
-  end  
+	end	
 
 	IF @Activate_Destination_Database_Containment = 1 AND (SELECT value_in_use FROM sys.configurations WHERE configuration_id = 16393) = 0
 		EXEC sp_configure 'contained database authentication', 1; RECONFIGURE WITH OVERRIDE;
@@ -1770,15 +1851,15 @@ BEGIN
 
   
   
-  CREATE TABLE #t (FT_ID INT, dbname NVARCHAR(128), path NVARCHAR(255))
+	CREATE TABLE #t (FT_ID INT, dbname NVARCHAR(128), ServerName sysname NULL, path NVARCHAR(255))
 
-  ---- Begin Body:
+	---- Begin Body:
   
   
   
   
-  if (@Backup_root_or_path <> '')
-  BEGIN  					
+	IF (@Backup_root_or_path <> '')
+	BEGIN  					
 		
 		IF @USE_SQLAdministrationDB_Database = 1
 		BEGIN
@@ -1806,15 +1887,15 @@ BEGIN
 						[BackupTypeDescription] nvarchar(128),
 						ServerName NVARCHAR(128),
 						FileExtension VARCHAR(5),
-						IsAddedDuringTheLastDiskScan BIT NOT NULL DEFAULT 0,
+						/*IsAddedDuringTheLastDiskScan BIT NOT NULL DEFAULT 0,*/
 						IsIncluded BIT NOT NULL DEFAULT 1,
 						IsDeleted BIT NOT NULL DEFAULT 0,
 						CONSTRAINT [PK_DiskBackupFiles_FILE] PRIMARY KEY ([FILE],[IsIncluded]) WITH FILLFACTOR = 70
 					)
 				ELSE
 					UPDATE DiskBackupFiles
-					SET IsIncluded = 1
-					WHERE IsDeleted = 0
+					SET IsIncluded = 0
+					WHERE IsIncluded = 1 --AND IsDeleted = 0
 			'
 			EXEC (@sql)
 
@@ -1823,16 +1904,16 @@ BEGIN
 			SET @SQL =
 			'
 				use SQLAdministrationDB
-
-				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan_Filtered'')
-					CREATE INDEX IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan_Filtered		ON SQLAdministrationDB..DiskBackupFiles (IsAddedDuringTheLastDiskScan)
-					INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
-					WHERE IsDeleted = 0
-					WITH(FILLFACTOR = 70)
-
+				/*
+				--IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan_Filtered'')
+				--	CREATE INDEX IX_DiskBackupFiles_IsAddedDuringTheLastDiskScan_Filtered		ON SQLAdministrationDB..DiskBackupFiles (IsAddedDuringTheLastDiskScan)
+				--	INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
+				--	WHERE IsDeleted = 0
+				--	WITH(FILLFACTOR = 70)
+				*/
 				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_DatabaseName_Filtered'')
-					CREATE INDEX IX_DiskBackupFiles_DatabaseName_Filtered						ON SQLAdministrationDB..DiskBackupFiles (DatabaseName,BackupFinishDate,BackupStartDate) 
-					INCLUDE([file],IsIncluded,DiskBackupFilesID,BackupTypeDescription)
+					CREATE INDEX IX_DiskBackupFiles_DatabaseName_Filtered						ON SQLAdministrationDB..DiskBackupFiles (IsIncluded,DatabaseName,BackupFinishDate,BackupStartDate) 
+					INCLUDE([file],ServerName,DiskBackupFilesID,BackupTypeDescription)
 					WHERE DatabaseName IS NOT NULL
 					WITH(FILLFACTOR = 70)
 
@@ -1844,7 +1925,7 @@ BEGIN
 				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskBackupFiles'') AND name = ''IX_DiskBackupFiles_IsDeleted_Filtered'')
 					CREATE INDEX IX_DiskBackupFiles_IsDeleted_Filtered							ON SQLAdministrationDB..DiskBackupFiles (IsDeleted)
 					INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
-					WHERE IsAddedDuringTheLastDiskScan = 0
+					/*WHERE IsAddedDuringTheLastDiskScan = 0*/
 					WITH(FILLFACTOR = 70)
 
 			'
@@ -1867,14 +1948,15 @@ BEGIN
 						[BackupTypeDescription] nvarchar(128),
 						ServerName NVARCHAR(128),
 						FileExtension VARCHAR(5),
-						IsAddedDuringTheLastDiskScan BIT,
+						/*IsAddedDuringTheLastDiskScan BIT,*/
 						IsIncluded BIT NOT NULL DEFAULT 1,
-						--IsDeleted BIT NOT NULL DEFAULT 0,
+						/*IsDeleted BIT NOT NULL DEFAULT 0,*/
 						CONSTRAINT [PK_DiskLogBackupFiles_FILE] PRIMARY KEY ([FILE],[IsIncluded]) WITH FILLFACTOR = 70
 					)
 				ELSE
 					UPDATE DiskLogBackupFiles
-					SET IsIncluded = 1
+					SET IsIncluded = 0
+					WHERE IsIncluded = 1
 					--WHERE IsDeleted = 0
 			'
 			IF @Restore_Log_Backups = 1 OR OBJECT_ID('SQLAdministrationDB..DiskLogBackupFiles') IS NULL
@@ -1885,23 +1967,23 @@ BEGIN
 			SET @SQL =
 			'
 				use SQLAdministrationDB
-
+				/*
 				--IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_IsAddedDuringTheLastDiskScan'')
 				--	CREATE INDEX IX_DiskLogBackupFiles_IsAddedDuringTheLastDiskScan					ON SQLAdministrationDB..DiskLogBackupFiles (IsAddedDuringTheLastDiskScan)
 				--	INCLUDE([file], [DatabaseName], [BackupStartDate], [BackupFinishDate], [BackupTypeDescription])
 				--	WITH(FILLFACTOR = 70)
-
+				*/
 				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DatabaseName_Filtered'')
 					CREATE INDEX IX_DiskLogBackupFiles_DatabaseName_Filtered						ON SQLAdministrationDB..DiskLogBackupFiles (DatabaseName,BackupStartDate,BackupFinishDate) 
-					INCLUDE([file],IsIncluded,DiskLogBackupFilesID,BackupTypeDescription,FileExtension,IsAddedDuringTheLastDiskScan,ServerName)
+					INCLUDE([file],IsIncluded,DiskLogBackupFilesID,BackupTypeDescription,FileExtension,ServerName)
 					WHERE DatabaseName IS NOT NULL
 					WITH(FILLFACTOR = 70)
-				
+				/*
 				--IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DatabaseName_isIncluded'')
 				--	CREATE INDEX IX_DiskLogBackupFiles_DatabaseName_isIncluded						ON SQLAdministrationDB..DiskLogBackupFiles (DatabaseName,isIncluded,BackupStartDate,BackupFinishDate) 
 				--	INCLUDE([file])
 				--	WITH(FILLFACTOR = 70)
-			
+				*/
 				IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(''DiskLogBackupFiles'') AND name = ''IX_DiskLogBackupFiles_DiskLogBackupFilesID_DatabaseName'')
 					CREATE INDEX IX_DiskLogBackupFiles_DiskLogBackupFilesID_DatabaseName			ON SQLAdministrationDB..DiskLogBackupFiles (DiskLogBackupFilesID,DatabaseName) 					
 					WITH(FILLFACTOR = 70)
@@ -1959,8 +2041,8 @@ BEGIN
 			BackupTypeDescription nvarchar(128),
 			ServerName NVARCHAR(128),
 			FileExtension VARCHAR(5),
-			IsAddedDuringTheLastDiskScan AS (CONVERT(BIT,1)),
-			IsIncluded BIT NOT NULL DEFAULT 1,
+			--IsAddedDuringTheLastDiskScan AS (CONVERT(BIT,1)),
+			IsIncluded BIT NOT NULL DEFAULT 0,
 			IsDeleted AS (CONVERT(BIT,0))
 		)
 		
@@ -1976,7 +2058,8 @@ BEGIN
 			END
 
 			IF (SELECT file_is_a_directory FROM sys.dm_os_file_exists(@Backup_root_or_path)) = 1
-			begin
+			BEGIN
+				/****** Deprecated cmdshell but faster approach:
 				DECLARE @cmdshellInput NVARCHAR(500) = 
 				CASE @IncludeSubdirectories 
 					WHEN 1 THEN --'powershell "GET-ChildItem -Recurse -File \"' + @Backup_root_or_path + '\*.bak\" | %{ $_.FullName }"'	
@@ -1991,9 +2074,10 @@ BEGIN
 
 				insert into #DirContents ([file])
   				EXEC master..xp_cmdshell @cmdshellInput								
-
+				*/
 				--EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
-
+				insert into #DirContents ([file])
+				SELECT full_filesystem_path FROM sys.dm_os_enumerate_filesystem(@Backup_root_or_path,'*.bak')
 
 				IF @BackupFileName_RegexFilter <> ''
 					DELETE FROM #DirContents WHERE PATINDEX(@BackupFileName_RegexFilter,[file]) = 0
@@ -2013,7 +2097,7 @@ BEGIN
 				SET @SQL = 'ALTER TABLE #DirContents ALTER COLUMN [file] nvarchar(255) NOT NULL'
 				EXEC (@sql)
 				ALTER TABLE #DirContents ADD CONSTRAINT PK_DirContents_FILE PRIMARY KEY ([file],[IsIncluded])
-				CREATE INDEX IX_DirContents_DatabaseName ON #DirContents (DatabaseName,BackupFinishDate,BackupStartDate) INCLUDE([file],IsIncluded,DiskBackupFilesID,BackupTypeDescription)
+				CREATE INDEX IX_DirContents_DatabaseName ON #DirContents (DatabaseName,BackupFinishDate,BackupStartDate) INCLUDE(ServerName,[file],IsIncluded,DiskBackupFilesID,BackupTypeDescription)
 			END
 			ELSE
 			BEGIN
@@ -2043,7 +2127,9 @@ BEGIN
 		BEGIN
 			SET @SQL =
 			'
-				DELETE a 
+				UPDATE a
+				SET IsDeleted = 1,
+					IsIncluded = 0
 				FROM
 				(
 					SELECT * FROM SQLAdministrationDB..DiskBackupFiles dbf
@@ -2051,7 +2137,7 @@ BEGIN
 				
 				) a
 			
-				UPDATE SQLAdministrationDB..DiskBackupFiles SET IsAddedDuringTheLastDiskScan = 0 WHERE IsAddedDuringTheLastDiskScan = 1
+				/*UPDATE SQLAdministrationDB..DiskBackupFiles SET IsAddedDuringTheLastDiskScan = 0 WHERE IsAddedDuringTheLastDiskScan = 1*/
 			
 				INSERT SQLAdministrationDB..DiskBackupFiles
 				SELECT 
@@ -2062,7 +2148,7 @@ BEGIN
 					dc.BackupTypeDescription,
 					dc.ServerName,
 					dc.FileExtension,
-					dc.IsAddedDuringTheLastDiskScan,
+					/*dc.IsAddedDuringTheLastDiskScan,*/
 					dc.IsIncluded,
 					dc.IsDeleted
 				FROM #DirContents dc LEFT JOIN SQLAdministrationDB..DiskBackupFiles dbf
@@ -2167,7 +2253,7 @@ BEGIN
 						 ) b
 						 WHERE dbo.ufn_CheckNameValidation(b.FileName'+IIF(@HasExt = 1,'+''.''+b.Ext ','')+','''+@Convention+''', '''+@Separator+''', b.BFDate) = 1
 				
-				
+						/*
 						--select
 						--		a.FileName,
 						--		dbo.ufn_StringTokenizer(a.FileName,@BackupFileName_naming_convention_separator,@DBIndex),
@@ -2179,6 +2265,7 @@ BEGIN
 						--(SELECT DatabaseName, BackupTypeDescription, BackupStartDate, ServerName, FileExtension, '+IIF(@HasExt = 1, 'LEFT(RIGHT([file],CHARINDEX(''\'',REVERSE([file]))-1),LEN(RIGHT([file],CHARINDEX(''\'',REVERSE([file]))-1))-CHARINDEX(''.'',REVERSE(RIGHT([file],CHARINDEX(''\'',REVERSE([file]))-1))))','RIGHT([file],CHARINDEX(''\'',REVERSE([file]))-1)') + ' FileName ' + IIF(@HasExt = 1,',RIGHT([file],CHARINDEX(''.'',REVERSE([file]))-1) Ext','') + '  FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + '
 						-- WHERE IsAddedDuringTheLastDiskScan = 1) a
 						-- WHERE dbo.ufn_CheckNameValidation(a.FileName'+IIF(@HasExt = 1,'+''.''+a.Ext ','')+','''+@Convention+''', '''+@Separator+''') = 1
+						*/					
 					'			
 					
 					BEGIN TRY
@@ -2186,7 +2273,7 @@ BEGIN
 					END TRY
 					BEGIN CATCH
 						PRINT ERROR_MESSAGE()
-						RAISERROR('Something is wrong with some of your backup file names, the name convention you have introduced to this stored procedure, its separator, or the formula you have given for DATETIME transform.',16,1) WITH NOWAIT
+						RAISERROR('Warning!!! Something is wrong with some of your backup file names, the name convention you have introduced to this stored procedure, its separator, or the formula you have given for DATETIME transform.',0,1) WITH NOWAIT
 					END CATCH
 					TRUNCATE TABLE #BackupNamePartIndexes
 
@@ -2208,7 +2295,7 @@ BEGIN
 		BEGIN 
 			
 
-			SET @message = CHAR(10)+'Reading headers of backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed but more accurate mode):'+CHAR(10)+'0 percent of files processed.'
+			SET @message = CHAR(10)+'Reading headers of database backup files for '+CONVERT(VARCHAR(10),@Count_FileHeaders_to_read)+' files (lower speed but more accurate mode):'+CHAR(10)+'0 percent of files processed.'
             RAISERROR(@message,0,1) WITH NOWAIT
 
 			
@@ -2235,11 +2322,11 @@ BEGIN
 						while @@FETCH_STATUS = 0
 						begin
 			
-					---------------------------------------------------------------------------------------------------------
+					/*---------------------------------------------------------------------------------------------------------*/
 
-							execute sp_BackupDetails @Backup_Path
+							execute usp_BackupDetails @Backup_Path
 
-					---------------------------------------------------------------------------------------------------------
+					/*---------------------------------------------------------------------------------------------------------*/
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set DatabaseName = ISNULL((select top 1 DatabaseName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9),concat(''UnreadableBackupFile_'', LEFT(CONVERT(NVARCHAR(50),NEWID()),12))) WHERE CURRENT OF BackupDetails
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set BackupStartDate = (select top 1 BackupStartDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails							
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set BackupFinishDate = (select top 1 BackupFinishDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
@@ -2247,7 +2334,7 @@ BEGIN
 							update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' set ServerName = (select top 1 ServerName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 										
                 
-							DELETE from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+							TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 							FETCH NEXT FROM BackupDetails INTO @Backup_Path, @DatabaseName , @BackupFinishDate, @BackupTypeDescription				
 						END 
 					CLOSE BackupDetails
@@ -2267,7 +2354,7 @@ BEGIN
 
 		END
 
-		----- Applying Fiters: @Exclude_DBName_Filter, and @Include_DBName_Filter filters-----------------------------------------
+		----- Applying Filters: @Exclude_DBName_Filter, and @Include_DBName_Filter filters-----------------------------------------
 		BEGIN TRY
 
 			---- Including @Include_DBName_Filter databases and excluding others ---------------------------------------
@@ -2276,12 +2363,12 @@ BEGIN
 				SET @SQL =
 				'
 					UPDATE FT
-					SET FT.IsIncluded = 0
+					SET FT.IsIncluded = 1
 					FROM
-					(SELECT * FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' WHERE IsIncluded = 1) FT				
-					LEFT JOIN (SELECT TRIM(value) value FROM STRING_SPLIT('''+@Include_DBName_Filter+''','','')) ss
+					(SELECT * FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' WHERE IsIncluded = 0) FT				
+					JOIN (SELECT TRIM(value) value FROM STRING_SPLIT('''+@Include_DBName_Filter+''','','')) ss
 					ON FT.DatabaseName LIKE ss.value { ESCAPE ''\'' }
-					WHERE ss.value IS NULL
+					
 					OPTION (RECOMPILE)
 				'
 				EXEC(@SQL)
@@ -2310,12 +2397,12 @@ BEGIN
 				IF @BackupFinishDate_StartDATETIME <> ''1900.01.01 00:00:00''
 					UPDATE ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' 
 					SET IsIncluded = 0
-					WHERE IsDeleted = 0 AND COALESCE(BackupFinishDate, BackupStartDate) < @BackupFinishDate_StartDATETIME
+					WHERE IsIncluded = 1 AND IsDeleted = 0 AND COALESCE(BackupFinishDate, BackupStartDate) < @BackupFinishDate_StartDATETIME
 
 				IF @BackupFinishDate_EndDATETIME <> ''9999.12.31 23:59:59''
 					UPDATE ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' 
 					SET IsIncluded = 0
-					WHERE IsDeleted = 0 AND COALESCE(BackupFinishDate, BackupStartDate) > @BackupFinishDate_EndDATETIME
+					WHERE IsIncluded = 1 AND IsDeleted = 0 AND COALESCE(BackupFinishDate, BackupStartDate) > @BackupFinishDate_EndDATETIME
 
 			'
 
@@ -2341,14 +2428,16 @@ BEGIN
 					ROW_NUMBER() OVER (PARTITION BY DatabaseName ORDER BY BackupStartDate DESC) AS [Row] ,
 					DiskBackupFilesID,
 					DatabaseName AS database_name,
-					[file]
-				FROM (SELECT DatabaseName, BackupFinishDate, BackupStartDate, DiskBackupFilesID, [file], BackupTypeDescription FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' WHERE IsIncluded = 1 AND DatabaseName IS NOT NULL) FT
+					[file],
+					ServerName
+				FROM (SELECT DatabaseName, ServerName, BackupFinishDate, BackupStartDate, DiskBackupFilesID, [file], BackupTypeDescription FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskBackupFiles', '#DirContents') + ' WHERE IsIncluded = 1 AND IsDeleted = 0 AND DatabaseName IS NOT NULL) FT
 				WHERE [BackupTypeDescription] IN (''Database'',''Partial'', ''FULL'') OR [BackupTypeDescription] IS NULL
 			)
 			INSERT INTO #t
 			SELECT 
 				DiskBackupFilesID,
 				T.database_name dbname,
+				ServerName,
 				[file] [path]		
 			FROM T 
 			WHERE T.[Row] = 1
@@ -2357,8 +2446,56 @@ BEGIN
 		EXEC (@SQL)
 		
 		------------ End file operations (Backups) -------------------------------------------------------------------
+		DECLARE @Number_of_Databases_to_Restore VARCHAR(4) = CONVERT(VARCHAR(4),(select count(*) from #t))
+  		IF @Number_of_Databases_to_Restore=0
+		BEGIN
+			SET @message = 'Fatal error: No backups exist within the folder you specified for your backup root or its subdirectories with the given criteria, or you do not have permission.'+CHAR(10)+'Hint: check also your naming convention if you are using it.'
+  			RAISERROR(@message,16,1)
+			RETURN 1
+		END
+		----- Show elapsed time:
+		SET @message = 'Elapsed time: ' + dbo.ufn_ElapsedTime(@OperationStartTime)
+		RAISERROR(@message,0,1) WITH NOWAIT
+	
+		DECLARE @Databases NVARCHAR(4000)
+		PRINT(CHAR(10))
+		--RAISERROR('***Begining Operation:',0,1) WITH NOWAIT
+		PRINT('DATABASES TO RESTORE: ('+@Number_of_Databases_to_Restore+' Database' + IIF(@Number_of_Databases_to_Restore>1,'s','') + ')')
+		PRINT('---------------------')		
+		IF @Destination_DatabaseName<>'' AND @Number_of_Databases_to_Restore = 1
+		begin
+			
+			UPDATE #t SET dbname = @Destination_DatabaseName
+			SELECT @Databases =				(
+												dbname + REPLICATE(CHAR(9),2) + '-->' + REPLICATE(CHAR(9),2) +
+												@Destination_DatabaseName + IIF(EXISTS (SELECT 1 FROM sys.databases WHERE name=@Destination_DatabaseName),' (Replace)',' (New)') 												
+											) 
+										FROM #t
+										
+		END
+		ELSE
+		BEGIN
+			DECLARE @Len INT =(SELECT MAX(LEN(dbname)) FROM #t)
+			SELECT @Databases = STRING_AGG	(
+												CONVERT	(NVARCHAR(MAX),
+															dbname + REPLICATE(CHAR(9),CEILING((@Len-LEN(dbname))/4.0)+1) + '-->' + REPLICATE(CHAR(9),2) +
+															@Destination_Database_Name_prefix +
+															dbname +
+															@Destination_Database_Name_suffix + IIF(DB_ID(@Destination_Database_Name_prefix+dbname+@Destination_Database_Name_suffix) IS NULL,' (New)',' (Replace)') 																													
+														)
+												,CHAR(10)
+											) 
+										FROM #t
+		END
+	
+		EXEC dbo.usp_PrintLong @Databases
+		PRINT('')
+		PRINT('')
 
-		------------ Begin file operations: (Log Backups) ----------------------------------------------------------------
+
+
+
+		------------ Begin file operations: (Log Backups) ------------------------------------------------------------
 		IF @Restore_Log_Backups = 1
 		BEGIN        
 			BEGIN TRY
@@ -2372,21 +2509,145 @@ BEGIN
 					BackupTypeDescription nvarchar(128),
 					ServerName NVARCHAR(128),
 					FileExtension VARCHAR(5),
-					IsAddedDuringTheLastDiskScan AS (CONVERT(BIT,1)),
+					--IsAddedDuringTheLastDiskScan AS (CONVERT(BIT,1)),
 					IsIncluded BIT NOT NULL DEFAULT 1
 					--,IsDeleted AS (CONVERT(BIT,0))
 				)
+
+				DECLARE @ExitCode TABLE (ExitCode INT)
 
 				IF (SELECT file_exists+file_is_a_directory FROM sys.dm_os_file_exists(@LogBackup_root_or_path)) = 0
 				BEGIN
 			 
 					set @message = 'Fatal filesystem error:'+CHAR(10)+'The file or folder "'+@LogBackup_root_or_path+'", you specified for @LogBackup_root_or_path does not exist, or you do not have permission.'
+					INSERT @ExitCode SELECT 1
     				raiserror(@message, 16, 1)				
-					RETURN 1
 				END
 
+				------------ Taking log backup for live restore operation: ---------------------------------------------------
+				IF @Live_Restore_LogBackup_Temporary_Location <> ''
+				BEGIN
+					IF (SELECT file_is_a_directory FROM sys.dm_os_file_exists(@Live_Restore_LogBackup_Temporary_Location)) = 0
+					BEGIN
+						
+						
+						INSERT @ExitCode SELECT 1
+						RAISERROR('The directory specified for @Live_Restore_LogBackup_Temporary_Location is either invalid or inaccessible.',16,1)
+					END
+					PRINT CHAR(10)+'--------------------------- for live restore operation ----------------------------------------------------'
+					DECLARE @FT_ID INT, @dbname NVARCHAR(128), @ServerName sysname, @path NVARCHAR(255), @rpc BIT, @TimeStampStart DATETIME, @TimeStampEnd DATETIME, @LinkedServerName sysname, @remote_transaction_promotion BIT
+					DECLARE ServerNameFinder CURSOR FOR
+						SELECT FT_ID,dbname,ServerName,[path] FROM #t
+					OPEN ServerNameFinder
+						FETCH NEXT FROM ServerNameFinder INTO @FT_ID, @dbname, @ServerName,@path
+						WHILE @@FETCH_STATUS = 0
+						BEGIN
+							IF @ServerName IS NULL
+							BEGIN                    
+								EXEC dbo.usp_BackupDetails @Backup_Path = @path
+								UPDATE #t SET ServerName = (select top 1 ServerName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF ServerNameFinder
+								SET @ServerName = (select top 1 ServerName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9)
+								TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+							END
+							SET @path = @Live_Restore_LogBackup_Temporary_Location+'\'+@dbname+'_'+FORMAT(GETDATE(),'yyyyMMdd_HHmmss')+'_temp_log_backup.trn'
+							SET @message = 'The linked-server '+@ServerName+' is not defined, and the @Live_Restore_LogBackup_Temporary_Location option was specified. Define it with the appropriate mappings and try again.'+CHAR(10)+'Note that the linked-server''s name must be something like SERVERNAME\INSTANCE,PORT and not IP address.'
+					
+							SELECT @LinkedServerName = name, @rpc = is_rpc_out_enabled, @remote_transaction_promotion = is_remote_proc_transaction_promotion_enabled FROM sys.servers WHERE name LIKE @ServerName+'%' AND SUBSTRING(name,LEN(@ServerName)+1,1) IN (',','')
+							SET @SQL = 'EXEC(''IF (SELECT recovery_model_desc FROM sys.databases WHERE name = '''''+@dbname+''''') <> ''''SIMPLE'''' BEGIN BACKUP LOG '+QUOTENAME(@dbname)+' TO DISK=N'''''+@path+''''' WITH COPY_ONLY, COMPRESSION, INIT, STATS=40; SELECT @@ERROR END; ELSE BEGIN SELECT -20; /*PRINT ''''Warning!!! The recovery model of the database is simple, thus '''''''''+@dbname+''''''''' database cannot be restored to its latest state using a log backup.''''*/ END '') AT '+QUOTENAME(@LinkedServerName)
+							IF @LinkedServerName IS NULL
+							BEGIN
+								INSERT @ExitCode SELECT 1
+								RAISERROR(@message,16,1)
+							END
+
+							SET @message = 'Your linked-server exists, but RPC is not enabled for it, which is required.'
+							IF @rpc = 0
+							BEGIN
+								INSERT @ExitCode SELECT 1
+								RAISERROR(@message,16,1)
+							END
+							
+							SET @message = 'Your linked-server exists, but ''Remote Proc Transaction Promotion'' option is enabled for it, which needs to be turned off.'
+							IF @remote_transaction_promotion = 1
+							BEGIN
+								INSERT @ExitCode SELECT 1
+								RAISERROR(@message,16,1)
+							END
+
+							SET @message = 'Taking tail of the log backup for the database '''+@dbname+''' for live restore operation(COPY_ONLY,RECOVERY).'
+							
+							--IF @Generate_Statements_Only = 0
+							RAISERROR(@message,0,1) WITH NOWAIT
+							SET @TimeStampStart = GETDATE()
+							
+							--IF @Generate_Statements_Only = 0
+							INSERT @ExitCode							
+							EXEC(@SQL)
+							SET @TimeStampEnd = GETDATE()
+
+							--IF @Generate_Statements_Only = 0
+							IF (SELECT ExitCode FROM @ExitCode) = 0
+							BEGIN
+								SET @message = 'Log backup taken remotely successfully.'+CHAR(10)+'------------------'
+								RAISERROR(@message,0,1) WITH NOWAIT
+								DELETE FROM @ExitCode
+							END							
+							ELSE
+							BEGIN								
+								SET @message = 'Error! The recovery model of the database is simple on the source server, thus '''+@dbname+''' database cannot be restored to its latest state using a log backup. The entire operation will abort.'
+								raiserror(@message,16,1)
+							END
+							
+							IF @Live_Restore_LogBackup_Temporary_Location NOT LIKE @LogBackup_root_or_path+'%'
+								INSERT #DirContentsLog								
+								(
+									[file],
+									DatabaseName,
+									BackupStartDate,
+									BackupFinishDate,
+									BackupTypeDescription,
+									ServerName,
+									FileExtension,
+									IsIncluded
+								)
+								VALUES
+								(   @path,    -- file - nvarchar(255)
+									@dbname,   -- DatabaseName - nvarchar(128)
+									@TimeStampStart,   -- BackupStartDate - datetime
+									@TimeStampEnd,   -- BackupFinishDate - datetime
+									'LOG',   -- BackupTypeDescription - nvarchar(128)
+									@ServerName,   -- ServerName - nvarchar(128)
+									'TRN',   -- FileExtension - varchar(5)
+									1 -- IsIncluded - bit
+								)
+							FETCH NEXT FROM ServerNameFinder INTO @FT_ID, @dbname, @ServerName,@path
+						END
+					CLOSE ServerNameFinder
+					DEALLOCATE ServerNameFinder
+
+					SELECT * INTO #TempTailLogFiles FROM #DirContentsLog	
+					
+					PRINT '--------------------------- end for live restore operation ------------------------------------------------'+CHAR(10)
+				END
+			END TRY
+			BEGIN CATCH
+
+				SET @message = ERROR_MESSAGE()
+				SET @ErrLevel = ERROR_SEVERITY()
+				SET @ErrState = ERROR_STATE()
+				RAISERROR(@message,@ErrLevel,@ErrState)
+				IF NOT EXISTS (SELECT 1 FROM @ExitCode) 
+					RETURN 1
+				RETURN (SELECT ExitCode FROM @ExitCode)
+
+			END CATCH
+
+				------------ End Taking log backup for live restore operation: ---------------------------------------------------
+
+
 				IF (SELECT file_is_a_directory FROM sys.dm_os_file_exists(@LogBackup_root_or_path)) = 1
-				begin
+				BEGIN
+					/********* Deprecated but faster cmdshell approach 
 					SET @cmdshellInput = 
 					CASE @IncludeSubdirectories 
 						WHEN 1 THEN --'powershell "GET-ChildItem -Recurse -File \"' + @LogBackup_root_or_path + '\*.bak\" | %{ $_.FullName }"'	
@@ -2399,10 +2660,15 @@ BEGIN
 
 					--EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE; EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE;
 
+
 					insert into #DirContentsLog ([file])
-  					EXEC master..xp_cmdshell @cmdshellInput								
+  					EXEC master..xp_cmdshell @cmdshellInput
+										
 
 					EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
+					*/
+					INSERT into #DirContentsLog ([file])
+					SELECT full_filesystem_path FROM sys.dm_os_enumerate_filesystem(@Backup_root_or_path,'*.trn')
 
 
 					IF @LogBackupFileName_RegexFilter <> ''
@@ -2421,14 +2687,9 @@ BEGIN
 					EXEC (@sql)
 					ALTER TABLE #DirContentsLog ADD CONSTRAINT PK_DirContentsLog_FILE PRIMARY KEY ([file],[IsIncluded])
 					CREATE INDEX IX_DirContentsLog_DatabaseName ON #DirContentsLog (DatabaseName,BackupStartDate,BackupFinishDate) INCLUDE([file],IsIncluded,DiskLogBackupFilesID,BackupTypeDescription)
-				END				
-			END TRY
-			BEGIN CATCH
-				SET @message = ERROR_MESSAGE()
-				SET @ErrLevel = ERROR_SEVERITY()
-				SET @ErrState = ERROR_STATE()
-				RAISERROR(@message,@ErrLevel,@ErrState)
-			END CATCH
+				END
+				
+			-- This script does not keep history for DiskLogBackupFiles table.
 
 			IF @USE_SQLAdministrationDB_Database = 1
 			BEGIN
@@ -2442,7 +2703,7 @@ BEGIN
 				
 					) a
 			
-					UPDATE SQLAdministrationDB..DiskLogBackupFiles SET IsAddedDuringTheLastDiskScan = 0 WHERE IsAddedDuringTheLastDiskScan = 1
+					/*UPDATE SQLAdministrationDB..DiskLogBackupFiles SET IsAddedDuringTheLastDiskScan = 0 WHERE IsAddedDuringTheLastDiskScan = 1*/
 			
 					INSERT SQLAdministrationDB..DiskLogBackupFiles
 					SELECT 
@@ -2453,9 +2714,9 @@ BEGIN
 						dc.BackupTypeDescription,
 						dc.ServerName,
 						dc.FileExtension,
-						dc.IsAddedDuringTheLastDiskScan,
+						/*dc.IsAddedDuringTheLastDiskScan,*/
 						dc.IsIncluded
-						--,dc.IsDeleted
+						/*,dc.IsDeleted*/
 					FROM #DirContentsLog dc LEFT JOIN SQLAdministrationDB..DiskLogBackupFiles dbf
 					ON dbf.[file] = dc.[file]
 					WHERE dbf.[file] IS NULL
@@ -2505,7 +2766,6 @@ BEGIN
 							) dt
 						) dt
 
-
 						SET @HasExt = IIF(CHARINDEX('.ext',@Convention)<> 0, 1, 0)
 						SET @SQL =
 						'
@@ -2549,7 +2809,8 @@ BEGIN
 							EXEC sys.sp_executesql @SQL, N'@BackupFileName_naming_convention_separator NVARCHAR(5)', @Separator
 						END TRY
 						BEGIN CATCH
-							RAISERROR('Something is wrong with some of your backup file names, the name convention you have introduced to this stored procedure, its separator, or the formula you have given for DATETIME transform.',16,1) WITH NOWAIT
+							SET @message = 'Something is wrong with some of your backup file names, the name convention you have introduced to this stored procedure, its separator,'+CHAR(10)+' or the formula you have given for DATETIME transform. The process of reading naming conventions will now skip to reading headers of the files.'
+							RAISERROR(@message,16,1) WITH NOWAIT
 						END CATCH
 						TRUNCATE TABLE #BackupNamePartIndexes
 
@@ -2557,7 +2818,6 @@ BEGIN
 					END
 				CLOSE FileScannerbyConvention
 				DEALLOCATE FileScannerbyConvention
-
 			END
 
 			SET @SQL = 
@@ -2577,7 +2837,6 @@ BEGIN
 				SET @LoopCount = CEILING(@Count_FileHeaders_to_read*1.0/@Chunk_Size)	
 				SET @count = @LoopCount
 				
-
 				WHILE @LoopCount > 0
 				BEGIN 
 				
@@ -2597,11 +2856,11 @@ BEGIN
 							while @@FETCH_STATUS = 0
 							begin
 			
-						---------------------------------------------------------------------------------------------------------
+						/*---------------------------------------------------------------------------------------------------------*/
 
-								execute sp_BackupDetails @Backup_Path
+								execute usp_BackupDetails @Backup_Path
 								--print @Backup_Path
-						---------------------------------------------------------------------------------------------------------
+						/*---------------------------------------------------------------------------------------------------------*/
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set DatabaseName = ISNULL((select top 1 DatabaseName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9),concat(''UnreadableBackupFile_'', LEFT(CONVERT(NVARCHAR(50),NEWID()),12))) WHERE CURRENT OF BackupDetails
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set BackupStartDate = (select top 1 BackupStartDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails								
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set BackupFinishDate = (select top 1 BackupFinishDate from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
@@ -2609,7 +2868,7 @@ BEGIN
 								update ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' set ServerName = (select top 1 ServerName from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9) WHERE CURRENT OF BackupDetails
 										
                 
-								DELETE from #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
+								TRUNCATE TABLE #_46Y_xayCTv0Pidwh23eFBdt7TwavSK5r4j9
 								FETCH NEXT FROM BackupDetails INTO @Backup_Path, @DatabaseName , @BackupFinishDate, @BackupTypeDescription				
 							END 
 						CLOSE BackupDetails
@@ -2642,12 +2901,12 @@ BEGIN
 					SET @SQL =
 					'
 						UPDATE FT
-						SET FT.IsIncluded = 0
+						SET FT.IsIncluded = 1
 						FROM
-						(SELECT * FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' WHERE IsIncluded = 1) FT				
-						LEFT JOIN (SELECT TRIM(value) value FROM STRING_SPLIT('''+@Include_DBName_Filter+''','','')) ss
+						(SELECT * FROM ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' WHERE IsIncluded = 0) FT				
+						JOIN (SELECT TRIM(value) value FROM STRING_SPLIT('''+@Include_DBName_Filter+''','','')) ss
 						ON FT.DatabaseName LIKE ss.value { ESCAPE ''\'' }
-						WHERE ss.value IS NULL
+						
 						OPTION (RECOMPILE)
 					'
 					EXEC(@SQL)
@@ -2676,12 +2935,12 @@ BEGIN
 					IF @BackupFinishDate_StartDATETIME <> ''1900.01.01 00:00:00''
 						UPDATE ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' 
 						SET IsIncluded = 0
-						WHERE COALESCE(BackupFinishDate, BackupStartDate) < @BackupFinishDate_StartDATETIME
+						WHERE IsIncluded = 1 AND COALESCE(BackupFinishDate, BackupStartDate) < @BackupFinishDate_StartDATETIME
 
 					IF @BackupFinishDate_EndDATETIME <> ''9999.12.31 23:59:59''
 						UPDATE ' + IIF(@USE_SQLAdministrationDB_Database = 1, 'SQLAdministrationDB..DiskLogBackupFiles', '#DirContentsLog') + ' 
 						SET IsIncluded = 0
-						WHERE COALESCE(BackupFinishDate, BackupStartDate) > @BackupFinishDate_EndDATETIME
+						WHERE IsIncluded = 1 AND COALESCE(BackupFinishDate, BackupStartDate) > @BackupFinishDate_EndDATETIME
 				'
 			
 				EXEC sp_executesql @SQL, N'@BackupFinishDate_StartDATETIME DATETIME, @BackupFinishDate_EndDATETIME DATETIME', @BackupFinishDate_StartDATETIME, @BackupFinishDate_EndDATETIME
@@ -2710,49 +2969,14 @@ BEGIN
 	RETURN 1
   END
 	
-  	DECLARE @Number_of_Databases_to_Restore VARCHAR(4) = CONVERT(VARCHAR(4),(select count(*) from #t))
-  	IF @Number_of_Databases_to_Restore=0
-	BEGIN
-		SET @message = 'Fatal error: No backups exist within the folder you specified for your backup root or its subdirectories with the given criteria, or you do not have permission.'+CHAR(10)+'Hint: check also your naming convention if you are using it.'
-  		RAISERROR(@message,16,1)
-		RETURN 1
-	END
 	----- Show elapsed time:
 	SET @message = 'Elapsed time: ' + dbo.ufn_ElapsedTime(@OperationStartTime)
 	RAISERROR(@message,0,1) WITH NOWAIT
 	
-	DECLARE @Databases NVARCHAR(4000)
-	PRINT(CHAR(10))
-	--RAISERROR('***Begining Operation:',0,1) WITH NOWAIT
-	PRINT('DATABASES TO RESTORE: ('+@Number_of_Databases_to_Restore+' Database' + IIF(@Number_of_Databases_to_Restore>1,'s','') + ')')
-	PRINT('---------------------')		
-	IF @Destination_DatabaseName<>'' AND @Number_of_Databases_to_Restore = 1
-	begin
-			
-		UPDATE #t SET dbname = @Destination_DatabaseName
-		SELECT @Databases =				(
-											dbname + REPLICATE(CHAR(9),2) + '-->' + REPLICATE(CHAR(9),2) +
-											@Destination_DatabaseName												
-										) 
-									FROM #t
-										
-	END
-    ELSE            		
-		SELECT @Databases = STRING_AGG	(
-											dbname + REPLICATE(CHAR(9),2) + '-->' + REPLICATE(CHAR(9),2) +
-											@Destination_Database_Name_prefix +
-											dbname +
-											@Destination_Database_Name_suffix																	
-											,CHAR(10)
-										) 
-									FROM #t
-		
-	PRINT @Databases
-	PRINT('')
 	PRINT('')
 	DECLARE @RestoreSPResult int
 	declare RestoreResults cursor FOR
-		SELECT * from #t
+		SELECT FT_ID,dbname,path from #t
 	open RestoreResults
 		-------------------------------------------------------------------------
 		fetch next from RestoreResults into @DiskBackupFilesID, @DatabaseName, @Backup_Path			
@@ -2760,8 +2984,8 @@ BEGIN
 		BEGIN
 				
 -------------------------------------------------------------------------------------------------------------------------------					
-				EXEC @RestoreSPResult = sp_complete_restore
-											@Drop_Buffers_Before_Restore = @Drop_Buffers_Before_Restore,
+				EXEC @RestoreSPResult = usp_complete_restore
+											@Drop_SQLSBuffers_Before_Restore = @Drop_SQLSBuffers_Before_Restore,
 											@Drop_Database_if_Exists = 0,
 											@DiskBackupFilesID = @DiskBackupFilesID,
 											@Restore_DBName = @DatabaseName,
@@ -2787,31 +3011,55 @@ BEGIN
 											@ShrinkDatabase_policy = @ShrinkDatabase_policy,
 											@RebuildLogFile_policy = @RebuildLogFile_policy,
 											@GrantAllPermissions_policy = @GrantAllPermissions_policy,
-											@OperationStartTime = @OperationStartTime
+											@OperationStartTime = @OperationStartTime,
+											@Script_to_Execute_After_Restore = @Script_to_Execute_After_Restore
 			IF @Stop_On_Error = 1 AND @RestoreSPResult <> 0
 			BEGIN
 				PRINT 'The last restore operation failed. The process will not continue as @Stop_On_Error was set to 1.'
 				BREAK
             END
--------------------------------------------------------------------------------------------------------------------------------				
+	-------------------------------------------------------------------------------------------------------------------------------				
 			FETCH NEXT FROM RestoreResults INTO @DiskBackupFilesID, @DatabaseName, @Backup_Path
 		END 
 	CLOSE RestoreResults
 	DEALLOCATE RestoreResults
 	PRINT('--=========================================================================================================')	
-		
+	
+	
+	--------------------- Clearing temporary tail of log backup files -------------------------------------------------------------
+	IF @Generate_Statements_Only = 0 AND @Live_Restore_LogBackup_Temporary_Location<>''
+	BEGIN
+		DECLARE TailLogWiper CURSOR FOR
+			SELECT [file] FROM #TempTailLogFiles
+		OPEN TailLogWiper
+			FETCH NEXT FROM TailLogWiper INTO @path
+			WHILE @@FETCH_STATUS = 0
+			BEGIN
+				EXEC xp_delete_files @path
+				FETCH NEXT FROM TailLogWiper INTO @path
+			END	
+		CLOSE TailLogWiper
+		DEALLOCATE TailLogWiper
+	END
+	--------------------- End clearing temporary tail of log backup files ---------------------------------------------------------
+
 END
 
 GO
 
 --=============================================================================================================================
 
+--IF  @@SERVERNAME NOT LIKE '%test%'
+--BEGIN
+--	RAISERROR('Session has a wrong connection! Change the connection and re-run the script',16,1)
+--	RETURN;
+--END 
 
 
-EXEC sp_restore_latest_backups 
+EXEC usp_restore_latest_backups 
 
-	@Drop_Buffers_Before_Restore = 0,
-	@Destination_Database_Name_suffix = N'',
+	@Drop_SQLSBuffers_Before_Restore = 0,
+	@Destination_Database_Name_suffix = N'_stage',
   										-- (Optional) You can specify the destination database names' suffix here. If the destination database name is equal to the backup database name,
   										-- the database will be restored on its own. 
 	@Destination_Database_Name_prefix = N'',
@@ -2835,12 +3083,12 @@ EXEC sp_restore_latest_backups
 										-- (Optional) If @Destination_Database_DataFiles_Location parameter is set to 'InheritFromSource', the '@Destination_Database_LogFile_Location' parameter will be ignored.
 										-- Possible options: 'InheritFromSource'|''|'Some Path'. '' or NULL means target server's default
 
-	@Backup_root_or_path = --'%userprofile%\desktop',
-					--N'D:\Database Backup\',
-					N'\\172.16.40.35\Backup\Backup\Database',
+	@Backup_root_or_path = --'\\Cando-DB1\D$\backup',--'%userprofile%\desktop',
+					N'\\KarboarD-DB1\g$\',
+					--N'\\172.16.40.35\Backup\Backup\Database',
 					--N'"D:\Database Backup\NW_Full_backup_0240.bak"',
 										-- (*Mandatory) Root location for backup files. You can also sepcify a single file.
-										-- Possible options: ''|'Some Path'. '' or NULL means target server's default
+										-- Possible options: ''|'Some Path'|NULL. '' or NULL means target server's default
 
 	------ Begin file processing speed-up parameters: ---------------------------------------------------------------------------
 	-- These parameters are not mandatory, anyhow you need to carefully read the instructions before you can use them.
@@ -2890,18 +3138,18 @@ EXEC sp_restore_latest_backups
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded. You
-										-- can also include wildcard characters "%" and "_" for each entry. The escape carachter for these wildcards is "\"
+										-- can also include wildcard characters "%" and "_" for each entry. The escape character for these wildcards is "\"
 										-- The @Exclude_DBName_Filter outpowers @Include_DBName_Filter.
   
 	@Include_DBName_Filter = --'SQLAdministrationDB',
 							--'dbWarden', 
 							--N'nOrthwind',
-							N'CandoMainDB',
+							N'KarboardDB',
 							--N'',
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script includes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019 and excludes others. Note that space at the begining and end of the names
-										-- will be disregarded. You can also include wildcard character "%" and "_" for each entry. The escape carachter for 
+										-- will be disregarded. You can also include wildcard character "%" and "_" for each entry. The escape character for 
 										-- these wildcards is "\".
 									
 
@@ -2910,12 +3158,20 @@ EXEC sp_restore_latest_backups
 	------------ Begin Log backup restore related parameters: -------------------------------------------------
 	@Restore_Log_Backups = 1,			-- (Optional)
 	@Force_Recovery_If_No_Log_Backups_Found = 1,
-	@LogBackup_root_or_path = N'\\172.16.40.35\Backup\Backup\Database',
-										-- (Optional) If left undefined, the script will assume that the log backups root is the same as the full
+	@LogBackup_root_or_path = N'',
+										-- (Optional) If left empty or undefined, the script will assume that the log backups root is the same as the full
 										-- backups' root
 	@StopAt = '',
 				--'2022.10.02 11:10:18',--'2022.08.28 15:23:18',--'2022.08.12 09:25:25',
 										-- (Optional)
+	@Live_Restore_LogBackup_Temporary_Location = '',--N'\\172.16.40.35\TempBackups\',
+										-- (Optional) In order to restore the database from production to the latest time before executing this script,
+										-- this can be set for a temporary location of the log backup of production, triggered by this script. Note that
+										-- all the previous log backups must also be available for the log chain. The specified path also needs to be
+										-- a shared UNC path accessible to both servers. The linked server to the production must also exist to issue the
+										-- log backup command, the RPC feature of the linked server must be enabled and the mapped login on production
+										-- must have backup rights (for example: db_backupoperator). 
+										-- IF left empty or null, this parameter will be ignored.
 	------------ End Log backup restore related parameters: ---------------------------------------------------
 	
 	@Keep_Database_in_Restoring_State = 0,						
@@ -2948,25 +3204,29 @@ EXEC sp_restore_latest_backups
 	@ShrinkDatabase_policy = -2,		-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave %x of free space after shrinking 
 	@ShrinkLogFile_policy = -2,			-- (Optional) Possible options: -2: Do not shrink | -1: shrink only | 0<=x : shrink reorganizing files and leave x MBs of free space after shrinking.
 										-- Using @ShrinkDatabase_policy and @ShrinkLogFile_policy may be redundant for log file if the same option for both is specified.
-	@RebuildLogFile_policy = '',--'32MB:128MB:1024MB',	
+	@RebuildLogFile_policy = '128MB:128MB:5GB',--'32MB:128MB:1024MB',	
 										-- (Optional) Possible options: NULL or Empty string: Do not rebuild | 'x:y:z' (For example, 4MB:64MB:1024MB) rebuild to SIZE = x, FILEGROWTH = y, MAXSIZE = z. If @RebuildLogFile_policy is specified, @ShrinkLogFile_policy will be ignored.
 										-- Note: There is no risk of 'Transactional inconsistency', in this stored procedure specifically, despite the warning message that Microsoft may generate and you do not need to run CHECKDB for this in particular. Also, the extra log files have been deleted.
 
-	@GrantAllPermissions_policy = -2	-- (Optional) Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account, remove every user from the database, and make guest a member of db_owner group:
-									-- The "2" option is theorically correct, but there seems to be a SQL Server bug that I have seen cases that despite the fact that I dropped SQL Server users on that database, the users still authenticated with their previous user names and not
-									-- 'guest' account.
-		
+	@GrantAllPermissions_policy = 3,	-- (Optional) Possible options: -2: Do not alter permissions | 1: Make every current DB user, a member of db_owner group | 2: Turn on guest account, remove every user from the database, and make guest a member of db_owner group:
+										-- The "2" option is theorically correct, but there seems to be a SQL Server bug that I have seen cases that despite the fact that I dropped SQL Server users on that database, the users still authenticated with their previous user names and not
+										-- 'guest' account. So I added the third option which is a combination of 1 & 2 | 3: make the existing users members of db_owner group and turn on guest account and make the guest account a db_owner
+	@Script_to_Execute_After_Restore = ''	
+										-- (Optional) This parameter will hold a dynamic query to be executed for each database before it becomes available to the end user. Before full execution of this dynamic query, the database will remain in
+										-- SINGLE_USER mode.
 GO
 
 
 --SELECT * FROM SQLAdministrationDB.dbo.RestoreHistory ORDER BY RestoreHistoryID DESC
 SELECT * FROM msdb..restorehistory ORDER BY restore_history_id DESC
-SELECT * FROM SQLAdministrationDB..DiskBackupFiles
-SELECT * FROM SQLAdministrationDB..DiskLogBackupFiles WHERE [file] LIKE '%JvTalentPoolDB%'
+SELECT * FROM SQLAdministrationDB..DiskBackupFiles WHERE [FILE] = '\\172.16.40.35\Backup\Backup\Database\Full\JvTalentPoolDB_FULL_202301190016.bak' 
+UPDATE SQLAdministrationDB..DiskBackupFiles SET IsIncluded = 0 WHERE IsIncluded = 1
+SELECT * FROM SQLAdministrationDB..DiskLogBackupFiles  WHERE IsIncluded = 1
+--UPDATE SQLAdministrationDB..DiskLogBackupFiles SET IsIncluded = 0 WHERE IsIncluded = 1
 SELECT * FROM SQLAdministrationDB..RestoreHistory
 
 
-
+--ALTER TABLE SQLAdministrationDB..RestoreHistory ADD LastRestoredLogBackupID int
 --SELECT DISTINCT DiskBackupFilesID from SQLAdministrationDB..RestoreHistory WHERE DiskBackupFilesID NOT IN (SELECT DiskBackupFilesID FROM SQLAdministrationDB..DiskBackupFiles)
 
 -- Results after "SQLAdministrationDB Caching of Files" optimization for about 6000 backup files:
@@ -2977,21 +3237,22 @@ SELECT * FROM SQLAdministrationDB..RestoreHistory
 -- restore database sqladministrationdb_test with recovery
 
 
-DROP PROC dbo.sp_PrintLong
+DROP PROC dbo.usp_PrintLong
 GO
 DROP FUNCTION dbo.ufn_CheckNameValidation
 GO
 DROP FUNCTION dbo.ufn_StringTokenizer
 GO
-DROP FUNCTION dbo.fn_FileExistsForAnotherDatabase
+DROP FUNCTION dbo.ufn_FileExistsForAnotherDatabase
 GO
-DROP PROCEDURE sp_BackupDetails
+DROP PROCEDURE usp_BackupDetails
 GO
-DROP PROCEDURE dbo.sp_complete_restore
+DROP PROCEDURE dbo.usp_complete_restore
 GO
-DROP PROCEDURE dbo.sp_restore_latest_backups
+DROP PROCEDURE dbo.usp_restore_latest_backups
 GO
 DROP FUNCTION dbo.ufn_ElapsedTime
 GO
+
 
 

@@ -86,31 +86,22 @@ CREATE OR ALTER PROC SyncLogins
 	@Login_Name sysname = '',
 	@Authentication_Type VARCHAR(10) = '',
 	@Plain_Password NVARCHAR(512) = '',
-	@Hashed_Password NVARCHAR(512) = '',
 	@Purpose VARCHAR(50) = 'Production',
 	--@Permission_Type INT = 0,
 	@Login_Status BIT = NULL,
 	@MegaProject NVARCHAR(10) = 'JV',
-	@MustChange BIT = 0,
-	@password_expiry_enabled BIT = 1,
 	@sync_enabled BIT = 1
 WITH EXEC AS 'JobVision\SQLServer'
 AS
 BEGIN
 	SET NOCOUNT ON
 	DECLARE @begin_timestamp DATETIME = GETDATE(),
-			@duration DECIMAL(9,3),
-			@SuccessFlag BIT = 1
+			@duration DECIMAL(9,3)
 	SET @Login_Name = ISNULL(@Login_Name,'')
 	SET @Authentication_Type = ISNULL(@Authentication_Type,'')
 	SET @Plain_Password = ISNULL(@Plain_Password,'')
-	SET @Hashed_Password = ISNULL(@Hashed_Password,'')
-	IF @Plain_Password<>'' AND @Hashed_Password <> '' BEGIN RAISERROR('Only one of @Hashed_Password or @Plain_Password can be specified at one execution.',16,1) RETURN 1 END
 	--SET @Permission_Type = ISNULL(@Permission_Type,0)
 	--SET @Login_Status = ISNULL(@Login_Status,1)
-	SET @MustChange = ISNULL(@MustChange,0)
-	IF @MustChange = 1 AND @Plain_Password = '' BEGIN RAISERROR('When @MustChange is set to 1, @Plain_Password must also be specified.',16,1) RETURN 1 END
-	IF @MustChange = 1 AND @Hashed_Password<>'' BEGIN RAISERROR('When @MustChange is set to 1, @Plain_Password must be specified and not @Hashed_Password.',16,1) RETURN 1 END
 	SET @Purpose = ISNULL(@Purpose,'')
 	IF	@Authentication_Type NOT IN ('','SQL','WINDOWS') BEGIN RAISERROR('Authentication_Type entered must be one of SQL | WINDOWS',16,1) RETURN 1 END
 	IF	@Purpose NOT IN ('Test','Production','') BEGIN RAISERROR('Invalid value specified for @Purpose. Valid values are Test | Production.',16,1) RETURN 1 END
@@ -129,23 +120,23 @@ BEGIN
 			RAISERROR('@Login_Name cannot contain character "\". If you want to create a windows authentication login, do not include domain or pc name. Instead set @Authentication_Type to "WINDOWS".',16,1) 
 			RETURN 1 
 		END 
-		--SELECT @Plain_Password
-		IF @Plain_Password='' AND @Hashed_Password = ''
+		SELECT @Plain_Password
+		IF @Plain_Password='' 
 		BEGIN 
 			IF (@Authentication_Type='SQL') 
 			BEGIN 
-				RAISERROR('Either of @Plain_Password or @Hashed_Password must be supplied when @Login_Name is specified and Authentication_Type is set to SQL.',16,1) 
+				RAISERROR('@Plain_Password must be supplied when @Login_Name is specified and Authentication_Type is set to SQL.',16,1) 
 				RETURN 1 
 			END
 		END
 		ELSE 
 			IF @Authentication_Type = 'WINDOWS'
 			BEGIN 
-				RAISERROR('@Plain_Password or @Hashed_Password cannot be specified when @Authentication_Type is chosen to be "WINDOWS".',16,1) 
+				RAISERROR('@Plain_Password cannot be specified when @Authentication_Type is chosen to be "WINDOWS".',16,1) 
 				RETURN 1 
 			END 
 		 
-		IF @Authentication_Type = 'WINDOWS' SELECT @Login_Name='JobVision\'+@Login_Name, @Plain_Password = NULL, @Hashed_Password = NULL
+		IF @Authentication_Type = 'WINDOWS' SELECT @Login_Name='JobVision\'+@Login_Name, @Plain_Password = NULL
 
 		IF EXISTS (SELECT 1 FROM dbo.InstanceLogins WHERE LoginName=@Login_Name)
 				UPDATE dbo.InstanceLogins SET Purpose = @Purpose, PasswordPlain = @Plain_Password WHERE LoginName = @Login_Name
@@ -157,7 +148,6 @@ BEGIN
 		    Purpose,
 		    AuthenticationType,
 		    MegaProject,
-			set_password_expiry_enabled,
 			sync_enabled
 		)
 		VALUES
@@ -167,14 +157,13 @@ BEGIN
 		    DEFAULT, -- Purpose - varchar(50)
 		    @Authentication_Type,    -- AuthenticationType - varchar(10)
 		    @MegaProject,     -- MegaProject - varchar(50)
-			@password_expiry_enabled,
 			@sync_enabled
 		)
 	END
 	ELSE IF @Plain_Password<>'' OR @Authentication_Type<>''
 	BEGIN
 		
-		RAISERROR('When @Login_Name is not specified, @Plain_Password, @Hashed_Password, OR @Authentication_Type cannot also be specified.',16,1)
+		RAISERROR('When @Login_Name is not specified, @Plain_Password OR @Authentication_Type cannot also be specified.',16,1)
 		RETURN 1
 	END
 
@@ -186,19 +175,9 @@ BEGIN
 	    PasswordPlain,
 	    Purpose,
 	    AuthenticationType,
-	    MegaProject,
-		set_password_expiry_enabled,
-		sync_enabled
+	    MegaProject
 	)
-	SELECT 
-		sp.name,
-		NULL,
-		NULL,
-		IIF(CHARINDEX('\',sp.name)<>0,'WINDOWS','SQL'),
-		@MegaProject,
-		IIF(LOGINPROPERTY(sp.name,'DaysUntilExpiration') IS NULL,0,1),
-		0 
-	FROM sys.server_principals sp
+	SELECT sp.name, NULL, NULL, IIF(CHARINDEX('\',sp.name)<>0,'WINDOWS','SQL'), @MegaProject FROM sys.server_principals sp
 	LEFT JOIN dbo.InstanceLogins il ON sp.name COLLATE DATABASE_DEFAULT=il.LoginName
 	LEFT JOIN (SELECT '##' name UNION ALL SELECT 'NT SERVICE\' UNION ALL SELECT 'NT AUTHORITY\' UNION ALL SELECT @@SERVERNAME+'\' UNION ALL SELECT SUSER_SNAME()) dt ON sp.name LIKE dt.name+'%' 
 	WHERE il.LoginName IS NULL AND dt.name IS NULL AND sp.type IN ('S','U') AND sp.principal_id<>1
@@ -244,17 +223,9 @@ BEGIN
 			SET @SQL = 
 			'
 				IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '''+@LoginName+''')
-				BEGIN
-					RAISERROR(''Specified login does not exist on the primary server. It will be created'+IIF(@sync_enabled = 0,'.''',' and then synchronized through other servers.''')+',0,1) WITH NO_WAIT
-					CREATE LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+IIF(@PasswordPlain<>'','N'''+@PasswordPlain+'''',@Hashed_Password+' HASHED')+IIF(@MustChange = 1,' MUST_CHANGE, CHECK_EXPIRATION = ON',', CHECK_POLICY=OFF, CHECK_EXPIRATION=OFF')+' 
-				END
+					CREATE LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = N'''+@PasswordPlain+''', CHECK_POLICY=OFF, CHECK_EXPIRATION=OFF
 				ELSE
-				BEGIN
-					RAISERROR(''Specified login exists on the primary server. It will be updated'+IIF(@sync_enabled = 0,'.''',' and then synchronized through other servers.''')+',0,1) WITH NO_WAIT
-					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = N''jjkdjfkfkfkk3999!''
-					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH CHECK_POLICY = OFF, CHECK_EXPIRATION=OFF
-					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+IIF(@PasswordPlain<>'','N'''+@PasswordPlain+'''',@Hashed_Password+' HASHED')+'
-				END
+					ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = N'''+@PasswordPlain+''', CHECK_POLICY = OFF, CHECK_EXPIRATION=OFF
 			'
 			IF ISNULL(@Login_Status,~@is_disabled) = 1
 				SET @SQL +=
@@ -276,14 +247,13 @@ BEGIN
 				UPDATE dbo.InstanceLogins SET PasswordPlain = NULL WHERE LoginName = @LoginName
             END TRY
 			BEGIN CATCH
-				SET @SuccessFlag = 0
 				SET @PRINT_or_RAISERROR = 2			-- 1 for print 2 for RAISERROR
 				SET @ErrMsg = ERROR_MESSAGE()
 				SET @ErrLine = ERROR_LINE()
 				SET @ErrNo = CONVERT(NVARCHAR(6),ERROR_NUMBER())
 				SET @ErrState = CONVERT(NVARCHAR(3),ERROR_STATE())
 				SET @ErrSeverity = CONVERT(NVARCHAR(2),ERROR_SEVERITY())
-				SET @UDErrMsg = 'Login "'+@LoginName+'": Something went wrong during the operation. Depending on your preference the operation will fail or continue, skipping this iteration.'+CHAR(10)+'System error message:'+CHAR(10)
+				SET @UDErrMsg = 'Something went wrong during the operation. Depending on your preference the operation will fail or continue, skipping this iteration.'+CHAR(10)+'System error message:'+CHAR(10)
 						+ 'Msg '+@ErrNo+', Level '+@ErrSeverity+', State '+@ErrState+', Line '+@ErrLine + CHAR(10)
 						+ @ErrMsg
 				IF @PRINT_or_RAISERROR = 1
@@ -323,7 +293,7 @@ BEGIN
 			sp.is_disabled
 		FROM sys.server_principals sp JOIN dbo.InstanceLogins il
 		ON sp.name COLLATE DATABASE_DEFAULT = il.LoginName
-		WHERE /*name LIKE 'App%1%' AND*/ il.AuthenticationType = 'SQL' AND PasswordHash IS NOT NULL AND sync_enabled = 1 AND name<>@Login_Name
+		WHERE /*name LIKE 'App%1%' AND*/ il.AuthenticationType = 'SQL' AND PasswordHash IS NOT NULL AND sync_enabled = 1
 	OPEN LoginScriptGenerator
 		FETCH NEXT FROM LoginScriptGenerator INTO @LoginName, @PasswordHash, @SID, @is_disabled
 		WHILE @@FETCH_STATUS = 0
@@ -337,25 +307,30 @@ BEGIN
 					IF exists (SELECT 1 FROM sys.server_principals WHERE sid='+@SID+' AND name <> ''''''+'''+@LoginName+'''+'''''')
 					BEGIN
 						SELECT @name = name FROM sys.server_principals WHERE sid='+@SID+'
-						SET @sql2 = ''''ALTER LOGIN ''''+QUOTENAME(@name)+'''' WITH name='''''''''+QUOTENAME(@LoginName)+'''''''''''''
+						SET @sql2 = ''''DENY CONNECT SQL TO ''''+QUOTENAME(@name)
 						EXEC(@sql2)
-						ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, CHECK_POLICY = OFF
-						
+						SET @sql2 = ''''''''
+						SELECT @sql2 += ''''KILL '''' + CONVERT(VARCHAR(11), session_id) + '''';''''
+						FROM sys.dm_exec_sessions
+						WHERE security_id = SUSER_SID('''''+@LoginName+''''')
+						EXEC (@sql2)
+						SET @sql2 = ''''DROP Login ''''+QUOTENAME(@name)
+						EXEC(@sql2)
 					END
 					IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = ''''''+'''+@LoginName+'''+'''''')
-					BEGIN
 						IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE sid = '+@SID+')
 							CREATE LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, SID = '+@SID+', CHECK_POLICY=OFF, CHECK_EXPIRATION=OFF
-					END
-					ELSE				
-						IF (SELECT sid FROM sys.server_principals WHERE name=''''''+'''+@LoginName+'''+'''''') = '+@SID+'		-- Most frequent case
-						BEGIN							
-							ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = ''''jjkdjfkfkfkk3999!''''
-							ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, CHECK_POLICY = OFF, CHECK_EXPIRATION = OFF
-						END
 						ELSE
 						BEGIN
-							/*RAISERROR(''''''+''The login announced from the primary server exists on the target server but with a different sid.''+char(10)+''Server: ''+''     Login: ''+'''+@LoginName+'''+'''''',16,1)*/
+							ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH name = '+QUOTENAME(@LoginName)+'
+							ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, CHECK_POLICY = OFF
+						END
+					ELSE				
+						IF (SELECT sid FROM sys.server_principals WHERE name=''''''+'''+@LoginName+'''+'''''') = '+@SID+'
+							ALTER LOGIN '+QUOTENAME(@LoginName)+' WITH PASSWORD = '+@PasswordHash+' HASHED, CHECK_POLICY = OFF
+						ELSE
+						BEGIN
+							/*RAISERROR(''''''+''The login announced from the primary server exists on the target server but with a different sid.''+char(10)+''Server: ''+@Server+''     Login: ''+'''+@LoginName+'''+'''''',16,1)*/
 						
 							USE master
 							DENY CONNECT SQL TO '+QUOTENAME(@LoginName)+'
@@ -394,18 +369,18 @@ BEGIN
 				FETCH NEXT FROM ExecutorPerServer INTO @LinkedServer
 				WHILE @@FETCH_STATUS = 0
 				BEGIN
-					--SELECT @LoginName, @LinkedServer
 					SET @SQL2 = 
 					'
 						DECLARE @SQL NVARCHAR(MAX) ='''+@SQL+'''
 						EXEC(@SQL) AT '+QUOTENAME(@LinkedServer)+'
 					'
 					BEGIN TRY
-						EXEC(@SQL2)
-						--EXEC sp_executesql @SQL2, N'@Server sysname', @LinkedServer
+						
+						--PRINT '--------------------'+CHAR(10)+@LoginName+CHAR(10)+@LinkedServer
+
+						EXEC sp_executesql @SQL2, N'@Server sysname', @LinkedServer
 					END TRY
 					BEGIN CATCH
-						SET @SuccessFlag = 0
 						PRINT @SQL2
 						SELECT @LinkedServer, @LoginName
 						SET @PRINT_or_RAISERROR = 2			-- 1 for print 2 for RAISERROR
@@ -414,7 +389,7 @@ BEGIN
 						SET @ErrNo = CONVERT(NVARCHAR(6),ERROR_NUMBER())
 						SET @ErrState = CONVERT(NVARCHAR(3),ERROR_STATE())
 						SET @ErrSeverity = CONVERT(NVARCHAR(2),ERROR_SEVERITY())
-						SET @UDErrMsg = 'Login "'+@LoginName+'", Server "'+@LinkedServer+'": Something went wrong during the operation. Depending on your preference the operation will fail or continue, skipping this iteration.'+CHAR(10)+'System error message:'+CHAR(10)
+						SET @UDErrMsg = 'Something went wrong during the operation. Depending on your preference the operation will fail or continue, skipping this iteration.'+CHAR(10)+'System error message:'+CHAR(10)
 								+ 'Msg '+@ErrNo+', Level '+@ErrSeverity+', State '+@ErrState+', Line '+@ErrLine + CHAR(10)
 								+ @ErrMsg
 						IF @PRINT_or_RAISERROR = 1
@@ -494,7 +469,6 @@ BEGIN
 						EXEC(@SQL2)
 					END TRY
 					BEGIN CATCH
-						SET @SuccessFlag = 0
 						SET @PRINT_or_RAISERROR = 2			-- 1 for print 2 for RAISERROR
 						SET @ErrMsg = ERROR_MESSAGE()
 						SET @ErrLine = ERROR_LINE()
@@ -547,8 +521,7 @@ BEGIN
 	    original_execution_login,
 	    [duration (s)],
 	    dop,
-	    parameter_values,
-		WasSuccessful
+	    parameter_values
 	)
 	VALUES
 	(   
@@ -559,21 +532,21 @@ BEGIN
 	    @duration,      -- duration (s) - bigint
 		@dop,
 		'
-    	@Login_Name = '''+ISNULL(@Login_Name,'NULL')+''',
-		@Authentication_Type = '''+ISNULL(@Authentication_Type,'NULL')+''',
+    	@Login_Name = '''+@Login_Name+''',
+		@Authentication_Type = '''+@Authentication_Type+''',
 		@Plain_Password = '''+IIF(@Plain_Password<>'','#########','')+''',
-		@Purpose = '''+ISNULL(@Purpose,'NULL')+''',
+		@Purpose = '''+@Purpose+''',
 		--@Permission_Type = ,
-		@Login_Status = '+ISNULL(CONVERT(VARCHAR(4),@Login_Status),'NULL')+',
-		@MegaProject = '''+ISNULL(@MegaProject,'NULL')+''',
-		@sync_enabled = '+ISNULL(CONVERT(VARCHAR(4),@sync_enabled),'NULL')+'
-		',
-		@SuccessFlag
+		@Login_Status = '+CONVERT(CHAR(1),@Login_Status)+'
+		@MegaProject = '''+@MegaProject+'''
+		@sync_enabled = '+CONVERT(CHAR(1),@sync_enabled)+'
+		'
 	 )
 	 
 	 
 END
 GO
+
 --EXEC dbo.SyncLogins --@Login_Name = 'Apptestsp1',@Authentication_Type = 'SQL',@Plain_Password='PP'
 --EXEC AS LOGIN = 'jobvision\sqlserver'
 --SELECT SUSER_SNAME(),USER_NAME()
