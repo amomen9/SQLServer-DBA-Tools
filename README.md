@@ -20,7 +20,7 @@ T-SQL Scripts
 
 - LICENSE: <br/>
 MIT as noted.
-If you wish to contribute to the codes or have any suggestions or want to report a flaw,
+If you wish to contribute to this repository's codes or have any suggestions or want to report a flaw,
 please give me an email at amomen@gmail.com. I'd be appreciative
 - These scripts are for SQL Server's general purposes. For corresponding instructions for each script,
 please read them below.
