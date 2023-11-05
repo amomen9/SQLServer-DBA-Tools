@@ -8,7 +8,7 @@
 [![license badge]][license]
 
 
-[license badge]:https://img.shields.io/badge/license-Modified%20GNU%203-blue
+[license badge]:https://img.shields.io/badge/license-Modified%20MIT%203-blue
 
 
 [license]:https://github.com/amomen9/SQLServer-DBA-Tools/blob/main/LICENSE
