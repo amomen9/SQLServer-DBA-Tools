@@ -42,7 +42,7 @@ please read them below.
 
 <dt>1. sp_restore_latest_backups</dt>
   <br/>
-	<dd> Effortlessly probe for backup files within a folder recursively and restore and restore the ones that you want to whatever point in time or to the latest log backup available, on an instance, either from scratch or to replace the existing one.</dd>
+	<dd> Effortlessly probe for backup files within a folder recursively and restore the ones that you want to whatever point in time or to the latest log backup available, on an instance, either from scratch or to replace the existing one.</dd>
 	<dd>
 	The idea for this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
@@ -50,7 +50,7 @@ please read them below.
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
 	and optionally probes for log backups for point-in-time recovery or restoring to a later moment than the last full backup,
 	reads the database name and backup dates from these files and restores the latest backup of every found database within the given
-	criteria. If the database already exists, a tail of log backup can be taken first. Sample Standard Output of the execution is within
+	criteria. If the database already exists, a tail of log backup can be taken first. A sample Standard Output of the execution is within
 	the sp_restore_latest_backups directory.
 	</dd>
 	<dd><b>Applications:</b></dd>
