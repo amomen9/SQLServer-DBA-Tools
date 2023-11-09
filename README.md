@@ -21,17 +21,17 @@ T-SQL Scripts
 - LICENSE: <br/>
 MIT as noted.
 If you wish to contribute to this repository's codes or have any suggestions or want to report a flaw,
-please give me an email at amomen@gmail.com. I'd be appreciative
+please give me an email at amomen@gmail.com or report on GitHub. I'd be appreciative
 - These scripts are for SQL Server's general purposes. For corresponding instructions for each script,
 please read them below.
 - The scripts are not pretty much optimized where they don't need to be.
-- Some scripts (I believe a few) might seem simple (they are put inside the "Educational" directory), but they carry usefull tricky ideas
-- If you like the codes, please spread the word and connect me on linkedin at https://www.linkedin.com/in/ali-momen and star this repository if you like.
+- Some scripts (I believe a few) might seem simple (they are put inside the "Educational" directory), but they carry useful tricky ideas
+- If you like the codes, please spread the word and connect me on Linkedin at https://www.linkedin.com/in/ali-momen and star this repository if you like.
 - Please have a look at my website if you wish at https://amdbablog.blogspot.com/
-- Most of stored procedures start with "sp_" in the name instead of "usp_". That's how I have been more convenient. You can change the name of course.
+- Most of the stored procedures start with "sp_" in the name instead of "usp_". That's how I have been more convenient. You can change the name of course.
 - General note:
 	T-SQL is not optimized when it comes to heavy workloads and may become partly the bottleneck of your tasks unless you natively compile and optimize it. This does not usually happen in OLTP systems though. You just may want to bear this in mind.
-- Some codes may not have been well cleaned and commented yet. Though they will be some time in the future, and mostly I don't believe they are hard to understand right now, and the variables namings are helpful.
+- Some codes may not have been well refactored, cleaned, and commented on yet. Though they will be some time in the future, and mostly I don't believe they are hard to understand right now, and the variables' namings are helpful.
 - Some scripts contained within this repository are not mentioned in this readme file yet.
 
 
@@ -42,19 +42,19 @@ please read them below.
 
 <dt>1. sp_restore_latest_backups</dt>
   <br/>
-	<dd> Effortlessly restore backups in a folder tree (no matter how deep they are) to whatever point in time or to the latest log backup available, on an instance, either from scratch or replace the existing one.</dd>
+	<dd> Effortlessly probe for backup files within a folder recursively and restore and restore the ones that you want to whatever point in time or to the latest log backup available, on an instance, either from scratch or to replace the existing one.</dd>
 	<dd>
-	The idea of this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
+	The idea for this script comes from my SQL Server professor P.Aghasadeghi (http://fad.ir/Teacher/Details/10). This stored procedure
   	restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups,
-	there will be no records of these backups in msdb. The records can be imported from the original server anyways but there would be
+	there will be no records of these backups in MSDB. The records can be imported from the original server anyway but there would be
 	some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files,
-	and optionally probes for log backups for point in time recovery or restoring to a later moment than the last full backup,
+	and optionally probes for log backups for point-in-time recovery or restoring to a later moment than the last full backup,
 	reads the database name and backup dates from these files and restores the latest backup of every found database within the given
 	criteria. If the database already exists, a tail of log backup can be taken first. Sample Standard Output of the execution is within
-	sp_restore_latest_backups directory.
+	the sp_restore_latest_backups directory.
 	</dd>
 	<dd><b>Applications:</b></dd>
-	<dd>1. Automation of the restoring the backups on the development or staging servers and carrying out the post-restore operations automatically like changing the recovery model, setting the database as read-only, shrinking database files, granting high permissions to every user of the database, rebuilding log file, etc.</dd>
+	<dd>1. Automation of restoring the backups on the development or staging servers and carrying out the post-restore operations automatically like changing the recovery model, setting the database as read-only, shrinking database files, granting high permissions to every user of the database, rebuilding log file, etc.</dd>
 	<dd>2. Granting execute access on this SP to senior developers on the development instances, so that they can renew or PITR their databases whenever they require without the need for DBAs' intervention or their direct access to the backup files/repository.</dd>
 	<dd>3. Keep history and track of who restored what database, when, which backup, to what point in time, other restore details, etc. </dd>
 	<dd><b>Example:</b></dd>
