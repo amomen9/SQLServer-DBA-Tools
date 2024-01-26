@@ -9,7 +9,7 @@ GO
 
 -- For information please refer to the README.md
 
-CREATE OR ALTER FUNCTION udtvf_elapsedtime(@start_time DATETIME2(3))
+CREATE OR ALTER FUNCTION fn_udtvf_elapsedtime(@start_time DATETIME2(3))
 RETURNS TABLE
 AS
 RETURN
@@ -60,7 +60,7 @@ GO
 
 
 
-CREATE OR ALTER FUNCTION udtvf_monitorserver_perfparams()
+CREATE OR ALTER FUNCTION fn_udtvf_monitorserver_perfparams()
 RETURNS TABLE
 AS
 RETURN
@@ -156,7 +156,8 @@ RETURN
 		--, r.granted_query_memory
 		--, qmg.granted_memory_kb
 		, r.wait_type [Wait Type]
-		, r.wait_time [Wait Time]
+		, r.wait_time/1000.0 [Wait Time(s)]
+		, r.wait_resource [Wait Resource]
 		--, r.last_wait_type [Last Wait Type]
 		--, s.deadlock_priority [Deadlock Priority]
 		--, c.client_net_address [Client Address]
@@ -169,7 +170,7 @@ RETURN
 		, r.dop [Degree of Parallelism]
 		--, r.nest_level [Code Nest Level]
 		, r.command [Command Type]
-		, sh.text [Request Script Text]
+		--, sh.text [Request Script Text]
 		--, r.plan_handle
 		, r.row_count [Row Count]
 		, s.is_user_process
@@ -183,7 +184,7 @@ RETURN
 	LEFT JOIN sys.endpoints e
 	ON s.endpoint_id = e.endpoint_id
 	LEFT JOIN sys.dm_exec_query_memory_grants qmg
-	ON c.session_id = qmg.session_id
+	ON c.session_id = qmg.session_id AND qmg.request_id = r.request_id
 	LEFT JOIN sys.dm_tran_session_transactions st
 	ON st.session_id = s.session_id
 	LEFT JOIN sys.dm_tran_database_transactions dt
@@ -191,7 +192,7 @@ RETURN
 	OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) sh
 	OUTER APPLY sys.dm_exec_sql_text(c.most_recent_sql_handle) rsh
 	OUTER APPLY sys.dm_exec_query_plan(r.plan_handle) qp
-	OUTER APPLY udtvf_elapsedtime(r.start_time) t
+	OUTER APPLY fn_udtvf_elapsedtime(r.start_time) t
 	WHERE 
 	(sh.text IS NULL OR sh.text <> 'sp_server_diagnostics')
 	AND s.session_id <> @@spid
@@ -212,7 +213,7 @@ GO
 SET STATISTICS TIME,IO on
 
 
-SELECT * FROM udtvf_monitorserver_perfparams()
+SELECT * FROM fn_udtvf_monitorserver_perfparams()
 WHERE is_user_process = 1 --AND [Session ID]=60
 ORDER BY [request_cpu_time(s)] desc
 

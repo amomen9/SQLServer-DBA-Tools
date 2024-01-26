@@ -60,7 +60,7 @@ GO
 
 
 
-CREATE OR ALTER FUNCTION fn_udtvf_monitorserver_all()
+CREATE OR ALTER FUNCTION fn_udtvf_monitorserver_all_lite()
 RETURNS TABLE
 AS
 RETURN
@@ -111,20 +111,21 @@ RETURN
 	)
 	SELECT TOP 100 PERCENT
 			GETDATE() [Report Date]
-		, s.session_id [Session ID]
+		, r.session_id [Session ID]
 		, t.[Elapsed DD:HH:MM:SS.ms]
 		, r.cpu_time/1000.0 [request_cpu_time(s)]
-		, s.STATUS [Status]
+		, r.STATUS [Status]
 		, r.logical_reads [Logical Reads]
 		, r.reads [Reads]
 		, r.writes [Writes]
-		, (s.memory_usage * 8) [Memory Usage (KB)]
+		--, (s.memory_usage * 8) [Memory Usage (KB)]
 		, ISNULL(sh.text,rsh.text) [Most Recent Script Text]
 		, qp.query_plan
 		, database_transaction_log_bytes_used/1024.0/1024/1024 db_tran_log_used_gb
 		, database_transaction_log_bytes_used_system/1024.0/1024/1024 db_sys_tran_log_used_gb
-		, s.cpu_time/1000.0 [session_cpu_time(s)]
-		, DB_NAME(s.database_id) [Database Name]
+		
+		--, s.cpu_time/1000.0 [session_cpu_time(s)]
+		, DB_NAME(r.database_id) [Database Name]
 		, s.original_login_name [Original Login Name]
 		, s.nt_user_name [Windows/Domain Account Name]
 		, s.HOST_NAME [Host Name Connected to Server]
@@ -135,23 +136,23 @@ RETURN
 		, dt.transaction_id
 		, database_transaction_begin_time
 		, database_transaction_log_bytes_reserved/1024.0/1024/1024 db_tran_log_resrv_gb
-		, DB_NAME(s.authenticating_database_id) [Authenticating Database Name]
+		--, DB_NAME(s.authenticating_database_id) [Authenticating Database Name]
 		, IIF(s.program_name LIKE 'SQLAgent - TSQL JobStep (Job %',
-				(SELECT NAME FROM msdb..sysjobs WHERE job_id=(SELECT CONVERT(VARCHAR(100),CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1))) FROM sys.dm_exec_sessions WHERE session_id=s.session_id))
+				(SELECT NAME FROM msdb..sysjobs WHERE job_id=(SELECT CONVERT(VARCHAR(100),CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1))) FROM sys.dm_exec_sessions WHERE session_id=r.session_id))
 				, NULL
 				) [Job Name]
 		, IIF(s.program_name LIKE 'SQLAgent - TSQL JobStep (Job %',
-				(SELECT CONVERT(VARCHAR(100),CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1))) FROM sys.dm_exec_sessions WHERE session_id=s.session_id)
+				(SELECT CONVERT(VARCHAR(100),CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1))) FROM sys.dm_exec_sessions WHERE session_id=r.session_id)
 				, NULL
 				) [Job id]			
 		, IIF(s.program_name LIKE 'SQLAgent - TSQL JobStep (Job %',
-				ISNULL((SELECT STRING_AGG(sch.NAME+':::'+IIF(sch.ENABLED=1,'enabled','disabled'),', ') job_schedule_name FROM msdb.dbo.sysjobschedules js JOIN msdb.dbo.sysschedules sch ON sch.schedule_id = js.schedule_id WHERE js.job_id = (SELECT CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1)) FROM sys.dm_exec_sessions WHERE session_id=s.session_id) GROUP BY js.job_id ), NULL)
+				ISNULL((SELECT STRING_AGG(sch.NAME+':::'+IIF(sch.ENABLED=1,'enabled','disabled'),', ') job_schedule_name FROM msdb.dbo.sysjobschedules js JOIN msdb.dbo.sysschedules sch ON sch.schedule_id = js.schedule_id WHERE js.job_id = (SELECT CONVERT(UNIQUEIDENTIFIER,CONVERT(VARBINARY(100), SUBSTRING(program_name,30,34),1)) FROM sys.dm_exec_sessions WHERE session_id=r.session_id) GROUP BY js.job_id ), NULL)
 				, NULL
 				) [Job Schedule Name(s)]			
 		, IIF(r.blocking_session_id<>0, 'Yes', 'No') [Is Being Blocked?]	
 		, IIF(r.blocking_session_id<>0, r.blocking_session_id, NULL) [Session Blocking This Session]
 		, IIF(r.blocking_session_id<>0, (SELECT '#'+count_blocked+' ::: '+hb.hb FROM hb2 hb WHERE hb.blocked=s.session_id), NULL) [#CountBlocked_HeadBlocker]
-		, s.open_transaction_count [Open Transaction Count]
+		, r.open_transaction_count [Open Transaction Count]
 		, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/((CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MICROSECOND,r.start_time,SYSDATETIME()))/1000.0/*-CONVERT(DECIMAL(14,3),r.wait_time)*/)*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
 		, r.granted_query_memory
 		, qmg.granted_memory_kb
@@ -159,9 +160,9 @@ RETURN
 		, r.wait_time/1000.0 [Wait Time(s)]
 		, r.last_wait_type [Last Wait Type]
 		, r.wait_resource [Wait Resource]
-		, s.deadlock_priority [Deadlock Priority]
+		, r.deadlock_priority
 		, c.client_net_address [Client Address]
-		, c.client_tcp_port [Client Outgoing Port]
+		, c.client_tcp_port [Client Outgoing Port]		
 		, s.client_interface_name [Client Connection Driver]
 		, IIF(c.net_transport='session', 'MARS', c.net_transport) [Client Connection Protocol]
 		, e.name [Endpoint]
@@ -171,15 +172,14 @@ RETURN
 		, r.nest_level [Code Nest Level]
 		, r.command [Command Type]
 		, sh.text [Request Script Text]
-		, r.plan_handle
 		, r.row_count [Row Count]
 		, s.is_user_process
 		
 	FROM
 	sys.dm_exec_sessions s 
-	LEFT JOIN sys.dm_exec_connections c
+	JOIN sys.dm_exec_connections c
 	ON s.session_id = c.session_id
-	LEFT JOIN sys.dm_exec_requests r
+	JOIN sys.dm_exec_requests r
 	ON s.session_id = r.session_id
 	LEFT JOIN sys.endpoints e
 	ON s.endpoint_id = e.endpoint_id
