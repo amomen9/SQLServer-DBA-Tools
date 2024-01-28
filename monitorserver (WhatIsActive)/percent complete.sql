@@ -54,13 +54,16 @@ SELECT
 	percent_complete,
 	et.[Elapsed DD:HH:MM:SS.ms],
 	rt.[Elapsed DD:HH:MM:SS.ms] estimated_remaining_time,
-        GETDATE() [current_time],
-	DATEADD(MILLISECOND,R.estimated_completion_time,GETDATE()) estimated_end_datetime,
 	R.wait_type,
 	R.last_wait_type,
+	wt.[Elapsed DD:HH:MM:SS.ms] wait_time,
+	R.wait_time*100.0/R.total_elapsed_time [wait ratio],
+	DATEADD(MILLISECOND,R.estimated_completion_time,GETDATE()) estimated_end_time,
 	ST.text [query_text]
 FROM sys.dm_exec_requests R
 CROSS APPLY sys.dm_exec_sql_text(R.sql_handle) ST
 CROSS APPLY fn_udtvf_elapsedtime(R.start_time) et
 CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-R.estimated_completion_time,GETDATE())) rt
+CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-R.wait_time,GETDATE())) wt
 where estimated_completion_time<>0
+
