@@ -56,6 +56,8 @@ SELECT
 	rt.[Elapsed DD:HH:MM:SS.ms] estimated_remaining_time,
         GETDATE() [current_time],
 	DATEADD(MILLISECOND,R.estimated_completion_time,GETDATE()) estimated_end_datetime,
+	R.wait_type,
+	R.last_wait_type,
 	ST.text [query_text]
 FROM sys.dm_exec_requests R
 CROSS APPLY sys.dm_exec_sql_text(R.sql_handle) ST
