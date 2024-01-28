@@ -59,7 +59,8 @@ SELECT
 	wt.[Elapsed DD:HH:MM:SS.ms] wait_time,
 	R.wait_time*100.0/R.total_elapsed_time [wait ratio],
 	DATEADD(MILLISECOND,R.estimated_completion_time,GETDATE()) estimated_end_time,
-	SUBSTRING(ST.text, R.statement_start_offset / 2, (CASE WHEN R.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE R.statement_end_offset END - R.statement_start_offset) / 2 ) AS statement_executing 
+	SUBSTRING(ST.text, R.statement_start_offset / 2, (CASE WHEN R.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE R.statement_end_offset END - R.statement_start_offset) / 2 ) AS statement_executing,
+	DB_NAME(database_id) DBName
 FROM sys.dm_exec_requests R
 CROSS APPLY sys.dm_exec_sql_text(R.sql_handle) ST
 CROSS APPLY fn_udtvf_elapsedtime(R.start_time) et
