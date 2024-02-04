@@ -4,7 +4,7 @@ GO
 -- Author:				<a-momen>
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2024.01.23>
--- Description:			<monitorserver_waits (WhatIsActive)>
+-- Description:			<monitorserver_waits (WhatIsActive)_Sessions>
 -- =============================================
 
 -- For information please refer to the README.md
@@ -18,7 +18,7 @@ RETURN
 		REPLICATE('0',2-LEN(DAYS))+DAYS+':'+
 		REPLICATE('0',2-LEN(HOURS))+HOURS+':'+
 		REPLICATE('0',2-LEN(MINUTES))+MINUTES+':'+
-		REPLICATE('0',2-LEN(SECONDS))+SECONDS+':'+
+		REPLICATE('0',2-LEN(SECONDS))+SECONDS+'.'+
 		REPLICATE('0',3-LEN(MILLISECONDS))+MILLISECONDS [Elapsed DD:HH:MM:SS.ms]
 	FROM
 	(
@@ -394,7 +394,7 @@ RETURN
 		--		, NULL
 		--		) [Job Schedule Name(s)]			
 		--, s.open_transaction_count [Open Transaction Count]
-		--, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/((CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MICROSECOND,r.start_time,SYSDATETIME()))/1000.0/*-CONVERT(DECIMAL(14,3),r.wait_time)*/)*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
+		--, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/((CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MILLISECOND,r.start_time,GETDATE()))/*-CONVERT(DECIMAL(14,3),r.wait_time)*/)*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
 		--, r.granted_query_memory
 		--, qmg.granted_memory_kb
 		--, s.deadlock_priority [Deadlock Priority]
