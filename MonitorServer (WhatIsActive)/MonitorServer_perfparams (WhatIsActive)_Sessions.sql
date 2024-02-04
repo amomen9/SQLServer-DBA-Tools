@@ -156,7 +156,7 @@ RETURN
 		--, IIF(r.blocking_session_id<>0, r.blocking_session_id, NULL) [Session Blocking This Session]
 		--, IIF(r.blocking_session_id<>0, (SELECT '#'+count_blocked+' ::: '+hb.hb FROM hb2 hb WHERE hb.blocked=s.session_id), NULL) [#CountBlocked_HeadBlocker]
 		--, s.open_transaction_count [Open Transaction Count]
-		, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/((CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MILLISECOND,r.start_time,GETDATE()))/*-CONVERT(DECIMAL(14,3),r.wait_time)*/)*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
+		, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/(NULLIF(CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MILLISECOND,r.start_time,GETDATE())),0)/*-CONVERT(DECIMAL(14,3),r.wait_time)*/*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
 		--, r.granted_query_memory
 		--, qmg.granted_memory_kb
 		, r.wait_type [Wait Type]

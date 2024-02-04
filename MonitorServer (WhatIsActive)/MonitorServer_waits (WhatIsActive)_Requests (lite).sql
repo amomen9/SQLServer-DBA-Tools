@@ -400,7 +400,7 @@ RETURN
 		--		, NULL
 		--		) [Job Schedule Name(s)]			
 		--, s.open_transaction_count [Open Transaction Count]
-		--, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/((CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MILLISECOND,r.start_time,GETDATE()))/*-CONVERT(DECIMAL(14,3),r.wait_time)*/)*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
+		--, CONVERT(DECIMAL(14,3),r.cpu_time)*100.0/(NULLIF(CONVERT(DECIMAL(17,0),DATEDIFF_BIG(MILLISECOND,r.start_time,GETDATE())),0)/*-CONVERT(DECIMAL(14,3),r.wait_time)*/*(SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE STATUS = 'VISIBLE ONLINE')) [active average CPU Usage %]
 		--, r.granted_query_memory
 		--, qmg.granted_memory_kb
 		--, s.deadlock_priority [Deadlock Priority]
