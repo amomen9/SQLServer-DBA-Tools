@@ -1,4 +1,7 @@
-CREATE OR ALTER FUNCTION fn_udtvf_elapsedtime(@start_time DATETIME2(3))
+DROP FUNCTION IF EXISTS fn_udtvf_elapsedtime
+GO
+
+CREATE FUNCTION fn_udtvf_elapsedtime(@start_time DATETIME2(3))
 RETURNS TABLE
 AS
 RETURN

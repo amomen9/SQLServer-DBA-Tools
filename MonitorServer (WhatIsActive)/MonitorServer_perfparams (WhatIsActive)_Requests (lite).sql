@@ -9,7 +9,10 @@ GO
 
 -- For information please refer to the README.md
 
-CREATE OR ALTER FUNCTION fn_udtvf_elapsedtime(@start_time DATETIME2(3))
+DROP FUNCTION IF EXISTS fn_udtvf_elapsedtime
+DROP FUNCTION IF EXISTS fn_udtvf_monitorserver_perfparams_lite
+GO
+CREATE FUNCTION fn_udtvf_elapsedtime(@start_time DATETIME2(3))
 RETURNS TABLE
 AS
 RETURN
@@ -60,7 +63,7 @@ GO
 
 
 
-CREATE OR ALTER FUNCTION fn_udtvf_monitorserver_perfparams_lite()
+CREATE FUNCTION fn_udtvf_monitorserver_perfparams_lite()
 RETURNS TABLE
 AS
 RETURN
@@ -121,6 +124,7 @@ RETURN
 		--, (s.memory_usage * 8) [Memory Usage (KB)]
 		, qp.query_plan
 		, sh.text [Request Script Text]
+		, SUBSTRING(sh.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(sh.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS fragment_executing
 		, database_transaction_log_bytes_used/1024.0/1024/1024 db_tran_log_used_gb
 		, database_transaction_log_bytes_used_system/1024.0/1024/1024 db_sys_tran_log_used_gb
 		--, s.cpu_time/1000.0 [session_cpu_time(s)]
