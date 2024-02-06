@@ -68,23 +68,24 @@ RETURNS TABLE
 AS
 RETURN
 (
-	WITH processes AS
+	WITH requests AS
 	(
-		SELECT CONVERT(varchar(200),spid) blocked, CONVERT(varchar(200),blocked) blocker, REPLACE (t.text, CHAR(10), ' ') AS sql_text
-		FROM sys.sysprocesses p CROSS APPLY sys.dm_exec_sql_text(p.SQL_HANDLE) t
+		SELECT CONVERT(varchar(200),r.session_id) blocked, CONVERT(varchar(200),r.blocking_session_id) blocker, REPLACE (t.text, CHAR(10), ' ') AS sql_text
+		FROM sys.dm_exec_requests r
+		CROSS APPLY sys.dm_exec_sql_text(r.SQL_HANDLE) t WHERE r.blocking_session_id<>0 AND r.session_id<>@@SPID
 	),
 	blocking_sequence (blocked, blocker, sql_text, precedence)
 	AS
 	(
 		SELECT 
 			p.blocked, p.blocker, p.sql_text, p.blocked precedence
-		FROM processes p
+		FROM requests p
 		WHERE blocker = 0
-		AND EXISTS (SELECT 0 FROM processes pr WHERE pr.blocker = p.blocked AND pr.blocker <> pr.blocked)
+		AND EXISTS (SELECT 0 FROM requests pr WHERE pr.blocker = p.blocked AND pr.blocker <> pr.blocked)
 		UNION ALL
 		SELECT 
 			p.blocked, p.blocker, p.sql_text, CONVERT(VARCHAR(200),precedence + ',' + p.blocked) precedence
-		FROM processes p
+		FROM requests p
 		INNER JOIN blocking_sequence bs ON p.blocker = bs.blocked WHERE p.blocker > 0 AND p.blocker <> p.blocked
 	)
 	,
@@ -115,7 +116,7 @@ RETURN
 	SELECT TOP 100 PERCENT
 			GETDATE() [Report Date]
 		, r.session_id [Session ID]
-		, t.[Elapsed DD:HH:MM:SS.ms]
+		, et.[Elapsed DD:HH:MM:SS.ms]
 		, r.cpu_time/1000.0 [request_cpu_time(s)]
 		, r.STATUS [Status]
 		, r.logical_reads [Logical Reads]
@@ -160,7 +161,7 @@ RETURN
 		--, r.granted_query_memory
 		--, qmg.granted_memory_kb
 		, r.wait_type [Wait Type]
-		, r.wait_time/1000.0 [Wait Time(s)]
+		, wt.[Elapsed DD:HH:MM:SS.ms] [Wait Time DD:HH:MM:SS.ms]
 		, r.wait_resource [Wait Resource]
 		--, r.last_wait_type [Last Wait Type]
 		--, s.deadlock_priority [Deadlock Priority]
@@ -195,7 +196,8 @@ RETURN
 	OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) sh
 	OUTER APPLY sys.dm_exec_sql_text(c.most_recent_sql_handle) rsh
 	OUTER APPLY sys.dm_exec_query_plan(r.plan_handle) qp
-	OUTER APPLY fn_udtvf_elapsedtime(r.start_time) t
+	OUTER APPLY fn_udtvf_elapsedtime(r.start_time) et
+	OUTER APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-r.wait_time,GETDATE())) wt
 	WHERE 
 	(sh.text IS NULL OR sh.text <> 'sp_server_diagnostics')
 	AND s.session_id <> @@spid

@@ -53,22 +53,22 @@ GO
 
 SELECT 
 	session_id,
-	R.command,
+	r.command,
 	percent_complete,
 	et.[Elapsed DD:HH:MM:SS.ms],
 	rt.[Elapsed DD:HH:MM:SS.ms] estimated_remaining_time,
-	R.wait_type,
-	R.last_wait_type,
+	r.wait_type,
+	r.last_wait_type,
 	wt.[Elapsed DD:HH:MM:SS.ms] wait_time,
-	R.wait_time*100.0/R.total_elapsed_time [wait ratio],
-	DATEADD(MILLISECOND,R.estimated_completion_time,GETDATE()) estimated_end_time,
-	SUBSTRING(ST.text, R.statement_start_offset / 2, (CASE WHEN R.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE R.statement_end_offset END - R.statement_start_offset) / 2 ) AS statement_executing,
+	r.wait_time*100.0/r.total_elapsed_time [wait ratio],
+	DATEADD(MILLISECOND,r.estimated_completion_time,GETDATE()) estimated_end_time,
+	SUBSTRING(ST.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS statement_executing,
 	DB_NAME(database_id) DBName
-FROM sys.dm_exec_requests R
-CROSS APPLY sys.dm_exec_sql_text(R.sql_handle) ST
-CROSS APPLY fn_udtvf_elapsedtime(R.start_time) et
-CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-R.estimated_completion_time,GETDATE())) rt
-CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-R.wait_time,GETDATE())) wt
+FROM sys.dm_exec_requests r
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) ST
+CROSS APPLY fn_udtvf_elapsedtime(r.start_time) et
+CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-r.estimated_completion_time,GETDATE())) rt
+CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-r.wait_time,GETDATE())) wt
 where estimated_completion_time<>0
 
 
