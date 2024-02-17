@@ -310,7 +310,7 @@ RETURN
 (
 	WITH requests AS
 	(
-		SELECT CONVERT(varchar(200),r.session_id) blocked, CONVERT(varchar(200),r.blocking_session_id) blocker, REPLACE (t.text, CHAR(10), ' ') AS sql_text
+		SELECT CONVERT(VARCHAR(200),r.session_id) blocked, CONVERT(VARCHAR(200),r.blocking_session_id) blocker, REPLACE (t.text, CHAR(10), ' ') AS sql_text
 		FROM sys.dm_exec_requests r
 		CROSS APPLY sys.dm_exec_sql_text(r.SQL_HANDLE) t WHERE r.session_id<>@@SPID
 	),
@@ -341,7 +341,7 @@ RETURN
 				bs.sql_text,
 				blocked,
 				blocker,
-				(SELECT TOP 1 precedence FROM blocking_sequence bsi WHERE DATALENGTH(REPLACE(precedence,bs.blocked,''))<DATALENGTH(precedence) AND bsi.blocker<>0 ORDER BY LEN(bsi.precedence) desc) AS hb_precedence,
+				(SELECT TOP 1 precedence FROM blocking_sequence bsi WHERE DATALENGTH(REPLACE(precedence,bs.blocked,''))<DATALENGTH(precedence) AND bsi.blocker<>0 ORDER BY LEN(bsi.precedence) DESC) AS hb_precedence,
 				bs.precedence
 			FROM blocking_sequence bs
 			WHERE blocker<>0
@@ -372,7 +372,7 @@ RETURN
 		--, (s.memory_usage * 8) [Memory Usage (KB)]
 		, sh.text [Script Text]
 		, SUBSTRING(sh.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(sh.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS fragment_executing
-		, qp.query_plan
+		, qp.query_plan [Live Plan]
 		, database_transaction_log_bytes_used/1024.0/1024/1024 db_tran_log_used_gb
 		, database_transaction_log_bytes_used_system/1024.0/1024/1024 db_sys_tran_log_used_gb
 		--, s.cpu_time/1000.0 [session_cpu_time(s)]

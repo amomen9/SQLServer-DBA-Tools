@@ -60,9 +60,9 @@ SELECT
 	r.wait_type,
 	r.last_wait_type,
 	wt.[Elapsed DD:HH:MM:SS.ms] wait_time,
-	r.wait_time*100.0/r.total_elapsed_time [wait ratio],
+	r.wait_time*100.0/r.total_elapsed_time [wait/elapsed ratio],
 	DATEADD(MILLISECOND,r.estimated_completion_time,GETDATE()) estimated_end_time,
-	SUBSTRING(ST.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS statement_executing,
+	SUBSTRING(ST.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS [statement_executing (fragment)],
 	DB_NAME(database_id) DBName
 FROM sys.dm_exec_requests r
 CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) ST

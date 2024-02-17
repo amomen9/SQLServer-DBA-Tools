@@ -371,7 +371,7 @@ RETURN
 		, (s.memory_usage * 8) [Memory Usage (KB)]
 		, ISNULL(sh.text,rsh.text) [Most Recent Script Text]
 		, SUBSTRING(sh.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(sh.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS fragment_executing
-		, qp.query_plan
+		, qp.query_plan [Live Plan]
 		, database_transaction_log_bytes_used/1024.0/1024/1024 db_tran_log_used_gb
 		, database_transaction_log_bytes_used_system/1024.0/1024/1024 db_sys_tran_log_used_gb
 		, s.cpu_time/1000.0 [session_cpu_time(s)]
