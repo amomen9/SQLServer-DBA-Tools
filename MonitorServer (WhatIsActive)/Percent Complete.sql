@@ -52,7 +52,7 @@ GO
 
 
 SELECT 
-	session_id,
+	r.session_id,
 	r.command,
 	percent_complete,
 	et.[Elapsed DD:HH:MM:SS.ms],
@@ -63,8 +63,10 @@ SELECT
 	r.wait_time*100.0/r.total_elapsed_time [wait/elapsed ratio],
 	DATEADD(MILLISECOND,r.estimated_completion_time,GETDATE()) estimated_end_time,
 	SUBSTRING(ST.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS [statement_executing (fragment)],
-	DB_NAME(database_id) DBName
+	DB_NAME(r.database_id) DBName,
+	s.original_login_name
 FROM sys.dm_exec_requests r
+JOIN sys.dm_exec_sessions s ON r.session_id = s.session_id
 CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) ST
 CROSS APPLY fn_udtvf_elapsedtime(r.start_time) et
 CROSS APPLY fn_udtvf_elapsedtime(DATEADD(MILLISECOND,-r.estimated_completion_time,GETDATE())) rt

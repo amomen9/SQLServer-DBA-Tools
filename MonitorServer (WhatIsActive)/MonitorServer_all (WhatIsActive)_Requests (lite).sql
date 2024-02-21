@@ -171,7 +171,7 @@ RETURN
 		, s.client_interface_name [Client Connection Driver]
 		, IIF(c.net_transport='session', 'MARS', c.net_transport) [Client Connection Protocol]
 		, e.name [Endpoint]
-		, r.estimated_completion_time [Estimated Completion Time]
+		, DATEADD(MILLISECOND,r.estimated_completion_time,GETDATE()) estimated_end_time
 		, r.percent_complete [Percent Complete]
 		, r.dop [Degree of Parallelism]
 		, r.nest_level [Code Nest Level]
@@ -222,6 +222,9 @@ SET STATISTICS TIME,IO on
 SELECT * FROM fn_udtvf_monitorserver_all_lite()
 WHERE is_user_process = 1 --AND [Session ID]=60
 ORDER BY [request_cpu_time(s)] desc
+
+
+
 
 
 
