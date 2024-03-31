@@ -437,9 +437,9 @@ empty, log files will not be moved
 > because no optimization would be crucial. Part of the script (first
 > function and the body of second function has been taken from the
 > following URL written by **Alan Jefferson**:
-
+>
 >[<u>https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules</u>](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
-
+>
 > It helps DBAs plan their jobs' time table to smartly set their
 > schedules to carry out necessary practices. For example, overlapping
 > jobs should generally be avoided.
@@ -635,7 +635,7 @@ directory tree structure, and if you
 level up in the directory tree.
 ```
 ### 7. Enable CDC on a cluster's primary replica, enable CDC on a secondary replica  
-(Within "BI\\Enable CDC for clusters" directory)*
+**(Within "BI\\Enable CDC for clusters" directory)**
 
 > Enabling CDC on an AlwaysOn cluster which involves failovering is
 > tricky. The two scripts contained within the BI directory, do just
@@ -644,7 +644,7 @@ level up in the directory tree.
 > Secondary.sql" script.
 
 ### 8. dbWarden scripts: 
-*(contained within dbWarden directory)*
+**(contained within dbWarden directory)**
 
 > dbWarden is a free SQL Server Monitoring package. Here is a useful
 > link in introduction to dbWarden:  
@@ -660,7 +660,7 @@ level up in the directory tree.
 > last No of days.sql".
 
 ### 9. Backup Website 
-*(Within T-SQL_Backup&Restore repo directory):*
+**(Within T-SQL_Backup&Restore repo directory):**
 
 > This script performs a full backup of the database and home folder
 > files of the intended website. It can be turned into a scheduled job
@@ -669,7 +669,7 @@ level up in the directory tree.
 > name. A checkdb will also be performed prior to the database backup.
 
 ### 10. Restore Website 
-*(Within T-SQL_Backup&Restore repo directory):*
+**(Within T-SQL_Backup&Restore repo directory):**
 
 > Before using this script, please read the comments at the beginning of
 > Backup_Website.sql script thoroughly. This script restores the backups
@@ -779,7 +779,7 @@ target SQL Server
 @DestinationPass = 'P@$$W0rd'
 ```
 ### 14. correct checksum of a corrupt_page: 
-*(Within Educational directory)*
+**(Within Educational directory)**
 
 > If you have a corrupt page within your database and have identified it
 > through some means, for example "DBCC CHECKDB('DBNAME')", you can make
@@ -793,7 +793,7 @@ target SQL Server
 > [<u>https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases</u>](https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases)
 
 ### 15. create DimDate table 
-*(Within BI directory)*
+**(Within BI directory)**
 
 > This SP takes the start and end dates and creates DimDate table within
 > the database that this SP is being created in. The DimDate table can
@@ -811,7 +811,7 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 @Drop_Last_DimDate_If_Exists = 1
 ```
 ### 16. Typical SQL Server setup configuration file
-*with installation batch file. (Within educational directory)*
+**with installation batch file. (Within educational directory)**
 
 > If you wish to install SQL Server instances on many servers, you
 > should consider using a configuration file. A configuration file makes
@@ -829,39 +829,29 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 > You just need to remember to alter these files according to your
 > specifications and needs.
 
--   You may want to refer to the readme.txt file in the "SQL Server
-    > Unattended (Silent) Installation" itself too.
+-   You may want to refer to the readme.txt file in the "SQL Server Unattended (Silent) Installation" itself too.
 
--   Also, you need to either provide the following missing files or
-    > remove their reference from the batch files:
+-   Also, you need to either provide the following missing files or remove their reference from the batch files:
 
-    -   dbWarden_DB1_truncated_22.05.31.bak: backup file of dbWarden
-        > database
+    -   dbWarden_DB1_truncated_22.05.31.bak: backup file of dbWarden database
 
-    -   MsSqlCmdLnUtils.msi: MSI installation file for SQLCMD from
-        > Microsoft
+    -   MsSqlCmdLnUtils.msi: MSI installation file for SQLCMD from Microsoft
 
-    -   SQLADDB_22.06.06.bak: backup file of SQLAdministrationDB
-        > database
+    -   SQLADDB_22.06.06.bak: backup file of SQLAdministrationDB database
 
     -   SSMS Setup
 
     -   dbWarden-Jobs.sql
 
--   Please note that SQL port-firewall.bat includes changing the default
-    > port number for the default instance. If you do not intend to do
-    > that, simply remove the commands.
+-   Please note that SQL port-firewall.bat includes changing the default port number for the default instance. If you do not intend to do that, simply remove the commands.
 
--   You must run the "Install SQL Server.cmd" batch file with
-    > administrative priviledges.
+-   You must run the "Install SQL Server.cmd" batch file with administrative priviledges.
 
--   Some of the actions that this batch file carries out are the
-    > following:
+-   Some of the actions that this batch file carries out are the following:
 
     -   Mounts SQL Server Installation .iso image file
 
-    -   Installs the SQL Server instance according to the configuration
-        > file
+    -   Installs the SQL Server instance according to the configuration file
 
     -   Installs SSMS silently
 
