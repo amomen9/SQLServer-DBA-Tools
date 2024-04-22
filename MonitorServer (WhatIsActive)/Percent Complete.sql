@@ -54,6 +54,7 @@ GO
 SELECT 
 	r.session_id,
 	r.command,
+	DB_NAME(r.database_id) DBName,
 	percent_complete,
 	et.[Elapsed DD:HH:MM:SS.ms],
 	rt.[Elapsed DD:HH:MM:SS.ms] estimated_remaining_time,
@@ -63,7 +64,6 @@ SELECT
 	r.wait_time*100.0/r.total_elapsed_time [wait/elapsed ratio],
 	DATEADD(MILLISECOND,r.estimated_completion_time,GETDATE()) estimated_end_time,
 	SUBSTRING(ST.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(ST.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS [statement_executing (fragment)],
-	DB_NAME(r.database_id) DBName,
 	s.original_login_name
 FROM sys.dm_exec_requests r
 JOIN sys.dm_exec_sessions s ON r.session_id = s.session_id
