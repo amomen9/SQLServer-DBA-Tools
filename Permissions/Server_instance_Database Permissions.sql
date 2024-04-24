@@ -207,7 +207,13 @@ BEGIN
 		FROM sys.server_principals spr JOIN sys.server_permissions sp
 		ON spr.principal_id = sp.grantee_principal_id
 		UNION ALL
-		SELECT SUSER_SNAME(owner_sid),'AVAILABILITY GROUP', (SELECT group_name FROM sys.dm_hadr_availability_replica_cluster_nodes WHERE replica_server_name=@@SERVERNAME),'OWNER', NULL, 'OWNER', SUSER_ID(SUSER_SNAME(owner_sid)), (SELECT is_disabled FROM sys.server_principals WHERE sid=ar.owner_sid)  FROM sys.availability_replicas ar WHERE ar.replica_server_name = @@SERVERNAME AND owner_sid IS NOT NULL
+
+		SELECT SUSER_SNAME(ar.owner_sid),'AVAILABILITY REPLICA', ag.name availability_replica_name ,'OWNER', 'Self', 'OWNER', SUSER_ID(SUSER_SNAME(owner_sid)), (SELECT is_disabled FROM sys.server_principals where sid=ar.owner_sid) 
+		FROM sys.availability_replicas ar
+		RIGHT JOIN sys.availability_groups ag
+		ON ag.group_id = ar.group_id
+		WHERE ar.endpoint_url like '%'+@@SERVERNAME+'%' --AND owner_sid IS NOT NULL
+		
 		UNION ALL
 		SELECT SUSER_SNAME(owner_sid),'DATABASE', name, 'OWNER', NULL, 'OWNER', SUSER_ID(SUSER_SNAME(owner_sid)), (SELECT is_disabled FROM sys.server_principals WHERE sid=ar.owner_sid)						FROM sys.databases ar WHERE owner_sid IS NOT NULL
 		UNION ALL
@@ -272,11 +278,9 @@ BEGIN
 END
 GO
 
-EXEC dbo.usp_permissions_for_instance @Login_Filter = '%'    -- sysname 
+--EXEC dbo.usp_permissions_for_instance @Login_Filter = '%'    -- sysname 
 GO
 
-DROP PROC dbo.usp_permissions_for_instance
-GO
 
 
 
@@ -292,6 +296,8 @@ GO
 -- License:				<Please refer to the license file> 
 -- =============================================
 
+
+-- login role, server role owner location in select statements, create revoke, include guest and dbo
 
 --------  SP multiple Database Permissions -----------------------------------------------------------------------------------
 CREATE OR ALTER PROC usp_permissions_for_every_database
@@ -319,30 +325,29 @@ BEGIN
 	IF  @Permission_Filter_Out = '' SET @Permission_Filter_Out = 'ssssssss'
 	SET @Permission_Filter_Out = IIF(@Permission_Filter_Out = '','%',@Permission_Filter_Out)
 	SET @Change_Ownership_Username = ISNULL(@Change_Ownership_Username,'')
+	SET @Change_Permissions_Commands_Action = UPPER(@Change_Permissions_Commands_Action)
 	SET @Change_Permissions_Commands_Action = ISNULL(@Change_Permissions_Commands_Action,'')
 	SET @Execute_Change_Permissions_Commands_Action = ISNULL(@Execute_Change_Permissions_Commands_Action,0)
 	SET @Type_of_Principal = ISNULL(@Type_of_Principal,'')
 	IF @Type_of_Principal NOT IN ('','ROLE','USER') BEGIN RAISERROR('Invalide @Type_of_Principal specified.',16,1) RETURN 1 END
 	--IF @Change_Permissions_Commands_Action NOT BETWEEN 0 AND 2				BEGIN RAISERROR('Invalide @Change_Permissions_Commands_Action specified.',16,1) RETURN 1 END
-	IF @Change_Permissions_Commands_Action NOT IN ('','REVOKE','GRANT')		BEGIN RAISERROR('Invalide @Change_Permissions_Commands_Action specified.',16,1) RETURN 1 END
+	IF @Change_Permissions_Commands_Action NOT IN ('','REVOKE','CREATE')		BEGIN RAISERROR('Invalide @Change_Permissions_Commands_Action specified.',16,1) RETURN 1 END
 	
 	SET @Permission_State_Filter = IIF(@Permission_State_Filter = '' OR @Permission_State_Filter IS NULL,'GRANT, DENY',@Permission_State_Filter)
 	
 
 
-	CREATE TABLE #2 ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [Through] nvarchar(128), [state_desc] nvarchar(60), [User Database Role Memberships] nvarchar(4000), [is_user_disabled] INT, [Server Login] sysname, is_login_disabled BIT NULL )
+	CREATE TABLE #2 ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [Through] nvarchar(128), [state_desc] nvarchar(60), [User Database Role Memberships (Agg)] nvarchar(1000), [is_user_disabled] INT, [Server Login] sysname, is_login_disabled BIT NULL, [Server Role Memberships (Agg)] NVARCHAR(1000))
 
-	SELECT name INTO #ExistingDatabasesNames FROM sys.databases WHERE state=0
+	SELECT name INTO #ExistingDatabasesNames FROM sys.databases WHERE state=0 AND source_database_id IS NULL
 	
-	DECLARE @Permission_Keyword NVARCHAR(4) = IIF(@Change_Permissions_Commands_Action='GRANT','TO','FROM')
 	DECLARE @CoName sysname
 	DECLARE @sql NVARCHAR(MAX)	
-	DECLARE @usedb NVARCHAR(MAX)
 	DECLARE @Stmt_head NVARCHAR(MAX)
 	DECLARE @Stmt_master NVARCHAR(MAX) = ''
 	DECLARE @Stmt_tail NVARCHAR(MAX)
 	DECLARE @Revoke_Commands_Script NVARCHAR(MAX)
-	SET @Stmt_head =	-- Permissions which are granted to directly to the principal itself:
+	SET @Stmt_head =	-- Permissions which are granted directly to the principal itself:
 	'		
 		SELECT DISTINCT
 			  DB_NAME() DatabaseName
@@ -354,7 +359,7 @@ BEGIN
 			, dt.permission_name
 			, dt.Through
 			, dt.state_desc
-			, (SELECT STRING_AGG(sprsub.name,'', '') FROM sys.database_role_members srmsub JOIN sys.database_principals sprsub ON srmsub.role_principal_id=sprsub.principal_id WHERE srmsub.member_principal_id=dt.principal_id) [User Database Role Memberships]
+			, (SELECT STRING_AGG(sprsub.name,'', '') FROM sys.database_role_members srmsub JOIN sys.database_principals sprsub ON srmsub.role_principal_id=sprsub.principal_id WHERE srmsub.member_principal_id=dt.principal_id) [User Database Role Memberships (Agg)]
 			, IIF(EXISTS (SELECT 1 FROM sys.database_permissions dp JOIN sys.database_principals dpr ON dp.grantee_principal_id = dpr.principal_id AND dp.grantee_principal_id=dt.principal_id WHERE (dp.permission_name=''CONNECT'' AND dp.state_desc=''GRANT'') or dpr.type_desc=''DATABASE_ROLE''),0,1) [is_user_disabled]
 			, ISNULL(dt.[Server Login],
 						CASE (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id) 
@@ -367,6 +372,7 @@ BEGIN
 						END 
 					) [Server Login]
 			, ISNULL(is_login_disabled,(SELECT is_disabled FROM sys.server_principals WHERE sid = (SELECT sid FROM sys.database_principals where principal_id=dt.principal_id))) [is_login_disabled]
+			, (SELECT STRING_AGG(spr.name,'', '') FROM sys.server_principals spr  JOIN sys.server_role_members srm ON srm.role_principal_id = spr.principal_id JOIN sys.server_principals spr2 ON spr2.principal_id = srm.member_principal_id WHERE spr2.sid=(SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)) [Server Role Memberships (Agg)]
 		FROM 
 		(
 			SELECT 
@@ -425,8 +431,14 @@ BEGIN
 			SELECT SUSER_NAME(principal_id),''SERVICE'', name COLLATE DATABASE_DEFAULT, ''OWNER'', ''Self'', ''OWNER'', principal_id, NULL, NULL, NULL, NULL, NULL			FROM sys.services ar WHERE principal_id IS NOT NULL
 			UNION ALL
 			SELECT SUSER_NAME(principal_id),''CONTRACT'', name COLLATE DATABASE_DEFAULT, ''OWNER'', ''Self'', ''OWNER'', principal_id, NULL, NULL, NULL, NULL, NULL			FROM sys.service_contracts ar WHERE principal_id IS NOT NULL
+
 			UNION ALL
-			SELECT SUSER_SNAME(owner_sid),''AVAILABILITY GROUP'', (SELECT group_name FROM sys.dm_hadr_availability_replica_cluster_nodes WHERE replica_server_name=@@SERVERNAME),''OWNER'', ''Self'', ''OWNER'', SUSER_ID(SUSER_SNAME(owner_sid)), SUSER_SNAME(owner_sid), (SELECT is_disabled FROM sys.server_principals where sid=ar.owner_sid), NULL, NULL, NULL  FROM sys.availability_replicas ar WHERE ar.replica_server_name = @@SERVERNAME AND owner_sid IS NOT NULL
+			SELECT SUSER_SNAME(ar.owner_sid),''AVAILABILITY REPLICA'', ag.name availability_replica_name ,''OWNER'', ''Self'', ''OWNER'', SUSER_ID(SUSER_SNAME(owner_sid)), SUSER_SNAME(owner_sid), (SELECT is_disabled FROM sys.server_principals where sid=ar.owner_sid), NULL, NULL, NULL  
+			FROM sys.availability_replicas ar
+			RIGHT JOIN sys.availability_groups ag
+			ON ag.group_id = ar.group_id
+			WHERE ar.endpoint_url like ''%''+@@SERVERNAME+''%'' --AND owner_sid IS NOT NULL
+			
 			UNION ALL
 			SELECT SUSER_NAME(principal_id),''ENDPOINT'', name, ''OWNER'', ''Self'', ''OWNER'', principal_id, NULL, NULL, NULL, NULL, NULL									FROM sys.database_mirroring_endpoints ar WHERE principal_id IS NOT NULL
 			UNION ALL
@@ -481,14 +493,22 @@ BEGIN
 			BEGIN TRY
 
 				DECLARE @CompanyDBName sysname = @CoName
-				SET @sql = 'use '+QUOTENAME(@CompanyDBName)+CHAR(10)+@Stmt_head + IIF(@CompanyDBName = 'master',@Stmt_master,'') + @Stmt_tail
+				SET @sql =  'use '+
+							QUOTENAME(@CompanyDBName)+CHAR(10)+
+							@Stmt_head +
+							IIF(@CompanyDBName = 'master',@Stmt_master,'') +
+							@Stmt_tail
 				
 				INSERT INTO #2				
 				EXEC (@sql)
 
 			END TRY
 			BEGIN CATCH
-				PRINT(ERROR_MESSAGE())
+				DECLARE @Err_Msg NVARCHAR(2000) = ERROR_MESSAGE(),
+						@Err_Severity INT = ERROR_SEVERITY(),
+						@Err_State INT = ERROR_STATE()
+				
+				RAISERROR(@Err_Msg,@Err_Severity,@Err_State)
 			END CATCH
 
 			FETCH NEXT FROM CoFiller INTO @CoName    			
@@ -497,11 +517,11 @@ BEGIN
 		END
 	CLOSE CoFiller
 	DEALLOCATE CoFiller
-	EXEC dbo.usp_PrintLong @String = @sql -- nvarchar(max)
+	--EXEC dbo.usp_PrintLong @String = @sql -- nvarchar(max)
 	SET @sql =
 	'
 		SELECT 
-			#2.DatabaseName, #2.UserName, #2.class_desc, #2.class_object_schema_name, #2.class_object_name, #2.class_column_name, #2.permission_name, '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.Through'+IIF(@Show_Effective_Permissions = 1,','', '') ThroughAggregate','')+', '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.state_desc'+IIF(@Show_Effective_Permissions = 1,','', '') StateAggregate','')+', #2.[User Database Role Memberships], #2.[is_user_disabled], #2.[Server Login], #2.is_login_disabled
+			#2.DatabaseName, #2.UserName, #2.class_desc, #2.class_object_schema_name, #2.class_object_name, #2.class_column_name, #2.permission_name, '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.Through'+IIF(@Show_Effective_Permissions = 1,','', '') ThroughAggregate','')+', '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.state_desc'+IIF(@Show_Effective_Permissions = 1,','', '') StateAggregate','')+', #2.[User Database Role Memberships (Agg)], #2.[is_user_disabled], #2.[Server Login], #2.is_login_disabled, #2.[Server Role Memberships (Agg)]
 		FROM #2		JOIN (SELECT TRIM(value) value FROM STRING_SPLIT(@Principal_Filter_In,'','')) dt1
 		ON UserName LIKE dt1.value { ESCAPE ''\'' }
 		JOIN (SELECT TRIM(value) value FROM STRING_SPLIT(@Permission_Filter_In,'','')) dt2
@@ -511,10 +531,10 @@ BEGIN
 		WHERE dt3.value IS NULL
 					
 	'+
-	IIF(@Show_Effective_Permissions = 1,'	GROUP BY DatabaseName,UserName,class_desc,class_object_schema_name,class_object_name,class_column_name,permission_name,[User Database Role Memberships],[is_user_disabled],[Server Login],is_login_disabled','')
+	IIF(@Show_Effective_Permissions = 1,'	GROUP BY DatabaseName,UserName,class_desc,class_object_schema_name,class_object_name,class_column_name,permission_name,[User Database Role Memberships (Agg)],[is_user_disabled],[Server Login],is_login_disabled, [Server Role Memberships (Agg)]','')
 	
-	CREATE TABLE #temptable ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [ThroughAggregate] nvarchar(4000), [StateAggregate] nvarchar(4000), [User Database Role Memberships] nvarchar(4000), [is_user_disabled] int, [Server Login] nvarchar(128), [is_login_disabled] bit )
-
+	CREATE TABLE #temptable ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [ThroughAggregate] nvarchar(4000), [StateAggregate] nvarchar(4000), [User Database Role Memberships (Agg)] nvarchar(4000), [is_user_disabled] int, [Server Login] nvarchar(128), [is_login_disabled] BIT,  [Server Role Memberships (Agg)] NVARCHAR(1000))
+	
 	
 	INSERT #temptable
 	EXEC sys.sp_executesql @sql,N'@Principal_Filter_In nvarchar(255), @Permission_Filter_In NVARCHAR(500), @Permission_Filter_Out NVARCHAR(500)', @Principal_Filter_In, @Permission_Filter_In, @Permission_Filter_Out
@@ -532,22 +552,22 @@ BEGIN
 				DatabaseName,
 				STRING_AGG(CONVERT(NVARCHAR(max),	
 												CASE permission_name
-													WHEN 'OWNER'			THEN	'ALTER AUTHORIZATION ON '+class_desc+'::'+QUOTENAME(class_object_name)+' TO '+IIF(@Change_Permissions_Commands_Action = 'GRANT', QUOTENAME([Server Login]), IIF(@Change_Ownership_Username='','[dbo]',QUOTENAME(@Change_Ownership_Username)))
-													WHEN 'DATABASE OWNER'	THEN	'ALTER AUTHORIZATION ON DATABASE::'+QUOTENAME(class_object_name)+' TO '+IIF(@Change_Permissions_Commands_Action = 'GRANT', QUOTENAME([Server Login]), IIF(@Change_Ownership_Username='',QUOTENAME(SUSER_SNAME(0x01)),QUOTENAME(@Change_Ownership_Username)))
-													ELSE							@Change_Permissions_Commands_Action+' '+permission_name+	(
+													WHEN 'OWNER'			THEN	'ALTER AUTHORIZATION ON '+class_desc+'::'+QUOTENAME(class_object_name)+' TO '+IIF(@Change_Permissions_Commands_Action = 'CREATE', QUOTENAME([Server Login]), IIF(@Change_Ownership_Username='','[dbo]',QUOTENAME(@Change_Ownership_Username)))
+													WHEN 'DATABASE OWNER'	THEN	'ALTER AUTHORIZATION ON DATABASE::'+QUOTENAME(class_object_name)+' TO '+IIF(@Change_Permissions_Commands_Action = 'CREATE', QUOTENAME([Server Login]), IIF(@Change_Ownership_Username='',QUOTENAME(SUSER_SNAME(0x01)),QUOTENAME(@Change_Ownership_Username)))
+													ELSE							IIF(@Change_Permissions_Commands_Action='CREATE',TRIM(ss.value),'REVOKE')+' '+permission_name+	(
 																													CASE class_desc 
-																														WHEN 'DATABASE' THEN ' '+@Permission_Keyword+' '+QUOTENAME(UserName)
-																														WHEN 'OBJECT_OR_COLUMN' THEN ' ON '+QUOTENAME(class_object_schema_name)+'.'+QUOTENAME(class_object_name)+ISNULL('('+class_column_name+')','')+' '+@Permission_Keyword+' '+QUOTENAME(UserName)
-																														WHEN 'DATABASE_PRINCIPAL' THEN ' ON USER::'+QUOTENAME(class_object_name)+' '+@Permission_Keyword+' '+QUOTENAME(UserName) 
-																														ELSE ' ON '+class_desc+'::'+QUOTENAME(class_object_name)+' '+@Permission_Keyword+' '+QUOTENAME(UserName) 
+																														WHEN 'DATABASE' THEN ' '+IIF(@Change_Permissions_Commands_Action='CREATE','TO','FROM')+' '+QUOTENAME(UserName)
+																														WHEN 'OBJECT_OR_COLUMN' THEN ' ON '+QUOTENAME(class_object_schema_name)+'.'+QUOTENAME(class_object_name)+ISNULL('('+class_column_name+')','')+' '+IIF(@Change_Permissions_Commands_Action='CREATE','TO','FROM')+' '+QUOTENAME(UserName)
+																														WHEN 'DATABASE_PRINCIPAL' THEN ' ON USER::'+QUOTENAME(class_object_name)+' '+IIF(@Change_Permissions_Commands_Action='CREATE','TO','FROM')+' '+QUOTENAME(UserName) 
+																														ELSE ' ON '+class_desc+'::'+QUOTENAME(class_object_name)+' '+IIF(@Change_Permissions_Commands_Action='CREATE','TO','FROM')+' '+QUOTENAME(UserName) 
 																													END
 																												)
 												END
 								)
 							, CHAR(10)
 						  ) permission_command
-		FROM #temptable
-		WHERE ThroughAggregate LIKE '%Self%'
+		FROM #temptable CROSS APPLY STRING_SPLIT(StateAggregate,',') ss
+		WHERE ThroughAggregate = 'Self'
 		GROUP BY DatabaseName
 		) dt
 
@@ -563,20 +583,20 @@ END
 GO
 --CREATE TABLE #temptable ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), [class_object_name] nvarchar(128), [permission_name] nvarchar(128), [ThroughAggregate] nvarchar(4000), [StateAggregate] nvarchar(4000), [User Database Role Memberships] nvarchar(4000), [is_user_disabled] int, [Server Login] nvarchar(128), [is_login_disabled] bit )
 --INSERT #temptable
-EXEC dbo.usp_permissions_for_every_database @Type_of_Principal = 'ROLE',			--	USER | ROLE. Empty yields both.
-											@Principal_Filter_In = 
-																'JvRole_DenySensitiveFields',--'JvRole_ReadOnly, JvRole_RWE, JvRole_Alter, JvRole_DenySensitiveFields, %sensitive%',					-- Comma delimited list of database user names. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
+EXEC dbo.usp_permissions_for_every_database @Type_of_Principal = 'user',							--	USER | ROLE. Empty yields both.
+											@Principal_Filter_In ='%m.abeyat', 
+																--'JvRole_DenySensitive%',							--'JvRole_ReadOnly, JvRole_RWE, JvRole_Alter, JvRole_DenySensitiveFields, %sensitive%',					-- Comma delimited list of database user names. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
 											
-											@Database_Filter_In = '',--'test_contained_permission_users',
-																					-- Comma delimited list of Database Names in instance. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
-											@Permission_Filter_In = '',				-- Comma delimited list of Permission names. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
-											@Permission_Filter_Out = '',--'SELECT, EXECUTE, VIEW%, SHOWPLAN, REFERENCES, CONNECT, AUTHENTICATE',
-											@Permission_State_Filter = '',			-- Comma delimited list of Permission State. Empty string or NULL yields 'all'. Possible values: 'GRANT' | 'DENY'
-											@Show_Effective_Permissions = 1,
+											@Database_Filter_In = '',					--'test_contained_permission_users',
+																									-- Comma delimited list of Database Names in instance. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
+											@Permission_Filter_In = '',								-- Comma delimited list of Permission names. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
+											@Permission_Filter_Out = '',							--'SELECT, EXECUTE, VIEW%, SHOWPLAN, REFERENCES, CONNECT, AUTHENTICATE',
+											@Permission_State_Filter = '',							-- Comma delimited list of Permission State. Empty string or NULL yields 'all'. Possible values: 'GRANT' | 'DENY'
+											@Show_Effective_Permissions = 1,						-- Groups by permission states, so that you can figure out if a permission is indeed overally denied or granted.
 											@Change_Ownership_Username = '',
-											@Change_Permissions_Commands_Action = 'REVOKE',			-- Specify whether or not you want to generate revoke/grant commmands. For owner permissions and 'REVOKE', the ownership will be given to the specified user or 'dbo' if not specified.
+											@Change_Permissions_Commands_Action = 'create',			-- Specify whether or not you want to generate revoke or grant/deny commmands. For owner permissions and 'REVOKE', the ownership will be given to the specified user or 'dbo' if not specified.
 																									-- Revoking permission also includes revoking ownership.
-																									-- Possible values: REVOKE | GRANT | NULL | ''. NULL or empty string yields 'Do not generate'
+																									-- Possible values: REVOKE | CREATE | NULL | ''. NULL or empty string yields 'Do not generate'. CREATE means generate GRANT/DENY
 											@Execute_Change_Permissions_Commands_Action = 0			-- Choose whether to execute generated @Change_Permissions_Commands_Action or not
 
 
@@ -587,5 +607,13 @@ GO
 
 DROP PROC dbo.usp_PrintLong
 GO
+
+
+DROP PROC dbo.usp_permissions_for_instance
+GO
+
+
+
+
 
 
