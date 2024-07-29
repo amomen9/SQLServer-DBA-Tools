@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS #DriveSpec
 GO
 
 
-CREATE TABLE #DriveSpec ( [Server (IP + Port + Server Name)] NVARCHAR(256), [DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(4,2), [drive_type_desc] NVARCHAR(256) )
+CREATE TABLE #DriveSpec ( /*[Server (IP + Port + Server Name)] NVARCHAR(256), */[DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(4,2), [drive_type_desc] NVARCHAR(256) )
 
 DECLARE @SQL VARCHAR(8000) 
 IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
@@ -89,7 +89,7 @@ BEGIN
 	)
 	INSERT INTO #DriveSpec
 	SELECT
-		@@SERVERNAME, [DriveLetter], [logical_volume_name],
+		[DriveLetter], [logical_volume_name],
 		CONVERT(VARCHAR(103),CONVERT(DEC(20,2),cte.Size_bytes/1024.0/1024/1024))+' GB' [Size_GB], 
 		CONVERT(VARCHAR(103),CONVERT(DEC(20,2),cte.free_space_bytes/1024.0/1024/1024))+' GB' [free_space_GB],
 		
