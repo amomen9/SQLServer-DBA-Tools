@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS #DriveSpec
 GO
 
 
-CREATE TABLE #DriveSpec ( [DriveLetter] nvarchar(3), [logical_volume_name] nvarchar(4000), [Size_GB] varchar(103), [free_space_GB] varchar(103), used_space_percentage DECIMAL(38,2), [drive_type_desc] nvarchar(256) )
+CREATE TABLE #DriveSpec ( [Server (IP + Port + Server Name)] NVARCHAR(256), [DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(4,2), [drive_type_desc] NVARCHAR(256) )
 
 DECLARE @SQL VARCHAR(8000) 
 IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
@@ -89,9 +89,10 @@ BEGIN
 	)
 	INSERT INTO #DriveSpec
 	SELECT
-		[DriveLetter], [logical_volume_name],
+		@@SERVERNAME, [DriveLetter], [logical_volume_name],
 		CONVERT(VARCHAR(103),CONVERT(DEC(20,2),cte.Size_bytes/1024.0/1024/1024))+' GB' [Size_GB], 
 		CONVERT(VARCHAR(103),CONVERT(DEC(20,2),cte.free_space_bytes/1024.0/1024/1024))+' GB' [free_space_GB],
+		
 		(cte.Size_bytes-cte.free_space_bytes)*100.0/cte.Size_bytes used_space_percentage,
 		[drive_type_desc]
 	FROM cte
@@ -194,7 +195,8 @@ IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
 		dto.PORT,
 		dto.SQLVersion,
 		dto.CU,
-		dto.os_version_name
+		REPLACE(dto.os_version_name,'(Hypervisor)','') os_version_name,
+		IIF(dto.os_version_name LIKE '%(Hypervisor)%','VM','Physical') machine_type
 	FROM 
 	(
 		SELECT DISTINCT dt1.server, dt1.SQLVersion, dt1.CU, dt2.PORT, dt1.os_version_name
