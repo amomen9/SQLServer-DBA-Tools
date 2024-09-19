@@ -103,7 +103,8 @@ GO
 
 CREATE OR ALTER PROC usp_PrintLong
 	@String NVARCHAR(MAX),
-	@Max_Chunk_Size SMALLINT = 4000
+	@Max_Chunk_Size SMALLINT = 4000,
+	@Print_String_Length BIT = 0
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -171,6 +172,8 @@ BEGIN
 			
 		END 
 	END
+	IF @Print_String_Length = 1
+		PRINT '------------------------------'+CHAR(10)+'------String total length:'+CHAR(10)+CONVERT(NVARCHAR(100),(DATALENGTH(@String)/2))+CHAR(10)+'------Total line numbers:'+CHAR(10)+CONVERT(NVARCHAR(100),LEN(@String)-LEN(REPLACE(@String,CHAR(10),'')))+CHAR(10)+'------------------------------'
 END
 GO
 
@@ -231,7 +234,8 @@ BEGIN
 		UNION ALL
 		SELECT SUSER_NAME(principal_id),'REMOTE SERVICE BINDING', name, 'OWNER', NULL, 'OWNER', principal_id, (SELECT is_disabled FROM sys.server_principals WHERE principal_id=ar.principal_id)				FROM master.sys.remote_service_bindings ar WHERE principal_id IS NOT NULL
 		UNION ALL
-		SELECT ar2.name,'SERVER ROLE', ar.name, 'OWNER', NULL, 'OWNER', ar.owning_principal_id, (SELECT is_disabled FROM sys.server_principals WHERE principal_id=ar.principal_id)								FROM sys.server_principals ar JOIN sys.server_principals ar2 ON ar2.principal_id = ar.owning_principal_id WHERE ar.type_desc = 'SERVER_ROLE' AND ar.owning_principal_id IS NOT NULL
+		-- Server Roles: 
+		SELECT ar2.name,'SERVER ROLE', ar.name, 'OWNER', NULL, 'OWNER', ar.owning_principal_id, (SELECT is_disabled FROM sys.server_principals WHERE principal_id=ar2.principal_id)								FROM sys.server_principals ar JOIN sys.server_principals ar2 ON ar2.principal_id = ar.owning_principal_id WHERE ar.type_desc = 'SERVER_ROLE' AND ar.owning_principal_id IS NOT NULL
 		UNION ALL
 		SELECT SUSER_NAME(principal_id),'ROUTE', name, 'OWNER', NULL, 'OWNER', principal_id, (SELECT is_disabled FROM sys.server_principals WHERE principal_id=ar.principal_id)									FROM master.sys.routes ar WHERE principal_id IS NOT NULL
 		UNION ALL
@@ -278,7 +282,6 @@ BEGIN
 END
 GO
 
---EXEC dbo.usp_permissions_for_instance @Login_Filter = '%'    -- sysname 
 GO
 
 
@@ -337,7 +340,7 @@ BEGIN
 	
 
 
-	CREATE TABLE #2 ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [Through] nvarchar(128), [state_desc] nvarchar(60), [User Database Role Memberships (Agg)] nvarchar(1000), [is_user_disabled] INT, [Server Login] sysname, is_login_disabled BIT NULL, [Server Role Memberships (Agg)] NVARCHAR(1000))
+	CREATE TABLE #2 ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [Authentication Type] NVARCHAR(60), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [Through] nvarchar(128), [state_desc] nvarchar(60), [User Database Role Memberships (Agg)] nvarchar(1000), [is_user_disabled] INT, [Server Login] sysname, is_login_disabled BIT NULL, [Server Role Memberships (Agg)] NVARCHAR(1000), [Live Data (hostname:IP, Last Login Time)] NVARCHAR(2000))
 
 	SELECT name INTO #ExistingDatabasesNames FROM sys.databases WHERE state=0 AND source_database_id IS NULL
 	
@@ -348,10 +351,11 @@ BEGIN
 	DECLARE @Stmt_tail NVARCHAR(MAX)
 	DECLARE @Revoke_Commands_Script NVARCHAR(MAX)
 	SET @Stmt_head =	-- Permissions which are granted directly to the principal itself:
-	'		
+	'
 		SELECT DISTINCT
 			  DB_NAME() DatabaseName
 			, [UserName]
+			, (select authentication_type_desc from sys.database_principals where principal_id=dt.principal_id) [Authentication Type]
 			, dt.class_desc
 			, SCHEMA_NAME(schema_id) class_object_schema_name
 			, class_object_name
@@ -362,17 +366,28 @@ BEGIN
 			, (SELECT STRING_AGG(sprsub.name,'', '') FROM sys.database_role_members srmsub JOIN sys.database_principals sprsub ON srmsub.role_principal_id=sprsub.principal_id WHERE srmsub.member_principal_id=dt.principal_id) [User Database Role Memberships (Agg)]
 			, IIF(EXISTS (SELECT 1 FROM sys.database_permissions dp JOIN sys.database_principals dpr ON dp.grantee_principal_id = dpr.principal_id AND dp.grantee_principal_id=dt.principal_id WHERE (dp.permission_name=''CONNECT'' AND dp.state_desc=''GRANT'') or dpr.type_desc=''DATABASE_ROLE''),0,1) [is_user_disabled]
 			, ISNULL(dt.[Server Login],
-						CASE (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id) 
-							WHEN ''INSTANCE,SQL_USER''				THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
-							WHEN ''WINDOWS,WINDOWS_USER''			THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
-							WHEN ''DATABASE,SQL_USER''				THEN ''DATABASE (Contained)''
-							WHEN ''NONE,CERTIFICATE_MAPPED_USER''	THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
-							WHEN ''NONE,SQL_USER''					THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
+						CASE
+							WHEN (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id)=''INSTANCE,SQL_USER''						THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
+							WHEN (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id)=''WINDOWS,WINDOWS_USER''						THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
+							WHEN (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id)=''DATABASE,SQL_USER''						THEN ''DATABASE (Contained)''
+							WHEN (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id)=''NONE,CERTIFICATE_MAPPED_USER''				THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
+							WHEN (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id)=''NONE,SQL_USER'' AND dt.principal_id<5		THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),dt.[UserName])
+							WHEN (SELECT authentication_type_desc+'',''+type_desc FROM sys.database_principals WHERE principal_id=dt.principal_id)=''NONE,SQL_USER''							THEN ISNULL(SUSER_SNAME((SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)),''ORPHAN'')
 							ELSE ''NONE'' 
 						END 
 					) [Server Login]
-			, ISNULL(is_login_disabled,(SELECT is_disabled FROM sys.server_principals WHERE sid = (SELECT sid FROM sys.database_principals where principal_id=dt.principal_id))) [is_login_disabled]
+			, ISNULL(is_login_disabled,(SELECT is_disabled FROM sys.server_principals WHERE sid = (SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id))) [is_login_disabled]
 			, (SELECT STRING_AGG(spr.name,'', '') FROM sys.server_principals spr  JOIN sys.server_role_members srm ON srm.role_principal_id = spr.principal_id JOIN sys.server_principals spr2 ON spr2.principal_id = srm.member_principal_id WHERE spr2.sid=(SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)) [Server Role Memberships (Agg)]
+			, ISNULL((	
+					SELECT STRING_AGG(dtin.host_name+'':''+dtin.client_net_address,'' * '')+'' * ''+CONVERT(NVARCHAR(200),MAX(dtin.[Last Login Time]),120) [Live Data] 
+					FROM
+					(
+						SELECT host_name, client_net_address, MAX(s.login_time) [Last Login Time]
+						FROM sys.dm_exec_connections c JOIN sys.dm_exec_sessions s ON s.session_id = c.session_id
+						WHERE s.original_security_id = (SELECT sid FROM sys.database_principals WHERE principal_id=dt.principal_id)
+						GROUP BY host_name, client_net_address
+					) dtin
+			  ),''NOT CURRENTLY LOGGED IN'')	[Live Data (hostname:IP, Last Login Login Time)]
 		FROM 
 		(
 			SELECT 
@@ -399,7 +414,35 @@ BEGIN
 			ON ao.object_id = sp.major_id
 			UNION ALL'+ IIF(@Type_of_Principal IN ('USER',''),		-- If @Type_of_Principal includes users, add the following "OWNER" queries
 				'
-				SELECT ''dbo'', ''DATABASE'', DB_NAME(), ''DATABASE OWNER'', ''Self'', ''DATABASE OWNER'', 1, SUSER_SNAME(owner_sid), (SELECT is_disabled FROM sys.server_principals where sid=dbs.owner_sid), NULL, NULL, NULL										FROM sys.databases dbs WHERE database_id=DB_ID()
+				SELECT ''dbo'',
+					   ''DATABASE'',
+					   DB_NAME(),
+					   ''DATABASE OWNER'',
+					   ''SYSADMIN SERVER ROLE'',
+					   ''DATABASE OWNER'',
+					   1,
+					   dt.LoginName,
+					   dt.is_disabled,
+					   NULL,
+					   NULL,
+					   NULL
+				FROM (SELECT SP.name AS LoginName, sp.is_disabled FROM sys.server_principals SP JOIN sys.syslogins SL ON SP.sid = SL.sid WHERE SP.is_disabled = 0 AND SP.type_desc IN (''SQL_LOGIN'', ''WINDOWS_LOGIN'', ''WINDOWS_GROUP'') AND IS_SRVROLEMEMBER(''sysadmin'', SP.name) = 1) dt
+				UNION ALL
+				SELECT ''guest'',
+					   ''DATABASE'',
+					   DB_NAME(),
+					   ''DATABASE GUEST'',
+					   ''PUBLIC SERVER ROLE'',
+					   ''DATABASE GUEST'',
+					   2,
+					   dt.LoginName,
+					   dt.is_disabled,
+					   NULL,
+					   NULL,
+					   NULL
+				FROM (SELECT SP.name AS LoginName, sp.is_disabled FROM sys.server_principals SP JOIN sys.syslogins SL ON SP.sid = SL.sid WHERE SP.is_disabled = 0 AND SP.type_desc IN (''SQL_LOGIN'', ''WINDOWS_LOGIN'', ''WINDOWS_GROUP'') AND IS_SRVROLEMEMBER(''sysadmin'', SP.name) <> 1) dt
+				
+				
 				UNION ALL
 				SELECT SUSER_NAME(principal_id),''ASSEMBLY'', name, ''OWNER'', ''Self'', ''OWNER'', principal_id, NULL, NULL, NULL, NULL, NULL									FROM sys.assemblies ar WHERE principal_id IS NOT NULL
 				UNION ALL
@@ -481,24 +524,45 @@ BEGIN
 		ORDER BY 1
 
 	'
+	
 	-- Loop through databases and extract permissions:
-	DECLARE CoFiller CURSOR FOR
+	DECLARE DatabaseFiller CURSOR FOR
 		SELECT name FROM #ExistingDatabasesNames 
 		JOIN (SELECT TRIM(value) value FROM STRING_SPLIT(@Database_Filter_In,',')) dt2
 		ON name LIKE dt2.value { ESCAPE '\' }
-	OPEN CoFiller
-		FETCH NEXT FROM CoFiller INTO @CoName
+	OPEN DatabaseFiller
+		FETCH NEXT FROM DatabaseFiller INTO @CoName
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
 			BEGIN TRY
 
-				DECLARE @CompanyDBName sysname = @CoName
-				SET @sql =  'use '+
-							QUOTENAME(@CompanyDBName)+CHAR(10)+
-							@Stmt_head +
-							IIF(@CompanyDBName = 'master',@Stmt_master,'') +
-							@Stmt_tail
+				DECLARE @DBName sysname = @CoName
+				--SET @sql =  'use '+
+				--			QUOTENAME(@DBName)+CHAR(10)+
+				--			'
+				--				DECLARE @SQL NVARCHAR(MAX)
+				--				IF OBJECT_ID(''udf_pid2sid'') IS NULL
+				--					SET @SQL =
+				--					''
+				--						CREATE FUNCTION dbo.udf_pid2sid(@principal_id int)
+				--						RETURNS VARBINARY(85)
+				--						AS
+				--						BEGIN
+				--							RETURN (SELECT sid FROM sys.database_principals WHERE principal_id=@principal_id)
+				--						END
+				--					''
+				--				EXEC(@SQL)
+				--			'
+				--EXEC(@sql)
 				
+				SET @sql =  'use '+
+							QUOTENAME(@DBName)+CHAR(10)+
+							@Stmt_head +
+							IIF(@DBName = 'master',@Stmt_master,'') +
+							@Stmt_tail
+
+				
+
 				INSERT INTO #2				
 				EXEC (@sql)
 
@@ -511,17 +575,17 @@ BEGIN
 				RAISERROR(@Err_Msg,@Err_Severity,@Err_State)
 			END CATCH
 
-			FETCH NEXT FROM CoFiller INTO @CoName    			
+			FETCH NEXT FROM DatabaseFiller INTO @CoName    			
 			
 	
 		END
-	CLOSE CoFiller
-	DEALLOCATE CoFiller
+	CLOSE DatabaseFiller
+	DEALLOCATE DatabaseFiller
 	--EXEC dbo.usp_PrintLong @String = @sql -- nvarchar(max)
 	SET @sql =
 	'
 		SELECT 
-			#2.DatabaseName, #2.UserName, #2.class_desc, #2.class_object_schema_name, #2.class_object_name, #2.class_column_name, #2.permission_name, '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.Through'+IIF(@Show_Effective_Permissions = 1,','', '') ThroughAggregate','')+', '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.state_desc'+IIF(@Show_Effective_Permissions = 1,','', '') StateAggregate','')+', #2.[User Database Role Memberships (Agg)], #2.[is_user_disabled], #2.[Server Login], #2.is_login_disabled, #2.[Server Role Memberships (Agg)]
+			#2.DatabaseName, #2.UserName, #2.class_desc, #2.class_object_schema_name, #2.class_object_name, #2.class_column_name, #2.permission_name, '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.Through'+IIF(@Show_Effective_Permissions = 1,','', '') ThroughAggregate','')+', '+IIF(@Show_Effective_Permissions = 1,'STRING_AGG(','')+'#2.state_desc'+IIF(@Show_Effective_Permissions = 1,','', '') StateAggregate','')+', #2.[User Database Role Memberships (Agg)], #2.[is_user_disabled], #2.[Server Login], #2.is_login_disabled, #2.[Authentication Type], #2.[Server Role Memberships (Agg)], #2.[Live Data (hostname:IP, Last Login Time)]
 		FROM #2		JOIN (SELECT TRIM(value) value FROM STRING_SPLIT(@Principal_Filter_In,'','')) dt1
 		ON UserName LIKE dt1.value { ESCAPE ''\'' }
 		JOIN (SELECT TRIM(value) value FROM STRING_SPLIT(@Permission_Filter_In,'','')) dt2
@@ -531,9 +595,11 @@ BEGIN
 		WHERE dt3.value IS NULL
 					
 	'+
-	IIF(@Show_Effective_Permissions = 1,'	GROUP BY DatabaseName,UserName,class_desc,class_object_schema_name,class_object_name,class_column_name,permission_name,[User Database Role Memberships (Agg)],[is_user_disabled],[Server Login],is_login_disabled, [Server Role Memberships (Agg)]','')
+	IIF(@Show_Effective_Permissions = 1,'	GROUP BY DatabaseName,UserName,[Authentication Type],class_desc,class_object_schema_name,class_object_name,class_column_name,permission_name,[User Database Role Memberships (Agg)],[is_user_disabled],[Server Login],is_login_disabled, [Server Role Memberships (Agg)],[Live Data (hostname:IP, Last Login Time)]','')
 	
-	CREATE TABLE #temptable ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [ThroughAggregate] nvarchar(4000), [StateAggregate] nvarchar(4000), [User Database Role Memberships (Agg)] nvarchar(4000), [is_user_disabled] int, [Server Login] nvarchar(128), [is_login_disabled] BIT,  [Server Role Memberships (Agg)] NVARCHAR(1000))
+	
+
+	CREATE TABLE #temptable ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), class_object_schema_name sysname NULL, [class_object_name] nvarchar(128), class_column_name sysname NULL, [permission_name] nvarchar(128), [ThroughAggregate] nvarchar(4000), [StateAggregate] nvarchar(4000), [User Database Role Memberships (Agg)] nvarchar(4000), [is_user_disabled] int, [Server Login] nvarchar(128), [is_login_disabled] BIT, [Authentication Type] NVARCHAR(60),  [Server Role Memberships (Agg)] NVARCHAR(1000), [Live Data (hostname:IP, Last Login Time)] NVARCHAR(2000))
 	
 	
 	INSERT #temptable
@@ -581,10 +647,11 @@ BEGIN
 
 END
 GO
+EXEC dbo.usp_permissions_for_instance @Login_Filter = '%'    -- sysname 
 --CREATE TABLE #temptable ( [DatabaseName] nvarchar(128), [UserName] nvarchar(128), [class_desc] nvarchar(60), [class_object_name] nvarchar(128), [permission_name] nvarchar(128), [ThroughAggregate] nvarchar(4000), [StateAggregate] nvarchar(4000), [User Database Role Memberships] nvarchar(4000), [is_user_disabled] int, [Server Login] nvarchar(128), [is_login_disabled] bit )
 --INSERT #temptable
 EXEC dbo.usp_permissions_for_every_database @Type_of_Principal = 'user',							--	USER | ROLE. Empty yields both.
-											@Principal_Filter_In ='%m.abeyat', 
+											@Principal_Filter_In ='', 
 																--'JvRole_DenySensitive%',							--'JvRole_ReadOnly, JvRole_RWE, JvRole_Alter, JvRole_DenySensitiveFields, %sensitive%',					-- Comma delimited list of database user names. Empty string or NULL yields 'all'. LIKE wildcards are allowed 
 											
 											@Database_Filter_In = '',					--'test_contained_permission_users',
@@ -607,7 +674,6 @@ GO
 
 DROP PROC dbo.usp_PrintLong
 GO
-
 
 DROP PROC dbo.usp_permissions_for_instance
 GO
