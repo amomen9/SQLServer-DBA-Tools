@@ -35,6 +35,7 @@ T-SQL Scripts
 [](https://github.com/amomen9/SQLServer-DBA-Tools#contained-scripts)
 
 1. sp_restore_latest_backups
+
    Effortlessly probe for backup files within a folder recursively and restore the ones that you want to whatever point in time or to the latest log backup available, on an instance, either from scratch or to replace the existing one.The idea for this script comes from my SQL Server professor P.Aghasadeghi ([http://fad.ir/Teacher/Details/10](http://fad.ir/Teacher/Details/10)). This stored procedure restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups, there will be no records of these backups in MSDB. The records can be imported from the original server anyway but there would be some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files, and optionally probes for log backups for point-in-time recovery or restoring to a later moment than the last full backup, reads the database name and backup dates from these files and restores the latest backup of every found database within the given criteria. If the database already exists, a tail of log backup can be taken first. A sample Standard Output of the execution is within the sp_restore_latest_backups directory.**Applications:**1. Automation of restoring the backups on the development or staging servers and carrying out the post-restore operations automatically like changing the recovery model, setting the database as read-only, shrinking database files, granting high permissions to every user of the database, rebuilding log file, etc.2. Granting execute access on this SP to senior developers on the development instances, so that they can renew or PITR their databases whenever they require without the need for DBAs' intervention or their direct access to the backup files/repository.3. Keep history and track of who restored what database, when, which backup, to what point in time, other restore details, etc.
 
  **Example:**
@@ -176,6 +177,7 @@ EXEC sp_restore_latest_backups
 ---
 
 2. sp_MoveDatabases_Datafiles
+
    Effortlessly and robustly with minimum down time, move your databases' database files to another folder and then automatically bring them back online using this stored procedure. It supports databases with FILESTREAM/IN-MEMORY filegroups as well. You can also change the location of your tempdb database database files, after which a SQL Server service restart is required to put the change into effect. You can also specify multiple databases. If you want to move tempdb database files, you must not include any other database.Upcoming: Most of the times move command is used to rename files/directories. I want to add this feature to this sp.
    
    
@@ -190,7 +192,9 @@ EXEC dbo.sp_MoveDatabases_Datafiles
 
 ---
 
-1. sp_JobsInfo:This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not optimized though because no optimization would be crucial. Part of the script (first function and the body of second function has been taken from the following URL written by  **Alan Jefferson** :[https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
+3. sp_JobsInfo:
+
+This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not optimized though because no optimization would be crucial. Part of the script (first function and the body of second function has been taken from the following URL written by  **Alan Jefferson** :[https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
 
 It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping jobs should generally be avoided.
 
@@ -201,6 +205,7 @@ Every job is executed with the permissions of its owner. So it's a security best
 ---
 
 4. transfer indexes to other Filegroups/Partition Schemes
+
    This SP takes database names on the instance, generates the index transfer statements, and moves the specified index IDs to another filegroup/partition scheme. Email report of the result can also be implemented. Please note that index creation statements do not exist within "sys.all_sql_modules" or "sys.sql_modules" system catalogue views.
    
    **Example:**
