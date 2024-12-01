@@ -1,9 +1,6 @@
 use msdb
 go
 
-IF @@SERVERNAME NOT LIKE '%Pouya%'
-	SET NOEXEC ON
-GO
 
 CREATE or alter FUNCTION fn_IntToTimeString (@time INT) 
 
@@ -326,6 +323,5 @@ ORDER BY c1.[global step id]
 GO
 
 SELECT * FROM msdb.dbo.v_view_business_jobs
-
 
 

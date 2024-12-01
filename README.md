@@ -1,20 +1,10 @@
-![](https://img.shields.io/badge/-%23FFFFFF.svg?&style=flat-square&logo=Microsoft%20SQL%20Server&logoColor=red)<b>SQL Server</b>
-
+![](https://img.shields.io/badge/-%23FFFFFF.svg?&style=flat-square&logo=Microsoft%20SQL%20Server&logoColor=red)`<b>`SQL Server`</b>`
 
 # \#SQLServer DBA Tools
 
-
-
-[![license badge]][license]
-
-
-[license badge]:https://img.shields.io/badge/license-%20MIT%20-blue
-
-
-[license]:https://github.com/amomen9/SQLServer-DBA-Tools/blob/main/LICENSE
+[license badge][license]
 
 <br/>
-
 
 T-SQL Scripts
 
@@ -32,8 +22,6 @@ T-SQL Scripts
 
 ## Contained Scripts
 
-[](https://github.com/amomen9/SQLServer-DBA-Tools#contained-scripts)
-
 ### 1. sp_restore_latest_backups
 
    Effortlessly probe for backup files within a folder recursively and restore the ones that you want to whatever point in time or to the latest log backup available, on an instance, either from scratch or to replace the existing one.The idea for this script comes from my SQL Server professor P.Aghasadeghi ([http://fad.ir/Teacher/Details/10](http://fad.ir/Teacher/Details/10)). This stored procedure restores the latest backups from backup files accessible to the server. As the server is not the original producer of these backups, there will be no records of these backups in MSDB. The records can be imported from the original server anyway but there would be some complications. This script probes recursively inside the provided directory, extracts all the full or read-write backup files, and optionally probes for log backups for point-in-time recovery or restoring to a later moment than the last full backup, reads the database name and backup dates from these files and restores the latest backup of every found database within the given criteria. If the database already exists, a tail of log backup can be taken first. A sample Standard Output of the execution is within the sp_restore_latest_backups directory.**Applications:**1. Automation of restoring the backups on the development or staging servers and carrying out the post-restore operations automatically like changing the recovery model, setting the database as read-only, shrinking database files, granting high permissions to every user of the database, rebuilding log file, etc.2. Granting execute access on this SP to senior developers on the development instances, so that they can renew or PITR their databases whenever they require without the need for DBAs' intervention or their direct access to the backup files/repository.3. Keep history and track of who restored what database, when, which backup, to what point in time, other restore details, etc.
@@ -50,10 +38,10 @@ EXEC sp_restore_latest_backups
   										-- (Optional) You can specify the destination database names' prefix here. If the destination database name is equal to the backup database name,
   										-- the database will be restored on its own. 
 	@Destination_DatabaseName = N'',	-- This option only works if you have only one database to restore, otherwise it will be ignored. Prefix and suffix options will also be applied.
-	@Ignore_Existant = 0,	
+	@Ignore_Existant = 0,
 										-- (Optional) Ignore restoring databases that already exist on target. If set to 0, the existant will be replaced.
 	@Destination_Database_DataFiles_Location = 'D:\Database Data',
-										--'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\',	
+										--'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\MSSQL\DATA\',
   										-- (Optional) This script creates the folders if they do not exist automatically. Make sure SQL Service has permission to create such folders
   										-- This variable must be in the form of for example 'D:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\DATA'. If left empty,
 										-- the datafiles will be restored to destination servers default directory. If given 'same', the script will try to put datafiles to
@@ -66,7 +54,7 @@ EXEC sp_restore_latest_backups
 										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
 
 	@Backup_root_or_path = --'%userprofile%\desktop',
-					N'D:\Database Backup\',			
+					N'D:\Database Backup\',		
 					--N'"D:\Database Backup\NW_Full_backup_0240.bak"',
 										-- (*Mandatory) Root location for backup files. You can also specify a single file.
 										-- Possible options: ''|'Some Path'. '' or NULL means target server's default
@@ -92,7 +80,7 @@ EXEC sp_restore_latest_backups
 										-- Example: 
 										--			'TLog:DBName_BackupType_ServerName_TIMESTAMP.ext:_:STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''; DBName_BackupType_TIMESTAMP.ext:_:STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00'''
 										-- Note: DBName and TIMESTAMP are mandatory if this option is used.
-								
+							
 										*/
 										-- Our company's naming convention: dbWarden_FULL_BI-DB_202206010018.bak
 
@@ -102,20 +90,20 @@ EXEC sp_restore_latest_backups
 										-- , which is slower (default behavior), or skipped if this option is set to 1.
 	------ End file processing speed-up parameters: -----------------------------------------------------------------------------
 
-	@BackupFileName_RegexFilter = '',		
+	@BackupFileName_RegexFilter = '',	
 										-- (Optional) Use this filter to speed file scouring up, if you have too many files in the directory.
 
 	@BackupFinishDate_StartDATETIME = '',
-								
+							
 										-- (Optional)
 	@BackupFinishDate_EndDATETIME = '',
-								
+							
 										-- (Optional)
-	@USE_SQLAdministrationDB_Database = 1,		
+	@USE_SQLAdministrationDB_Database = 1,	
 										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside SQLAdministrationDB database for faster access to backup file records and their details.
 
 	@Exclude_system_databases = 1,		-- (Optional) set to 1 to avoid system databases' backups
-	@Exclude_DBName_Filter = N'  %adventure%,  %DW%',			
+	@Exclude_DBName_Filter = N'  %adventure%,  %DW%',		
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded. You
@@ -128,7 +116,7 @@ EXEC sp_restore_latest_backups
 										-- in the name like AdventureWorks2019 and excludes others. Note that space at the begining and end of the names
 										-- will be disregarded. You can also include wildcard character "%" and "_" for each entry. The escape carachter for 
 										-- these wildcards is "\".
-							
+						
 
 	@IncludeSubdirectories = 1,			-- (Optional) Choose whether to include subdirectories or not while the script is searching for backup files.
 
@@ -141,16 +129,16 @@ EXEC sp_restore_latest_backups
 										-- (Optional)
 	------------ End Log backup restore related parameters: ---------------------------------------------------
 
-	@Keep_Database_in_Restoring_State = 0,				
+	@Keep_Database_in_Restoring_State = 0,			
 										-- (Optional) If equals to 1, the database will be kept in restoring state
 	@Take_tail_of_log_backup_of_existing_database = 0,
-										-- (Optional, important)				
+										-- (Optional, important)			
 	@DataFileSeparatorChar = '_',
 										-- (Optional) This parameter specifies the punctuation mark used in data files names. For example "_"
 										-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 	@Change_Target_RecoveryModel_To = 'same',
 										-- (Optional) Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
-								
+							
 	@Set_Target_Databases_ReadOnly = 0,
 										-- (Optional)
 	@STATS = 50,
@@ -179,8 +167,7 @@ EXEC sp_restore_latest_backups
 ### 2. sp_MoveDatabases_Datafiles
 
    Effortlessly and robustly with minimum down time, move your databases' database files to another folder and then automatically bring them back online using this stored procedure. It supports databases with FILESTREAM/IN-MEMORY filegroups as well. You can also change the location of your tempdb database database files, after which a SQL Server service restart is required to put the change into effect. You can also specify multiple databases. If you want to move tempdb database files, you must not include any other database.Upcoming: Most of the times move command is used to rename files/directories. I want to add this feature to this sp.
-   
-   
+
    **Example:**
 
 ```tsql
@@ -194,20 +181,25 @@ EXEC dbo.sp_MoveDatabases_Datafiles
 
 ### 3. sp_JobsInfo:
 
-	This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not optimized though because no optimization would be crucial. Part of the script (first function and the body of second function has been taken from the following URL written by  **Alan Jefferson**:
-	
-	[https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
+a. This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not optimized though because no optimization would be crucial. Part of the script (first function and the body of second function has been taken from the following URL written by**Alan Jefferson**:
 
-	It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping jobs should generally be avoided. Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role memberships of the owner of the job.
+    [https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
+
+    It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping jobs should generally be avoided. Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role memberships of the owner of the job.
 
 [![Sample script output](https://github.com/amomen9/SQLServer-DBA-Tools/raw/main/img/Screenshot_5.png)](https://github.com/amomen9/SQLServer-DBA-Tools/blob/main/img/Screenshot_5.png)
+
+b. The defined view reports much important info including schedule, step command, historical run durations (if exist), etc.
+ The report is customly filtered by the job name. That means you can define desired filters.
+
+![1733012910087](image/README/1733012910087.png)
 
 ---
 
 ### 4. transfer indexes to other Filegroups/Partition Schemes
 
    This SP takes database names on the instance, generates the index transfer statements, and moves the specified index IDs to another filegroup/partition scheme. Email report of the result can also be implemented. Please note that index creation statements do not exist within "sys.all_sql_modules" or "sys.sql_modules" system catalogue views.
-   
+
    **Example:**
 
 ```tsql
@@ -261,7 +253,7 @@ Sample Code:
 ### 6. Execute external tsql
 
    The new version has become revolutionary and includes many new features! It has been tested in real environment to meet many needs. This script executes external tsql file(s) using sqlcmd and xp_cmdshell. It can run all the tsql files contained within a folder and its subdirectories. Because the scripts are to be executed by SQLCMD, you can also use SQLCMD commands like the one noted or ":connect" in your scripts as well. Sample sp execution statement is as follows:
-   
+
    **Example:**
 
 ```tsql
@@ -292,7 +284,7 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 				-- 3: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements
 				-- 4: Copy to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements, but don't delete source files
 				-- in options 2&3 the folders with the same name will be merged. These options work for @InputFolder only, not @InputFiles.
-		 ,@MoveTo_Folder_Name = 'old'		
+		 ,@MoveTo_Folder_Name = 'old'	
 				-- If you set @After_Successful_Execution_Policy to 2 or more, the copy or movement command will be t this folder preserving the original directory tree structure, and if you
 				-- leave this empty, the files will be logically moved/copied to one level up in the directory tree.
 ```
@@ -300,19 +292,20 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 ---
 
 ### 7. Enable CDC on a cluster's primary replica, enable CDC on a secondary replica
+
    (Within "BI\Enable CDC for clusters" directory)
-   
+
    Enabling CDC on an AlwaysOn cluster which involves failovering is tricky. The two scripts contained within the BI directory, do just that effortlessly. You need to execute "Enable CDC for clusters.sql", within which you have to specify the path for "create CDC Jobs On Secondary.sql" script.---
 
 ### 8. dbWarden scripts: (contained within dbWarden directory)
 
    dbWarden is a free SQL Server Monitoring package written mostly in T-SQL. Here is a useful link in introduction to dbWarden:
 
-	[https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3](https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3)
+    [https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3](https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3)
 
-	sourceforge link:
+    sourceforge link:
 
-	[https://sourceforge.net/projects/dbwarden/](https://sourceforge.net/projects/dbwarden/)
+    [https://sourceforge.net/projects/dbwarden/](https://sourceforge.net/projects/dbwarden/)
 
 The scripts that currently are contained include "CPU intensive tasks for an instance (dbWarden).sql" and "Per Day-Average KPI stat for the last No of days.sql".---
 
@@ -327,8 +320,8 @@ The scripts that currently are contained include "CPU intensive tasks for an ins
 ### 11. Cardinality Factor calculator sp for a table
 
     This stored procedure takes the name of a database and its table and calculates cardinality factor by calculating count(distinct column)/count(*) for every column. This may help the tuning specialists choose the better candidate column for indexing.
-	
-	**Example:**
+
+    **Example:**
 
 ```tsql
     DECLARE @temp TABLE(Column_Name SYSNAME, [Crowdedness (IN %)] FLOAT)
@@ -344,8 +337,8 @@ The scripts that currently are contained include "CPU intensive tasks for an ins
 ### 12. Drop login dependencies
 
     This stored procedure disables a login and revokes any dependecies (that prevent the login from being dropped) on the server for that login. Generally, dropping a login in SQL Server is not recommended but there is an option to drop the login at the end of the process. It may also leave orphaned database users. If the login is windows authentication, you do not have to specify the domain or computer name unless there are several identical login names under different domain and computer names. The complete windows authentication login name must be in the format: DomainName\LoginName (LoginName@DomainName format is not supported). For transferring the dependencies, security best practices are observed, that means the ownership of databases and user defined server roles will be transfered to holder of 0x01 SID (login name 'sa' by default) and the ownership of jobs will be transferred to a new login with no specific access.
-	
-	**Example:**
+
+    **Example:**
 
 ```tsql
     DECLARE @SID VARBINARY(85)
@@ -359,8 +352,8 @@ The scripts that currently are contained include "CPU intensive tasks for an ins
 ### 13. sp_restore_latest_backups_on_other_server (using psexec)
 
     The idea of this script comes from my SQL Server professor P.Aghasadeghi ([http://fad.ir/Teacher/Details/10](http://fad.ir/Teacher/Details/10)). This stored procedure restores the latest backups of a server on another server. Can come in handy sometimes. Please note that this SP benefits from Mark Russinovich's PsTools (psexec executable) briefly introduced on Microsoft's website at [https://docs.microsoft.com/en-us/sysinternals/downloads/pstools](https://docs.microsoft.com/en-us/sysinternals/downloads/pstools) and is mandatory for this script. After downloading PsTools, please place psexec from its archive to the source server's path. You can add it to a folder which is already in path like %systemroot%\system32\. There is no requirement for psexec on the destination server except for availability of the ports tcp\135 and tcp\445 which are open by default in Windows Firewall.
-	
-	**Example:**
+
+    **Example:**
 
 ```tsql
   exec sp_restore_latest_backups_on_other_server
@@ -378,17 +371,17 @@ The scripts that currently are contained include "CPU intensive tasks for an ins
 
 ### 14. correct checksum of a corrupt_page: (Within Educational directory)
 
-	If you have a corrupt page within your database and have identified it through some means, for example "DBCC CHECKDB('DBNAME')", you can make the page readable/writable again, by ordinary SQL statements, by correcting the checksum at a low level. This script is an example of it on the "Northwind" database. This script is included inside "Educational" subdirectory of the repository. You can get the "Northwind" sample database from the following link on Microsoft's website:
+    If you have a corrupt page within your database and have identified it through some means, for example "DBCC CHECKDB('DBNAME')", you can make the page readable/writable again, by ordinary SQL statements, by correcting the checksum at a low level. This script is an example of it on the "Northwind" database. This script is included inside "Educational" subdirectory of the repository. You can get the "Northwind" sample database from the following link on Microsoft's website:
 
-	[https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases](https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases)
+    [https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases](https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases)
 
 ---
 
 ### 15. create DimDate table (Within BI directory)
 
     This SP takes the start and end dates and creates DimDate table within the database that this SP is being created in. The DimDate table can have several cultures altogether besides Gregorian Calendar. The sample culture here is Persian. It has its own non-clustered index including all the necessary columns with the main index key of DateKey_Persian to be referenced by the foreign keys of other tables.
-	
-	**Example:**
+
+    **Example:**
 
 ```tsql
 EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
@@ -402,9 +395,9 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 
     If you wish to install SQL Server instances on many servers, you should consider using a configuration file. A configuration file makes it easier and faster for you to install instances and maintain harmonical policies among your instances (You can also generate your own configuration file at the end of SQL Server's ordinary step by step main visual installation setup and use it numerously afterwards). The Microsoft's documentation regarding this possibility exists on the link below:
 
-	[https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16](https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16)
+    [https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16](https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16)
 
-	These batch, sql, and ini files help you do loads of sequential installation and preparation actions with one batch file execution. You just need to remember to alter these files according to your specifications and needs.* You may want to refer to the readme.txt file in the "SQL Server Unattended (Silent) Installation" itself too.
+    These batch, sql, and ini files help you do loads of sequential installation and preparation actions with one batch file execution. You just need to remember to alter these files according to your specifications and needs.* You may want to refer to the readme.txt file in the "SQL Server Unattended (Silent) Installation" itself too.
 
 * Also, you need to either provide the following missing files or remove their reference from the batch files:
   * dbWarden_DB1_truncated_22.05.31.bak: backup file of dbWarden database
@@ -438,3 +431,6 @@ rem "for the batch file's arguments refer to the readme file."
 
 </details>
 -->
+
+[license badge]: https://img.shields.io/badge/license-%20MIT%20-blue
+[license]: https://github.com/amomen9/SQLServer-DBA-Tools/blob/main/LICENSE
