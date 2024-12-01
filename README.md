@@ -183,13 +183,13 @@ EXEC dbo.sp_MoveDatabases_Datafiles
 
 a. This script reports some information about jobs and their schedules. A sample output of this script is as follows. It is not optimized though because no optimization would be crucial. Part of the script (first function and the body of second function has been taken from the following URL written by**Alan Jefferson**:
 
-    [https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
+[https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
 
     It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping jobs should generally be avoided. Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role memberships of the owner of the job.
 
 [![Sample script output](https://github.com/amomen9/SQLServer-DBA-Tools/raw/main/img/Screenshot_5.png)](https://github.com/amomen9/SQLServer-DBA-Tools/blob/main/img/Screenshot_5.png)
 
-b. The defined view reports much important info including schedule, step command, historical run durations (if exist), etc.
+b. The defined view reports much important info including schedule, step command, historical run durations (if exist), etc. like below.
  The report is customly filtered by the job name. That means you can define desired filters.
 
 ![1733012910087](image/README/1733012910087.png)
@@ -301,11 +301,11 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 
    dbWarden is a free SQL Server Monitoring package written mostly in T-SQL. Here is a useful link in introduction to dbWarden:
 
-    [https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3](https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3)
+[https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3](https://www.sqlservercentral.com/articles/dbwarden-a-free-sql-server-monitoring-package-3)
 
     sourceforge link:
 
-    [https://sourceforge.net/projects/dbwarden/](https://sourceforge.net/projects/dbwarden/)
+[https://sourceforge.net/projects/dbwarden/](https://sourceforge.net/projects/dbwarden/)
 
 The scripts that currently are contained include "CPU intensive tasks for an instance (dbWarden).sql" and "Per Day-Average KPI stat for the last No of days.sql".---
 
@@ -373,7 +373,7 @@ The scripts that currently are contained include "CPU intensive tasks for an ins
 
     If you have a corrupt page within your database and have identified it through some means, for example "DBCC CHECKDB('DBNAME')", you can make the page readable/writable again, by ordinary SQL statements, by correcting the checksum at a low level. This script is an example of it on the "Northwind" database. This script is included inside "Educational" subdirectory of the repository. You can get the "Northwind" sample database from the following link on Microsoft's website:
 
-    [https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases](https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases)
+[https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases](https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/sql/linq/downloading-sample-databases)
 
 ---
 
@@ -395,7 +395,7 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 
     If you wish to install SQL Server instances on many servers, you should consider using a configuration file. A configuration file makes it easier and faster for you to install instances and maintain harmonical policies among your instances (You can also generate your own configuration file at the end of SQL Server's ordinary step by step main visual installation setup and use it numerously afterwards). The Microsoft's documentation regarding this possibility exists on the link below:
 
-    [https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16](https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16)
+[https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16](https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-ver16)
 
     These batch, sql, and ini files help you do loads of sequential installation and preparation actions with one batch file execution. You just need to remember to alter these files according to your specifications and needs.* You may want to refer to the readme.txt file in the "SQL Server Unattended (Silent) Installation" itself too.
 
