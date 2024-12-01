@@ -1,4 +1,4 @@
-![](https://img.shields.io/badge/-%23FFFFFF.svg?&style=flat-square&logo=Microsoft%20SQL%20Server&logoColor=red)`<b>`SQL Server`</b>`
+![](https://img.shields.io/badge/-%23FFFFFF.svg?&style=flat-square&logo=Microsoft%20SQL%20Server&logoColor=red)`<b>`SQL Server `</b>`
 
 # \#SQLServer DBA Tools
 
@@ -54,7 +54,7 @@ EXEC sp_restore_latest_backups
 										-- Possible options: 'SAME'|''|'Some Path'. '' or NULL means target server's default
 
 	@Backup_root_or_path = --'%userprofile%\desktop',
-					N'D:\Database Backup\',		
+					N'D:\Database Backup\',	
 					--N'"D:\Database Backup\NW_Full_backup_0240.bak"',
 										-- (*Mandatory) Root location for backup files. You can also specify a single file.
 										-- Possible options: ''|'Some Path'. '' or NULL means target server's default
@@ -80,7 +80,7 @@ EXEC sp_restore_latest_backups
 										-- Example: 
 										--			'TLog:DBName_BackupType_ServerName_TIMESTAMP.ext:_:STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00''; DBName_BackupType_TIMESTAMP.ext:_:STUFF(STUFF(STUFF(STUFF(TIMESTAMP,5,0,''.''),8,0,''.''),11,0,'' ''),14,0,'':'')+'':00'''
 										-- Note: DBName and TIMESTAMP are mandatory if this option is used.
-							
+						
 										*/
 										-- Our company's naming convention: dbWarden_FULL_BI-DB_202206010018.bak
 
@@ -90,20 +90,20 @@ EXEC sp_restore_latest_backups
 										-- , which is slower (default behavior), or skipped if this option is set to 1.
 	------ End file processing speed-up parameters: -----------------------------------------------------------------------------
 
-	@BackupFileName_RegexFilter = '',	
+	@BackupFileName_RegexFilter = '',
 										-- (Optional) Use this filter to speed file scouring up, if you have too many files in the directory.
 
 	@BackupFinishDate_StartDATETIME = '',
-							
+						
 										-- (Optional)
 	@BackupFinishDate_EndDATETIME = '',
-							
+						
 										-- (Optional)
-	@USE_SQLAdministrationDB_Database = 1,	
+	@USE_SQLAdministrationDB_Database = 1,
 										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside SQLAdministrationDB database for faster access to backup file records and their details.
 
 	@Exclude_system_databases = 1,		-- (Optional) set to 1 to avoid system databases' backups
-	@Exclude_DBName_Filter = N'  %adventure%,  %DW%',		
+	@Exclude_DBName_Filter = N'  %adventure%,  %DW%',	
 										-- (Optional) Enter a list of ',' delimited database names which can be split by TSQL STRING_SPLIT function. Example:
 										-- N'Northwind,AdventureWorks, StackOverFlow'. The script excludes databases that contain any of such keywords
 										-- in the name like AdventureWorks2019. Note that space at the begining and end of the names will be disregarded. You
@@ -116,7 +116,7 @@ EXEC sp_restore_latest_backups
 										-- in the name like AdventureWorks2019 and excludes others. Note that space at the begining and end of the names
 										-- will be disregarded. You can also include wildcard character "%" and "_" for each entry. The escape carachter for 
 										-- these wildcards is "\".
-						
+					
 
 	@IncludeSubdirectories = 1,			-- (Optional) Choose whether to include subdirectories or not while the script is searching for backup files.
 
@@ -129,16 +129,16 @@ EXEC sp_restore_latest_backups
 										-- (Optional)
 	------------ End Log backup restore related parameters: ---------------------------------------------------
 
-	@Keep_Database_in_Restoring_State = 0,			
+	@Keep_Database_in_Restoring_State = 0,		
 										-- (Optional) If equals to 1, the database will be kept in restoring state
 	@Take_tail_of_log_backup_of_existing_database = 0,
-										-- (Optional, important)			
+										-- (Optional, important)		
 	@DataFileSeparatorChar = '_',
 										-- (Optional) This parameter specifies the punctuation mark used in data files names. For example "_"
 										-- in 'NW_sales_1.ndf' or "$" in 'NW_sales$1.ndf'.
 	@Change_Target_RecoveryModel_To = 'same',
 										-- (Optional) Set this variable for the target databases' recovery model. Possible options: FULL|BULK-LOGGED|SIMPLE|SAME
-							
+						
 	@Set_Target_Databases_ReadOnly = 0,
 										-- (Optional)
 	@STATS = 50,
@@ -185,12 +185,24 @@ a. This script reports some information about jobs and their schedules. A sample
 
 [https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules](https://www.sqlservercentral.com/articles/how-to-decipher-sysschedules)
 
-    It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping jobs should generally be avoided. Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role memberships of the owner of the job.
+It helps DBAs plan their jobs' time table to smartly set their schedules to carry out necessary practices. For example, overlapping jobs should generally be avoided. Every job is executed with the permissions of its owner. So it's a security best practice to set the owner of the jobs, the logins which have minimum required permissions, and sysadmin members should generally be avoided. The last column lists the server role memberships of the owner of the job.
 
-[![Sample script output](https://github.com/amomen9/SQLServer-DBA-Tools/raw/main/img/Screenshot_5.png)](https://github.com/amomen9/SQLServer-DBA-Tools/blob/main/img/Screenshot_5.png)
+**Example:**
 
-b. The defined view reports much important info including schedule, step command, historical run durations (if exist), etc. like below.
- The report is customly filtered by the job name. That means you can define desired filters.
+```tsql
+SELECT * FROM msdb.dbo.v_view_jobs
+```
+
+![1733013852761](image/README/1733013852761.png)
+
+b. Similar to part `a.`, the defined view reports much important info including schedule, step command, historical run durations (if exist), etc. like below.
+ The report is customly filtered by the job name and can be useful for business jobs reports. That means you can define desired filters.
+
+**Example:**
+
+```tsql
+SELECT * FROM msdb.dbo.v_view_business_jobs
+```
 
 ![1733012910087](image/README/1733012910087.png)
 
@@ -284,7 +296,7 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 				-- 3: Move to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements
 				-- 4: Copy to @MoveTo_Folder_Name folder beside @InputFolder after successful execution and rename (add "_2") the files to avoid file replacements, but don't delete source files
 				-- in options 2&3 the folders with the same name will be merged. These options work for @InputFolder only, not @InputFiles.
-		 ,@MoveTo_Folder_Name = 'old'	
+		 ,@MoveTo_Folder_Name = 'old'
 				-- If you set @After_Successful_Execution_Policy to 2 or more, the copy or movement command will be t this folder preserving the original directory tree structure, and if you
 				-- leave this empty, the files will be logically moved/copied to one level up in the directory tree.
 ```
