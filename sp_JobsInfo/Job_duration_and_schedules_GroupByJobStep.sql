@@ -323,9 +323,10 @@ AS
 GO
 
 
-SELECT * FROM msdb.dbo.v_view_jobs
+SELECT * FROM msdb.dbo.v_view_jobs 
 
 DROP VIEW v_view_jobs
 GO
 	
+
 
