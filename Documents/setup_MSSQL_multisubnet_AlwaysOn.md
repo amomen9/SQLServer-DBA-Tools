@@ -178,6 +178,7 @@ a. Same subnet:
 ![1736750213620](image/setup_MSSQL_multisubnet_AlwaysOn/1736750213620.png)
 
 b. Secondary subnet:
+
 ![1736750222123](image/setup_MSSQL_multisubnet_AlwaysOn/1736750222123.png)
 
 11. .
