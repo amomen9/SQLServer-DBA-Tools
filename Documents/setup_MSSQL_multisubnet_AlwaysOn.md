@@ -49,10 +49,10 @@ Node1, Node2, and disaster (secondary subnet) node respectively:
 | Node2: 192.168.241.112 |
 | ---------------------- |
 
-Secondary subnet/Disaster Recovery Node:
+Secondary subnet Node:
 
-| 10.10.10.113 |
-| ------------ |
+| Node3: 10.10.10.113 |
+| ------------------- |
 
 Cluster IP addresses:
 
