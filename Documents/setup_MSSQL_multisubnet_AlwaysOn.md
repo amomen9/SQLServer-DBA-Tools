@@ -145,7 +145,8 @@ Lookup Zones” and click on “New Zone”
 
 ![1736749190148](image/setup_MSSQL_multisubnet_AlwaysOn/1736749190148.png)
 
-4.  ![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
+![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
+
 5. The options are
    self-expressive. The default is the second radio button but I prefer the first
    one
@@ -156,45 +157,44 @@ Lookup Zones” and click on “New Zone”
 7. Enter “Network ID” and
    click next
    ![1736749326724](image/setup_MSSQL_multisubnet_AlwaysOn/1736749326724.png)
-8. ![1736750120710](image/setup_MSSQL_multisubnet_AlwaysOn/1736750120710.png)
-9. ![1736750136563](image/setup_MSSQL_multisubnet_AlwaysOn/1736750136563.png)
+8. .
+   ![1736750120710](image/setup_MSSQL_multisubnet_AlwaysOn/1736750120710.png)
+9. .
+   ![1736750136563](image/setup_MSSQL_multisubnet_AlwaysOn/1736750136563.png)
+
    ![1736750178489](image/setup_MSSQL_multisubnet_AlwaysOn/1736750178489.png)
 10. Sample IPv4 address
     configuration on 2 of the nodes (DNS server specification is important for
     joining the domain process to find the domain controller):
     ![1736749362458](image/setup_MSSQL_multisubnet_AlwaysOn/1736749362458.png)
 
-a.
-Same subnet:
+a. Same subnet:
 ![1736750213620](image/setup_MSSQL_multisubnet_AlwaysOn/1736750213620.png)
 
-b.
-Secondary subnet:
+b. Secondary subnet:
 ![1736750222123](image/setup_MSSQL_multisubnet_AlwaysOn/1736750222123.png)
 
-·![1736750239253](image/setup_MSSQL_multisubnet_AlwaysOn/1736750239253.png)
+11. .
+
+![1736750239253](image/setup_MSSQL_multisubnet_AlwaysOn/1736750239253.png)
+
 **Summary for adding a secondary subnet server to the domain:**
 
 Joining Servers that are on the same subnet as the domain
 controller is easy and non-problematic. But as for a multi-subnet network, it
 becomes a bit tricky. There are 2 requirements:
 
-·
-You must manually add the
-secondary subnet reverse zones to the DNS server.
-
-·
-For either of the same
-subnet or secondary subnet servers to be able to resolve the domain name when
-trying to join the domain, you have to obviously define a DNS server on the
-server which is trying to join the domain, which can resolve the domain name.
-This DNS server is usually setup on the domain controller itself.
-
-·
-If you get an error when
-trying to join the VMs to the domain that the specified domain cannot be
-contacted, some issues including DNS server problems might be the reason
-including the following:
+* You must manually add the
+  secondary subnet reverse zones to the DNS server.
+* For either of the same
+  subnet or secondary subnet servers to be able to resolve the domain name when
+  trying to join the domain, you have to obviously define a DNS server on the
+  server which is trying to join the domain, which can resolve the domain name.
+  This DNS server is usually setup on the domain controller itself.
+* If you get an error when
+  trying to join the VMs to the domain that the specified domain cannot be
+  contacted, some issues including DNS server problems might be the reason
+  including the following:
 
 a.
 You have not set the DNS
@@ -205,11 +205,10 @@ Try to enter the “Root
 domain name” or “fully qualified domain name” as well. Netbios might not work
 if it is not defined in the DNS server.
 
-·
-If you get a SID error
-similar to this when trying to join your server to the domain, you have improperly
-cloned your VM. To resolve this, you have to run “Sysprep” on your VM. For
-information on how to do so, refer to online materials.
+* If you get a SID error
+  similar to this when trying to join your server to the domain, you have improperly
+  cloned your VM. To resolve this, you have to run “Sysprep” on your VM. For
+  information on how to do so, refer to online materials.
 
 ![1736750290961](image/setup_MSSQL_multisubnet_AlwaysOn/1736750290961.png)
 
@@ -228,38 +227,32 @@ information on how to do so, refer to online materials.
 | **10.10.10.113** |
 | ---------------------- |
 
-**3.
-![1736789306255](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789306255.png)
-**
-
-**4.
-![1736789331807](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789331807.png)
-**
-
-**5.
-![1736789357719](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789357719.png)
-**
-
-**6.
-![1736789373022](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789373022.png)
-**
+3. .
+   ![1736789306255](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789306255.png)
+4. .
+   ![1736789331807](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789331807.png)
+5. .
+   ![1736789357719](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789357719.png)
+6. .
+   ![1736789373022](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789373022.png)
 
 A warning shows up:
+
 ![1736789392227](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789392227.png)
 
 Storage validation is unimportant to us right now.
+
 ![1736789400726](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789400726.png)
 
 This warning strongly recommends that the
 link between our nodes is highly available and fault tolerant. We disregard it
 for our test case.
 
-**7.
-![1736789420213](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789420213.png)
-**
+7. .
+   ![1736789420213](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789420213.png)
 
-**8.
-**Entering cluster IP
+8. Entering cluster IP
+
 addresses for both subnets. Windows server failover cluster’s “Create Cluster Wizard”
 automatically detects that your cluster is multi-subnet based on the nodes you
 have added.
@@ -268,23 +261,23 @@ have added.
 If multiple subnets exist, all the subnets will be listed
 here.
 
-**9.
-![1736789477875](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789477875.png)
-**
+9. .
+   ![1736789477875](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789477875.png)
+10. .
 
-**10.  **
-![1736789501646](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789501646.png)
+    ![1736789501646](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789501646.png)
 
-**11.  **
+11. .
+
 ![1736789523986](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789523986.png)
 
 ## Setting up the AlwaysOn Availability group role for the cluster:
 
-**1.
-![1736789549757](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789549757.png)
-**
+1. .
 
-**2.
+   ![1736789549757](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789549757.png)
+
+2. .
 ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
 2. In the “New Availability Group” wizard, listener IP addresses for both subnets should be
 defined:
@@ -293,9 +286,8 @@ defined:
 
 Availability Group configurations.
 
-·
-**Conclusion and notable points in contrast with the
-single-subnet Availability Group:**
+* **Conclusion and notable points in contrast with the
+  single-subnet Availability Group:**
 
 After joining the secondary subnet servers to the domain,
 the cluster and AlwaysOn AG can be created as normal with the following new
@@ -314,7 +306,7 @@ the cluster.
 
 # Appendix:
 
-## **1.****Some details about ****the cluster and listener**** behaviors**
+## 1. **Some details about ****the cluster and listener**** behaviors**
 
 We know that the primary server holds the IP of the listener
 on its interfaces, meaning that calling the listener’s IP address on the
@@ -322,8 +314,8 @@ network,  **results in the primary server responding** .
 
 ipconfig on the primary server of our example:
 
-| Listener |
-| -------- |
+| Listener: |
+| --------- |
 
 ![1736794588382](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736794588382.png)
 
@@ -331,8 +323,8 @@ IP of the cluster will also be assigned to the interface of
 one of the servers which is usually the primary server but not necessarily. This is an example of a same-subnet
 secondary replica holding the cluster IP address:
 
-| Cluster |
-| ------- |
+| Cluster: |
+| -------- |
 
 ![1736794690093](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736794690093.png)
 
@@ -373,16 +365,15 @@ When Node1 and Node2 failed and the AG automatically failed over to Node3:
 
 The interface of Node3 has 3 IP addresses above.
 
-## **2.****Testing Availability Group:
+## 2. Testing Availability Group:
 
-**
 
 Logically there will be no difference between any of the
 nodes in this cluster in terms of being primary, synchronous, asynchronous,
 automatic failover, etc.
 
-| Disaster Node |
-| ------------- |
+| Disaster Node: |
+| -------------- |
 
 ![1736795855762](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795855762.png)
 
