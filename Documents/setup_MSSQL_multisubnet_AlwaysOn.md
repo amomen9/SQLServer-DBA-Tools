@@ -90,9 +90,9 @@ Availability Group Cluster
 
 5357 is **Web Services on Devices (WSD) API** in Windows
 
-5985 is WinRM and PowerShell remoting port over HTTP
+5985 is **WinRM and PowerShell remoting port over HTTP**
 
-9389 is Active Directory Web Services (ADWS)
+9389 is **Active Directory Web Services (ADWS)**
 
 ![1736749085362](image/setup_MSSQL_multisubnet_AlwaysOn/1736749085362.png)
 
