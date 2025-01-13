@@ -12,65 +12,62 @@ Last updated:
 
 ## Foreword:
 
-Sometimes you might need to setup a cluster which spans
-multiple subnets and separate vLans. The nodes on this cluster need to
-communicate using intermediary routing devices. A single datacenter can have multiple
-subnets. Multi-subnet AlwaysOn cluster is recommended for replicas that are
-situated in the same datacenter with strong and stable network connection.
+* Sometimes you might need to setup a cluster which spans
+  multiple subnets and separate vLans. The nodes on this cluster need to
+  communicate using intermediary routing devices. A single datacenter can have multiple
+  subnets. Multi-subnet AlwaysOn cluster is recommended for replicas that are
+  situated in the same datacenter with strong and stable network connection.
 
-However, please note that if your multi-subnet cluster should
-span over a cross-datacenter architecture with separate geolocations for
-disaster recovery purposes, a “Distributed Availability Group (DAG)” is a
-better solution and have some advantages over traditional AlwaysOn cluster.
-
-Also, as another remedy, you can create a virtual network on
-top of a physically separated LANs using SDN solutions with only one subnet.
-This way, the AlwaysOn cluster can be created on an ordinary single subnet network.
+  However, please note that if your multi-subnet cluster should span over a cross-datacenter architecture with separate geolocations for disaster recovery purposes, a “Distributed Availability Group (DAG)” is a better solution and have some advantages over traditional AlwaysOn cluster.
+* Also, as another remedy, you can create a virtual network on
+  top of a physically separated LANs using SDN solutions with only one subnet.
+  This way, the AlwaysOn cluster can be created on an ordinary single subnet network.
 
 ## Preliminaries and Prerequisites:
 
-·
-This document uses Windows Server 2019, and SQL Server 2019. Later, I tested it on Windows Server 2025 and
-SQL Server 2022
+* This document uses Windows Server 2019, and SQL Server 2019. Later, I tested it on Windows Server 2025 and
+  SQL Server 2022
+* This document assumes that
+  you have full control over your domain, servers, and network. If you do not,
+  you have to refer to respective infrastructure teams for your environment.
+* The full process for
+  creating SQL Server Availability Group are not explained here, and only the
+  difference between single-subnet and multi-subnet Availability Groups setup is
+  mentioned. For single-subnet details please refer to the online materials.
 
-·
-This document assumes that
-you have full control over your domain, servers, and network. If you do not,
-you have to refer to respective infrastructure teams for your environment.
-
-·
-The full process for
-creating SQL Server Availability Group are not explained here, and only the
-difference between single-subnet and multi-subnet Availability Groups setup is
-mentioned. For single-subnet details please refer to the online materials.
-
-**This test case specific IP addresses:
-
-**
+**This test case specific IP addresses:**
 
 Suppose that the following IP addresses belong to the DC,
 Node1, Node2, and disaster (secondary subnet) node respectively:
 
-192.168.241.240
+| DC: 192.168.241.240 |
+| ------------------- |
 
-192.168.241.111
+| Node1: 192.168.241.111 |
+| ---------------------- |
 
-192.168.241.112
+| Node2: 192.168.241.112 |
+| ---------------------- |
 
-10.10.10.113     (Secondary
-subnet/Disaster Recovery Node)
+Secondary subnet/Disaster Recovery Node:
+
+| 10.10.10.113 |
+| ------------ |
 
 Cluster IP addresses:
 
-192.168.241.114 & 10.10.10.114
+| 192.168.241.114 & 10.10.10.114 |
+| ------------------------------ |
 
 Listener IP addresses:
 
-192.168.241.115 & 10.10.10.115
+| 192.168.241.115 & 10.10.10.115 |
+| ------------------------------ |
 
-Router IP addresses:
+Router (Gateways between subnets) IP addresses:
 
-192.168.241.2 & 10.10.10.1
+| 192.168.241.2 & 10.10.10.1 |
+| -------------------------- |
 
 ## **Port Requirements:**
 
@@ -104,7 +101,8 @@ Availability Group Cluster
 Here is a major list of listening ports (apart from dynamic
 ports) in my test case on my different servers.
 
- DC:
+| DC: |
+| --- |
 
 ![1736749103871](image/setup_MSSQL_multisubnet_AlwaysOn/1736749103871.png)
 
@@ -147,7 +145,7 @@ Lookup Zones” and click on “New Zone”
 
 ![1736749190148](image/setup_MSSQL_multisubnet_AlwaysOn/1736749190148.png)
 
-4. ![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
+4.  ![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
 5. The options are
    self-expressive. The default is the second radio button but I prefer the first
    one
@@ -314,7 +312,6 @@ for the AG, you have to specify a listener IP for each subnet (Overall 2 IPs).
 As noted, only one of these two IP addresses can be online at the same time in
 the cluster.
 
-
 # Appendix:
 
 ## **1.****Some details about ****the cluster and listener**** behaviors**
@@ -391,6 +388,5 @@ automatic failover, etc.
 
 All failover scenarios were tested. (Automatic failover,
 manual failover, manual forced failover to the disaster recovery node, etc.)
-
 
 END  ![1736795907385](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png)
