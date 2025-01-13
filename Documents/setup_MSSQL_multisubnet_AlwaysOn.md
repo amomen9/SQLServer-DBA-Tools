@@ -262,12 +262,9 @@ for our test case.
 7. .
 
    ![1736789420213](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789420213.png)
-
-8. Entering cluster IP
-
-addresses for both subnets. Windows server failover cluster’s “Create Cluster Wizard”
-automatically detects that your cluster is multi-subnet based on the nodes you
-have added.
+8. Entering cluster IP addresses for both subnets. Windows server failover cluster’s “Create Cluster Wizard”
+   automatically detects that your cluster is multi-subnet based on the nodes you
+   have added.
 
 ![1736789447908](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789447908.png)
 
