@@ -354,7 +354,7 @@ cluster IP address also switched to the second subnet:
 
 Note that obviously both cluster and listener can only be
 online on 1 subnet at the same time, i.e. when they are online on one subnet,
-they will be offline on the other one. So, in order for the disaster recovery
+they will be offline on the other one. So, in order for the secondary subnet
 node to serve the application, either an IP forwarding service must redirect
 the requests to 192.168.241.115 to 10.10.10.115, or the application connection
 string must point to this new listener IP address with a different subnet.
@@ -365,19 +365,19 @@ When Node1 and Node2 failed and the AG automatically failed over to Node3:
 
 The interface of Node3 has 3 IP addresses above.
 
-## 2. Testing Availability Group:
+## 2. Testing the Availability Group:
 
 
 Logically there will be no difference between any of the
 nodes in this cluster in terms of being primary, synchronous, asynchronous,
 automatic failover, etc.
 
-| Disaster Node: |
-| -------------- |
+| Secondary subnet Node: |
+| ---------------------- |
 
 ![1736795855762](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795855762.png)
 
 All failover scenarios were tested. (Automatic failover,
-manual failover, manual forced failover to the disaster recovery node, etc.)
+manual failover, manual forced failover to the secondary subnet node, etc.)
 
 END  ![1736795907385](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png)
