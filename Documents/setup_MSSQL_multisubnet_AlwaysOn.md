@@ -150,25 +150,31 @@ Lookup Zones” and click on “New Zone”
 5. The options are
    self-expressive. The default is the second radio button but I prefer the first
    one
+
    ![1736749263628](image/setup_MSSQL_multisubnet_AlwaysOn/1736749263628.png)
 6. Choose the second subnet IP
    version and click next
+
    ![1736749309396](image/setup_MSSQL_multisubnet_AlwaysOn/1736749309396.png)
-7. Enter “Network ID” and
-   click next
+7. Enter “Network ID” and click next
+
    ![1736749326724](image/setup_MSSQL_multisubnet_AlwaysOn/1736749326724.png)
 8. .
+
    ![1736750120710](image/setup_MSSQL_multisubnet_AlwaysOn/1736750120710.png)
 9. .
+
    ![1736750136563](image/setup_MSSQL_multisubnet_AlwaysOn/1736750136563.png)
 
    ![1736750178489](image/setup_MSSQL_multisubnet_AlwaysOn/1736750178489.png)
 10. Sample IPv4 address
     configuration on 2 of the nodes (DNS server specification is important for
     joining the domain process to find the domain controller):
+
     ![1736749362458](image/setup_MSSQL_multisubnet_AlwaysOn/1736749362458.png)
 
 a. Same subnet:
+
 ![1736750213620](image/setup_MSSQL_multisubnet_AlwaysOn/1736750213620.png)
 
 b. Secondary subnet:
@@ -228,12 +234,16 @@ if it is not defined in the DNS server.
 | ---------------------- |
 
 3. .
+
    ![1736789306255](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789306255.png)
 4. .
+
    ![1736789331807](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789331807.png)
 5. .
+
    ![1736789357719](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789357719.png)
 6. .
+
    ![1736789373022](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789373022.png)
 
 A warning shows up:
@@ -249,6 +259,7 @@ link between our nodes is highly available and fault tolerant. We disregard it
 for our test case.
 
 7. .
+
    ![1736789420213](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789420213.png)
 
 8. Entering cluster IP
@@ -256,12 +267,14 @@ for our test case.
 addresses for both subnets. Windows server failover cluster’s “Create Cluster Wizard”
 automatically detects that your cluster is multi-subnet based on the nodes you
 have added.
+
 ![1736789447908](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789447908.png)
 
 If multiple subnets exist, all the subnets will be listed
 here.
 
 9. .
+
    ![1736789477875](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789477875.png)
 10. .
 
@@ -278,11 +291,14 @@ here.
    ![1736789549757](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789549757.png)
 
 2. .
+
 ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
 2. In the “New Availability Group” wizard, listener IP addresses for both subnets should be
 defined:
 
-![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)The rest of the configurations are very similar to single-subnet
+![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
+
+The rest of the configurations are very similar to single-subnet
 
 Availability Group configurations.
 
