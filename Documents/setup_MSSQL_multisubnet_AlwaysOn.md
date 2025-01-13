@@ -291,6 +291,7 @@ here.
 2. .
 
 ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
+
 2. In the “New Availability Group” wizard, listener IP addresses for both subnets should be
 defined:
 
@@ -394,4 +395,4 @@ automatic failover, etc.
 All failover scenarios were tested. (Automatic failover,
 manual failover, manual forced failover to the secondary subnet node, etc.)
 
-END  ![1736795907385](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png)
+END  <img src="image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png" width="5" />
