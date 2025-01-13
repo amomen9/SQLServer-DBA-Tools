@@ -395,4 +395,4 @@ automatic failover, etc.
 All failover scenarios were tested. (Automatic failover,
 manual failover, manual forced failover to the secondary subnet node, etc.)
 
-END  <img src="image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png" width="5" />
+END  <img src="image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png" width="25" />
