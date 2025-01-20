@@ -3,7 +3,7 @@
 
 ## Hit the Star! :star:
 
-If you are planning to use this repo for reference, please hit the star. Thanks!
+If you are planning to use this repo, please hit the star. Thanks!
 
 # \#SQLServer DBA Tools
 
