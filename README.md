@@ -9,7 +9,7 @@
 T-SQL Scripts
 
 * LICENSE:
-  MIT as noted. If you wish to contribute to this repository's codes or have any suggestions or want to report a flaw, please give me an email at [amomen@gmail.com](mailto:amomen@gmail.com) or report on GitHub. I'd be appreciative
+  CC0-1.0 license as noted. If you wish to contribute to this repository's codes or have any suggestions or want to report a flaw, please give me an email at [amomen@gmail.com](mailto:amomen@gmail.com) or report on GitHub. I'd be appreciative
 * These scripts are for SQL Server's general purposes. For corresponding instructions for each script, please read them below.
 * The scripts are not pretty much optimized where they don't need to be.
 * Some scripts (I believe a few) might seem simple (they are put inside the "Educational" directory), but they carry useful tricky ideas
