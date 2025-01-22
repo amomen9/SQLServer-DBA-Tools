@@ -5,9 +5,11 @@
 
 If you are planning to use this repo, please hit the star. Thanks!
 
+<br/>
+
 # \#SQLServer DBA Tools
 
-[license badge][license]
+![License: CC0-1.0](https://img.shields.io/badge/License-CC0--1.0-EAB590.svg)
 
 <br/>
 
