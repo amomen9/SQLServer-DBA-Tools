@@ -18,7 +18,7 @@ Last updated:
   subnets. Multi-subnet AlwaysOn cluster is recommended for replicas that are
   situated in the same datacenter with strong and stable network connection.
 
-  However, please note that if your multi-subnet cluster should span over a cross-datacenter architecture with separate geolocations for disaster recovery purposes, a “Distributed Availability Group (DAG)” is a better solution and have some advantages over traditional AlwaysOn cluster.
+  However, please note that if your multi-subnet cluster should span over a cross-datacenter architecture with separate geolocations for disaster recovery purposes, a “Distributed Availability Group (DAG)” is a better solution and have some advantages over traditional AlwaysOn clusters.
 * Also, as another remedy, you can create a virtual network on
   top of a physically separated LANs using SDN solutions with only one subnet.
   This way, the AlwaysOn cluster can be created on an ordinary single subnet network.
