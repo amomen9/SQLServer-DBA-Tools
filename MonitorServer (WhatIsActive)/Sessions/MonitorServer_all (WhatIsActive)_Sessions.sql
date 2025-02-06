@@ -219,10 +219,13 @@ GO
 SET STATISTICS TIME,IO on
 
 
-SELECT * FROM fn_udtvf_monitorserver_all()
-WHERE is_user_process = 1 --AND [Session ID]=60
+SELECT request_start_time, fragment_executing, * FROM fn_udtvf_monitorserver_all()
+WHERE is_user_process = 1
+AND [Open Transaction Count]>0
+--AND [Session ID] = 928 --AND [Session ID]=60
+
 ORDER BY [request_cpu_time(s)] desc
 
-
+--KILL 6432
 
 

@@ -127,8 +127,7 @@ RETURN
 		, SUBSTRING(sh.text, r.statement_start_offset / 2, (CASE WHEN r.statement_end_offset = -1 THEN DATALENGTH(sh.text) ELSE r.statement_end_offset END - r.statement_start_offset) / 2 ) AS fragment_executing
 		, qp.query_plan [Live Plan]
 		, database_transaction_log_bytes_used/1024.0/1024/1024 db_tran_log_used_gb
-		, database_transaction_log_bytes_used_system/1024.0/1024/1024 db_sys_tran_log_used_gb
-		
+		, database_transaction_log_bytes_used_system/1024.0/1024/1024 db_sys_tran_log_used_gb		
 		--, s.cpu_time/1000.0 [session_cpu_time(s)]
 		, DB_NAME(r.database_id) [Database Name]
 		, s.original_login_name [Original Login Name]
@@ -170,7 +169,6 @@ RETURN
 		, c.client_tcp_port [Client Outgoing Port]		
 		, s.client_interface_name [Client Connection Driver]
 		, IIF(c.net_transport='session', 'MARS', c.net_transport) [Client Connection Protocol]
-		, e.name [Endpoint]
 		, DATEADD(MILLISECOND,r.estimated_completion_time,GETDATE()) estimated_end_time
 		, r.percent_complete [Percent Complete]
 		, r.dop [Degree of Parallelism]
@@ -184,10 +182,8 @@ RETURN
 	sys.dm_exec_sessions s 
 	JOIN sys.dm_exec_connections c
 	ON s.session_id = c.session_id
-	JOIN sys.dm_exec_requests r
+	LEFT JOIN sys.dm_exec_requests r
 	ON s.session_id = r.session_id
-	LEFT JOIN sys.endpoints e
-	ON s.endpoint_id = e.endpoint_id
 	LEFT JOIN sys.dm_exec_query_memory_grants qmg
 	ON r.session_id = qmg.session_id AND r.request_id = qmg.request_id
 	LEFT JOIN sys.dm_tran_session_transactions st
@@ -220,7 +216,7 @@ SET STATISTICS TIME,IO on
 
 
 SELECT * FROM fn_udtvf_monitorserver_all_lite()
-WHERE is_user_process = 1 --AND [Session ID]=60
+WHERE is_user_process = 1 AND [Session ID] = 6432 --AND [Session ID]=60
 ORDER BY [request_cpu_time(s)] desc
 
 
