@@ -1,5 +1,7 @@
 # SQL Server Backup and Restore History Analyzer
 
+The script:
+
 <details>
 <summary>(click to expand) The complete script file with added explanations:</summary>
 
