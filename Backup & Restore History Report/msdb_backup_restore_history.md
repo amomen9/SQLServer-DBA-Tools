@@ -2,6 +2,8 @@
 
 <details>
 <summary>(click to expand) The complete script file with added explanations:</summary>
+
+```sql
 -- Refactored and optimized script for querying SQL Server backup and restore history
 -- Purpose: Retrieve and analyze backup and restore history, including database space usage.
 
@@ -192,6 +194,8 @@ JOIN msdb.dbo.backupmediafamily bmf ON bmf.media_set_id = bs.media_set_id
 WHERE rsh.restore_date >= DATEADD(DAY, ISNULL(@days, -30), GETDATE())
     AND rsh.destination_database_name = ISNULL(@dbname, rsh.destination_database_name)
 ORDER BY rsh.restore_history_id DESC;
+```
+
 </details>
 
 ## Purpose
