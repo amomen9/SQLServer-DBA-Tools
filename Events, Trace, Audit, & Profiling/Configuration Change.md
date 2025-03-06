@@ -1,6 +1,6 @@
 # SQL Server Configuration and Trace Analysis Script
 
-This script is designed to check the status of the `cmdshell` feature in SQL Server and analyze related events in the default trace file. Below is a breakdown of the script's purpose and the results it generates:
+This is a very simple script to check the status of the `cmdshell` feature in SQL Server and analyze related events in the default trace file. Below is a breakdown of the script's purpose and the results it generates:
 
 <b>The script:</b>
 
