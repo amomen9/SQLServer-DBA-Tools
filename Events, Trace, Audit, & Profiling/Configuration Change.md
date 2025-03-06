@@ -31,7 +31,7 @@ SELECT TOP 1
 FROM fn_trace_gettable(@tracepath, DEFAULT) T
 JOIN sys.trace_events TE ON T.EventClass = TE.trace_event_id
 WHERE CONVERT(DATE, StartTime) = CONVERT(DATE, GETDATE()) 
-    AND T.TextData LIKE '%cmdshell%'
+    AND T.TextData LIKE '%cmdshell%' AND T.TextDate LIKE 'sp_configure'
 ORDER BY T.StartTime ASC;
 ```
 
