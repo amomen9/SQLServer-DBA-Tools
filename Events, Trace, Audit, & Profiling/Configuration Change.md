@@ -2,7 +2,7 @@
 
 This is a very simple script to check the status of the `cmdshell` feature in SQL Server and analyze related events in the default trace file. Below is a breakdown of the script's purpose and the results it generates:
 
-<b>The script:</b>
+** This is the script (Check the .sql file for the latest version though): **
 
 <details>
 <summary>(click to expand) The complete script file with added explanations:</summary>
