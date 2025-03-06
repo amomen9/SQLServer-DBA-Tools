@@ -1,4 +1,8 @@
-# SQL Server Trace and Configuration Analyzer
+# SQL Server Configuration and Trace Analysis Script
+
+This script is designed to check the status of the `cmdshell` feature in SQL Server and analyze related events in the default trace file. Below is a breakdown of the script's purpose and the results it generates:
+
+<b>The script:</b>
 
 <details>
 <summary>(click to expand) The complete script file with added explanations:</summary>
@@ -29,3 +33,26 @@ JOIN sys.trace_events TE ON T.EventClass = TE.trace_event_id
 WHERE CONVERT(DATE, StartTime) = CONVERT(DATE, GETDATE()) 
     AND T.TextData LIKE '%cmdshell%'
 ORDER BY T.StartTime ASC;
+```
+
+</details>
+
+
+
+1. **Check if 'cmdshell' is enabled**  
+   The script queries the `sys.configurations` system view to determine whether the `cmdshell` feature is currently enabled. The `value_in_use` column indicates the status (1 for enabled, 0 for disabled).
+
+2. **Retrieve the path of the default trace file**  
+   The script declares a variable `@tracepath` and assigns it the path of the default trace file by querying the `sys.traces` system view. This path is used to access the trace data.
+
+3. **Query the default trace file for 'cmdshell' events**  
+   The script uses the `fn_trace_gettable` function to read the default trace file and filters for events related to `cmdshell` that occurred on the current day. It retrieves the following details:
+   - `ServerName`: The name of the SQL Server instance.
+   - `EventName`: The name of the trace event (e.g., `SQL:BatchStarting`).
+   - `DatabaseName`: The database where the event occurred.
+   - `ApplicationName`: The application that triggered the event.
+   - `LoginName`: The login associated with the event.
+   - `StartTime`: The timestamp of the event.
+   - `TextData`: The SQL statement or command executed.
+
+   The results are ordered by the earliest event timestamp (`StartTime`) and limited to the top 1 result.
