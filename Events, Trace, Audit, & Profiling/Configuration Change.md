@@ -45,7 +45,7 @@ ORDER BY T.StartTime ASC;
 2. **Retrieve the path of the default trace file**  
    The script declares a variable `@tracepath` and assigns it the path of the default trace file by querying the `sys.traces` system view. This path is used to access the trace data.
 
-3. **Query the default trace file for 'cmdshell' events**  
+3. **Query the default trace file for 'cmdshell' events (Check when and by who the cmdshell server configuration has been enabled or disabled)**  
    The script uses the `fn_trace_gettable` function to read the default trace file and filters for events related to `cmdshell` that occurred on the current day. It retrieves the following details:
    - `ServerName`: The name of the SQL Server instance.
    - `EventName`: The name of the trace event (e.g., `SQL:BatchStarting`).
