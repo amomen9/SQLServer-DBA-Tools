@@ -16,7 +16,7 @@ This article is part of the wider project of **"Automatic country-wide branch do
 
 ## 1. Overview
 
-The daily outage status report for bank branches is sent automatically from the email account `report.sending.email@company.com` by the `SQL Server Database Engine` on server `10.0.51.33`.
+The daily outage status report for bank branches is sent automatically from the email account `report.sending.email@company.com` by the `SQL Server Database Engine` on server `<Reporting Server IP>`.
 
 - Dispatch times:
   - Saturday to Wednesday: 14:30
@@ -109,7 +109,7 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
    - Create `Report` database and stored procedure `sp_save_excel_ghatei`.
    - Create SQL Agent Job `GhateiShoab`.
    - Configure Database Mail.
-   - Create Linked Server to `10.0.51.31` (WhatsUp server).
+   - Create Linked Server to `<WhatsUP Server IP>` (WhatsUp server).
    - Ensure directory structure and file system permissions.
    - Ensure `logo.png` placement.
 
@@ -287,7 +287,7 @@ Execute the following (order-sensitive) provided scripts on WhatsUp (already aut
 A script named (example):
 
 ```
-5131_10.0.53.45_WLR_Linked-Server.sql
+5131_<WLR Server IP>_WLR_Linked-Server.sql
 ```
 
 This must be coordinated with the Software Department for proper setup.
@@ -339,7 +339,7 @@ BEGIN
         END;
 
     SELECT @DatePersian =
-        (SELECT * FROM OPENQUERY([10.0.51.31],
+        (SELECT * FROM OPENQUERY([<WhatsUP Server IP>],
          'SELECT [WhatsUp].[dbo].SolarDate(GetDate())'));
 
     SET @FullDate = @DayofWeekPersian + N' ' + @DatePersian;
@@ -513,7 +513,7 @@ USE Report;
 DROP TABLE IF EXISTS Temp;
 
 SELECT * INTO Temp2
-FROM OPENQUERY([10.0.51.31], ''SELECT * FROM [WhatsUp].[rep].GhateiShoab()'');
+FROM OPENQUERY([<WhatsUP Server IP>], ''SELECT * FROM [WhatsUp].[rep].GhateiShoab()'');
 
 DECLARE @set INT;
 DECLARE @counter INT = 1;
@@ -585,7 +585,7 @@ SELECT @DayofWeekPersian =
     END;
 
 SELECT @DatePersian =
- (SELECT * FROM OPENQUERY([10.0.51.31],
+ (SELECT * FROM OPENQUERY([<WhatsUP Server IP>],
    ''SELECT [WhatsUp].[dbo].SolarDate(GetDate())''));
 
 SET @MailBody = N''<!doctype html>
@@ -776,37 +776,37 @@ USE [master];
 GO
 
 EXEC master.dbo.sp_addlinkedserver
-    @server = N'10.0.51.31',
+    @server = N'<WhatsUP Server IP>',
     @srvproduct = N'SQL Server';
 
 EXEC master.dbo.sp_addlinkedsrvlogin
-    @rmtsrvname = N'10.0.51.31',
+    @rmtsrvname = N'<WhatsUP Server IP>',
     @useself = N'False',
     @locallogin = NULL,
     @rmtuser = N'RSL',
     @rmtpassword = 'Kesh@v@rz!NoC33admin';
 
 EXEC master.dbo.sp_addlinkedsrvlogin
-    @rmtsrvname = N'10.0.51.31',
+    @rmtsrvname = N'<WhatsUP Server IP>',
     @useself = N'False',
     @locallogin = N'RSL',
     @rmtuser = N'RSL',
     @rmtpassword = 'Kesh@v@rz!NoC33admin';
 GO
 
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'collation compatible', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'data access', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'dist', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'pub', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'rpc', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'rpc out', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'sub', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'connect timeout', @optvalue=N'0';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'collation name', @optvalue=NULL;
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'lazy schema validation', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'query timeout', @optvalue=N'0';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'use remote collation', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'10.0.51.31', @optname=N'remote proc transaction promotion', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'collation compatible', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'data access', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'dist', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'pub', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'rpc', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'rpc out', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'sub', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'connect timeout', @optvalue=N'0';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'collation name', @optvalue=NULL;
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'lazy schema validation', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'query timeout', @optvalue=N'0';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'use remote collation', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'remote proc transaction promotion', @optvalue=N'true';
 GO
 ```
 
@@ -858,7 +858,7 @@ GO
 
 ---
 
-## 12. Post-Restart Actions (Reporting Server `10.0.51.33`)
+## 12. Post-Restart Actions (Reporting Server `<Reporting Server IP>`)
 
 After a system restart:
 
@@ -887,7 +887,7 @@ E:\ReportArchive\GhateiShoab
 or via UNC path:
 
 ```
-\\10.0.51.33\E$\ReportArchive\GhateiShoab
+\\<Reporting Server IP>\E$\ReportArchive\GhateiShoab
 ```
 
 ---
@@ -912,7 +912,7 @@ NOC_Reporting.rar
 Naming conventions:
 - `5133` → Reporting Server
 - `5131` → WhatsUp Server
-- `10.0.53.45` → WLR Server (current)
+- `<WLR Server IP>` → WLR Server (current)
 
 ---
 
