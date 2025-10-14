@@ -172,7 +172,7 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
    - Configure Database Mail.
    - Create Linked Server to `<`BHDB Server` IP>` (`BHDB Server`).
    - Ensure directory structure and file system permissions.
-   - Ensure `logo.png` placement.
+   - Ensure `bank_logo.png` placement.
 
 3. Validate service states and re-mount VHD after restarts (if applicable).
 
@@ -471,7 +471,7 @@ BEGIN
 
        # Merge and image
        mergeCells(wb, sheet = 1, cols = 1:10, rows = 1)
-       insertImage(wb, sheet = 1, "e:\\\\Template\\\\logo.png",
+       insertImage(wb, sheet = 1, "e:\\\\Template\\\\bank_logo.png",
                    width = 1.9, height = 0.7, startRow = 1, startCol = 5.5)
 
        addStyle(wb, sheet = 1,
@@ -909,7 +909,7 @@ GO
    ```
    Place the bank logo file as:
    ```
-   E:\Template\logo.png
+   E:\Template\bank_logo.png
    ```
 
 4. Right-click drive `E:` → `Properties` → `Security` tab:
