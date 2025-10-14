@@ -92,8 +92,8 @@ Because the production servers are disconnected from the Internet:
 
 You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed standalone) to connect to:
 
-- `WhatsUp` Server (source data)
-- `Report` Server (report generation and dispatch)
+- `BHDB Server` (source data)
+- `Reporting Server` (report generation and dispatch)
 
 ---
 
@@ -101,13 +101,13 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
 
 ### High-Level Sequence
 
-1. On the `WhatsUp` server:
+1. On the `BHDB Server`:
    - Create schema and function `[rep].[GhateiShoab]`.
    - Create login for Reporting Server access (`RSL`).
    - Execute additional dependency scripts.
-   - Configure (or request) Linked Server to `WLR` database.
+   - Configure (or request) Linked Server to `Branch List Server` database.
 
-2. On the `Report` server:
+2. On the `Reporting Server`:
    - Create `Report` database and stored procedure `sp_save_excel_ghatei`.
    - Create SQL Agent Job `GhateiShoab`.
    - Configure Database Mail.
@@ -274,7 +274,7 @@ GO
 
 ### 7.3 Additional Dependency Scripts
 
-Execute the following (order-sensitive) provided scripts on WhatsUp (already authored elsewhere):
+Execute the following (order-sensitive) provided scripts on ``BHDB Server`` (already authored elsewhere):
 
 ```
 5131_dbo.SolarDate.sql
@@ -284,12 +284,12 @@ Execute the following (order-sensitive) provided scripts on WhatsUp (already aut
 5131_dbo.fn_GetReportDwon.sql
 ```
 
-### 7.4 Linked Server to WLR
+### 7.4 Linked Server to `Branch List Server`
 
 A script named (example):
 
 ```
-5131_<`Branch List Server` IP>_WLR_Linked-Server.sql
+5131_<`Branch List Server` IP>_`Branch List Server`_Linked-Server.sql
 ```
 
 This must be coordinated with the Software Department for proper setup.
@@ -765,7 +765,7 @@ done:
 GO
 ```
 
-### 8.4 Create Linked Server to WhatsUp
+### 8.4 Create Linked Server to `BHDB Server`
 
 ```sql
 -- Script 4 (Reporting Server)
@@ -912,9 +912,9 @@ NOC_Reporting.rar
 ```
 
 Naming conventions:
-- `5133` → Reporting Server
+- `5133` → `Reporting Server`
 - `5131` → `BHDB Server`
-- `<`Branch List Server` IP>` → `Branch List Server` (current)
+- `<Branch List Server IP>` → `Branch List Server` (current)
 
 ---
 
@@ -925,7 +925,7 @@ Naming conventions:
 | 1 | Enable `R` in SQL setup |  |
 | 2 | Install & export R packages |  |
 | 3 | Copy `library` to Reporting Server |  |
-| 4 | Create function on WhatsUp |  |
+| 4 | Create function on BHDB |  |
 | 5 | Create login `RSL` |  |
 | 6 | Execute dependency scripts |  |
 | 7 | Create Linked Server(s) |  |
