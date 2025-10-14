@@ -1,8 +1,8 @@
 # Send an Email with a Conditionally Formatted Excel File Attached
 
 This article is part of the wider project of **"Automatic country-wide branch downtime report for the banking system"**.
- The rest of the project cannot be disclosed because it is an asset of the employer bank, and also they are by
- policy defined within the confidentiality level of publish-prohibited materials.
+ The rest of the project cannot be disclosed because it is an asset of the employer Bank, and also by
+ policy they are defined within the confidentiality level of publish-prohibited materials.
 
  
 ---
@@ -17,6 +17,65 @@ This article is part of the wider project of **"Automatic country-wide branch do
 ---
 
 ## 1. Overview
+
+
+
+### Server Roles Overview
+
+| Server Title                        | Acronym | Function & Type | Brief Intent & Functionality |
+|------------------------------------|---------|----------------------------|------------------------------|
+| Branch History Database Server     | BHDB    | MSSQL connected to WhatsUp | Collects and stores raw, time‑series branch connectivity and status data streamed from network monitoring tools. |
+| Branch List Database Server        | BLDB    | MSSQL keeping branch data  | Maintains authoritative branch reference data (names, IPs, codes, geography, link types) for enrichment and joins. |
+| Reporting Server                   | RPTS    |          MSSQL & R         | Orchestrates data retrieval, integration, Excel report generation (via R), and automated email dispatch. |
+
+---
+
+#### 1. Branch History Database Server (BHDB)
+
+The `Branch History Database Server` (`BHDB`) hosts the raw telemetry and historical status data about branch network connectivity. This data is continuously ingested from the `WhatsUp` Network Monitoring application (or alternative third‑party monitoring platforms). These tools probe branch endpoints, collect availability, latency, or link state information, and write results into their own internal schema within a `SQL Server` database engine.
+
+Because third‑party monitoring products (e.g., OpManager, Zabbix, SolarWinds Orion, etc.) typically design their databases for internal use rather than for downstream analytics, limited documentation is available. Some light reverse engineering (examining tables, stored procedures, views, and relationships) is often required to identify:
+- Which tables contain current vs. historical status.
+- How outages, performance metrics, or link types are encoded.
+- The timing/interval of probe inserts.
+
+Optionally, a lightweight, internally developed polling application could replace or complement commercial tools, writing directly into a normalized structure purpose‑built for reporting. Regardless of source, BHDB acts as the time‑series fact store that downstream processes query for outage intervals, start/end timestamps, and per‑branch status transitions.
+
+#### 2. Branch List Database Server (BLDB)
+
+The `Branch List Database Server` (`BLDB`) provides authoritative, slowly changing descriptive (dimension) data for each branch:
+- Branch name
+- Branch code
+- IP address(es)
+- Province and city
+- Network link type(s) (e.g., MPLS, VSAT, ADSL, PTMP, ...)
+- Any additional classification attributes
+
+This reference data enables enrichment of the raw outage or status facts pulled from `BHDB`. During report assembly, branch IP or code fields from historical records are joined to BLDB’s dimension tables to produce human‑readable entries (name, location, code, link description) in the final Excel report. Proper indexing (e.g., on branch code and IP) is important to ensure efficient joins. BLDB may also store validity periods for attributes if branches relocate or links are upgraded.
+
+#### 3. Reporting Server (RPTS)
+
+The `Reporting Server` (`RPTS`) coordinates the end‑to‑end reporting workflow:
+
+1. Connects to `BHDB` and `BLDB` to extract required raw outage segments and descriptive enrichment data.
+2. Integrates and transforms the combined dataset (deduplication, sequencing outages, computing durations).
+3. Prepares the email body (HTML) including localized date and contextual headings.
+4. Invokes `R` (through `SQL Server` Machine Learning Services) to generate a formatted Excel workbook:
+   - Applies column width, row height, cell styles, conditional highlighting (e.g., severe outages).
+   - Inserts corporate branding (logo image).
+   - Writes enriched outage records into a structured sheet.
+5. Archives the generated Excel file into a designated filesystem path for historical retention.
+6. Uses `Database Mail` to attach and dispatch the Excel report automatically to defined recipients at scheduled times (e.g., daily runs at 14:30 Saturday–Wednesday and 13:00 Thursday).
+
+The server thus serves as the automation hub, encapsulating scheduling (SQL Agent Jobs), data integration logic (T‑SQL procedures/functions), external scripting (R), and outbound email distribution.
+
+
+So, naming conventions:
+- `RPTS` → `Reporting Server`
+- `BHDB` → `BHDB Server`
+- `BHLB` → `BHLB Server`
+
+---
 
 The daily outage status report for bank branches is sent automatically from the email account `report.sending.email@company.com` by the `SQL Server Database Engine` on server `<Reporting Server IP>`.
 
@@ -275,15 +334,15 @@ GO
 ### 7.3 Additional Dependency Scripts
 
 Execute the following (order-sensitive) provided scripts on `BHDB Server` (already authored elsewhere)
-. The `5131_dbo.SolarDate.sql` script can be replaced by `SQL Server`'s
+. The `BHDB_dbo.SolarDate.sql` script can be replaced by `SQL Server`'s
 built-in inline `FORMAT` function which is also a better solution:
 
 ```
-5131_dbo.SolarDate.sql
-5131_dbo.GregorianDate.sql
-5131_dbo.fn_getUpTime.sql
-5131_dbo.fn_GetReportDwon_Prev.sql
-5131_dbo.fn_GetReportDwon.sql
+BHDB_dbo.SolarDate.sql
+BHDB_dbo.GregorianDate.sql
+BHDB_dbo.fn_getUpTime.sql
+BHDB_dbo.fn_GetReportDwon_Prev.sql
+BHDB_dbo.fn_GetReportDwon.sql
 ```
 
 ### 7.4 Linked Server to `Branch List Server`
@@ -291,7 +350,7 @@ built-in inline `FORMAT` function which is also a better solution:
 A script named (example):
 
 ```
-5131_<Branch List Server IP>_Branch List Server_Linked-Server.sql
+BHDB_<Branch List Server IP>_Branch List Server_Linked-Server.sql
 ```
 
 This must be coordinated with the Software Department for proper setup.
@@ -913,10 +972,6 @@ A compressed archive containing all referenced scripts:
 NOC_Reporting.rar
 ```
 
-Naming conventions:
-- `5133` → `Reporting Server`
-- `5131` → `BHDB Server`
-- `<Branch List Server IP>` → `Branch List Server` (current)
 
 ---
 
