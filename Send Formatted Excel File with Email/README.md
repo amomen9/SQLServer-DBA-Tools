@@ -111,7 +111,7 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
    - Create `Report` database and stored procedure `sp_save_excel_ghatei`.
    - Create SQL Agent Job `GhateiShoab`.
    - Configure Database Mail.
-   - Create Linked Server to `<WhatsUP Server IP>` (WhatsUp server).
+   - Create Linked Server to `<`BHDB Server` IP>` (`BHDB Server`).
    - Ensure directory structure and file system permissions.
    - Ensure `logo.png` placement.
 
@@ -119,12 +119,12 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
 
 ---
 
-## 7. WhatsUp Server Side Setup
+## 7. `BHDB Server` Side Setup
 
 ### 7.1 Create Schema and Function
 
 ```sql
--- Script 1 (WhatsUp Server)
+-- Script 1 (`BHDB Server`)
 -- =============================================
 -- Author: <A.Momen>
 -- Email: <amomen@gmail.com>
@@ -258,7 +258,7 @@ GO
 ### 7.2 Create Login for Reporting Server Access
 
 ```sql
--- Script 2 (WhatsUp Server)
+-- Script 2 (`BHDB Server`)
 -- Login used by Reporting Server to query WhatsUp data
 USE [master];
 GO
@@ -289,7 +289,7 @@ Execute the following (order-sensitive) provided scripts on WhatsUp (already aut
 A script named (example):
 
 ```
-5131_<WLR Server IP>_WLR_Linked-Server.sql
+5131_<`Branch List Server` IP>_WLR_Linked-Server.sql
 ```
 
 This must be coordinated with the Software Department for proper setup.
@@ -341,7 +341,7 @@ BEGIN
         END;
 
     SELECT @DatePersian =
-        (SELECT * FROM OPENQUERY([<WhatsUP Server IP>],
+        (SELECT * FROM OPENQUERY([<`BHDB Server` IP>],
          'SELECT [WhatsUp].[dbo].SolarDate(GetDate())'));
 
     SET @FullDate = @DayofWeekPersian + N' ' + @DatePersian;
@@ -515,7 +515,7 @@ USE Report;
 DROP TABLE IF EXISTS Temp;
 
 SELECT * INTO Temp2
-FROM OPENQUERY([<WhatsUP Server IP>], ''SELECT * FROM [WhatsUp].[rep].GhateiShoab()'');
+FROM OPENQUERY([<`BHDB Server` IP>], ''SELECT * FROM [WhatsUp].[rep].GhateiShoab()'');
 
 DECLARE @set INT;
 DECLARE @counter INT = 1;
@@ -587,7 +587,7 @@ SELECT @DayofWeekPersian =
     END;
 
 SELECT @DatePersian =
- (SELECT * FROM OPENQUERY([<WhatsUP Server IP>],
+ (SELECT * FROM OPENQUERY([<`BHDB Server` IP>],
    ''SELECT [WhatsUp].[dbo].SolarDate(GetDate())''));
 
 SET @MailBody = N''<!doctype html>
@@ -778,37 +778,37 @@ USE [master];
 GO
 
 EXEC master.dbo.sp_addlinkedserver
-    @server = N'<WhatsUP Server IP>',
+    @server = N'<`BHDB Server` IP>',
     @srvproduct = N'SQL Server';
 
 EXEC master.dbo.sp_addlinkedsrvlogin
-    @rmtsrvname = N'<WhatsUP Server IP>',
+    @rmtsrvname = N'<`BHDB Server` IP>',
     @useself = N'False',
     @locallogin = NULL,
     @rmtuser = N'RSL',
     @rmtpassword = 'Kesh@v@rz!NoC33admin';
 
 EXEC master.dbo.sp_addlinkedsrvlogin
-    @rmtsrvname = N'<WhatsUP Server IP>',
+    @rmtsrvname = N'<`BHDB Server` IP>',
     @useself = N'False',
     @locallogin = N'RSL',
     @rmtuser = N'RSL',
     @rmtpassword = 'Kesh@v@rz!NoC33admin';
 GO
 
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'collation compatible', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'data access', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'dist', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'pub', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'rpc', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'rpc out', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'sub', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'connect timeout', @optvalue=N'0';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'collation name', @optvalue=NULL;
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'lazy schema validation', @optvalue=N'false';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'query timeout', @optvalue=N'0';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'use remote collation', @optvalue=N'true';
-EXEC master.dbo.sp_serveroption @server=N'<WhatsUP Server IP>', @optname=N'remote proc transaction promotion', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'collation compatible', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'data access', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'dist', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'pub', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'rpc', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'rpc out', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'sub', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'connect timeout', @optvalue=N'0';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'collation name', @optvalue=NULL;
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'lazy schema validation', @optvalue=N'false';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'query timeout', @optvalue=N'0';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'use remote collation', @optvalue=N'true';
+EXEC master.dbo.sp_serveroption @server=N'<`BHDB Server` IP>', @optname=N'remote proc transaction promotion', @optvalue=N'true';
 GO
 ```
 
@@ -913,8 +913,8 @@ NOC_Reporting.rar
 
 Naming conventions:
 - `5133` → Reporting Server
-- `5131` → WhatsUp Server
-- `<WLR Server IP>` → WLR Server (current)
+- `5131` → `BHDB Server`
+- `<`Branch List Server` IP>` → `Branch List Server` (current)
 
 ---
 
