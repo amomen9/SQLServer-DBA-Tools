@@ -16,7 +16,7 @@ This article is part of the wider project of **"Automatic country-wide branch do
 
 ## 1. Overview
 
-The daily outage status report for bank branches is sent automatically from the email account `noc-wan@agri-bank.com` by the `SQL Server Database Engine` on server `10.0.51.33`.
+The daily outage status report for bank branches is sent automatically from the email account `report.sending.email@company.com` by the `SQL Server Database Engine` on server `10.0.51.33`.
 
 - Dispatch times:
   - Saturday to Wednesday: 14:30
@@ -703,7 +703,7 @@ DECLARE
 SET @profile_name    = 'DBEmail3';
 SET @account_name    = 'NOC WAN';
 SET @SMTP_servername = 'mail.agri-bank.com';
-SET @email_address   = 'noc-wan@agri-bank.com';
+SET @email_address   = 'report.sending.email@company.com';
 SET @display_name    = 'NOC WAN';
 SET @user_name       = 'noc-wan';
 SET @pass            = 'NOC-wan';
@@ -716,7 +716,7 @@ END;
 
 IF EXISTS (SELECT * FROM msdb.dbo.sysmail_account WHERE name = @account_name)
 BEGIN
-    RAISERROR('The specified Database Mail account (noc-wan@agri-bank.com) already exists.', 16, 1);
+    RAISERROR('The specified Database Mail account (report.sending.email@company.com) already exists.', 16, 1);
     GOTO done;
 END;
 
@@ -734,7 +734,7 @@ EXEC @rv = msdb.dbo.sysmail_add_account_sp
     @password = @pass;
 IF @rv <> 0
 BEGIN
-    RAISERROR('Failed to create the specified Database Mail account (noc-wan@agri-bank.com).', 16, 1);
+    RAISERROR('Failed to create the specified Database Mail account (report.sending.email@company.com).', 16, 1);
     GOTO done;
 END;
 
@@ -753,7 +753,7 @@ EXEC @rv = msdb.dbo.sysmail_add_profileaccount_sp
     @sequence_number = 1;
 IF @rv <> 0
 BEGIN
-    RAISERROR('Failed to associate the specified profile with the specified account (noc-wan@agri-bank.com).', 16, 1);
+    RAISERROR('Failed to associate the specified profile with the specified account (report.sending.email@company.com).', 16, 1);
     ROLLBACK TRANSACTION;
     GOTO done;
 END;
