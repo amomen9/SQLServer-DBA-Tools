@@ -10,7 +10,9 @@ This article is part of the wider project of **"Automatic country-wide branch do
 
 # Automatic Daily Branch Network Outage Report Dispatch
 
-**Document Last Modified:** 1404/01/14 (2025‑04‑03 Gregorian)
+**Document Originally Written:** 1401/01/14 (2021‑04‑03 Gregorian)
+
+**Document Last Modified:** 1404/07/16 (2025‑10‑05 Gregorian)
 
 ---
 
