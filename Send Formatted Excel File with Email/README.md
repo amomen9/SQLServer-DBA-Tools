@@ -10,7 +10,7 @@ This article is part of the wider project of **"Automatic country-wide branch do
 
 # Automatic Daily Branch Network Outage Report Dispatch
 
-**Document Last Modified:** 1400/01/14 (2021‑04‑03 Gregorian)
+**Document Last Modified:** 1404/01/14 (2025‑04‑03 Gregorian)
 
 ---
 
@@ -26,7 +26,7 @@ The report is generated via a stored procedure that invokes external `R` scripts
 
 ---
 
-## 2. Minimum System Software Requirements for the Report Server
+## 2. Minimum System Software Requirements for the Reporting Server
 
 | Component | Minimum Requirement |
 |----------|---------------------|
@@ -36,7 +36,7 @@ The report is generated via a stored procedure that invokes external `R` scripts
 
 ---
 
-## 3. Windows Installation and Configuration (Report Server)
+## 3. Windows Installation and Configuration (Reporting Server)
 
 The reporting system uses the `R` engine in `SQL Server` to convert the report into Excel. Therefore, the `R` feature (`Machine Learning Services and Languages`) must be enabled during `SQL Server` setup.
 
@@ -75,7 +75,7 @@ Because the production servers are disconnected from the Internet:
    ```
    C:\Program Files\Microsoft SQL Server\MSSQL15.MSSQLSERVER\R_SERVICES\library
    ```
-   and paste them into the corresponding path on the (offline) Report Server.
+   and paste them into the corresponding path on the (offline) Reporting Server.
 
 7. When prompted with a folder merge confirmation, click “No” for replacing existing root folder structure (to preserve any pre-existing components) but ensure package subfolders are copied as needed.
 
@@ -101,7 +101,7 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
 
 1. On the `WhatsUp` server:
    - Create schema and function `[rep].[GhateiShoab]`.
-   - Create login for report server access (`RSL`).
+   - Create login for Reporting Server access (`RSL`).
    - Execute additional dependency scripts.
    - Configure (or request) Linked Server to `WLR` database.
 
@@ -253,11 +253,11 @@ END;
 GO
 ```
 
-### 7.2 Create Login for Report Server Access
+### 7.2 Create Login for Reporting Server Access
 
 ```sql
 -- Script 2 (WhatsUp Server)
--- Login used by Report Server to query WhatsUp data
+-- Login used by Reporting Server to query WhatsUp data
 USE [master];
 GO
 
@@ -294,12 +294,12 @@ This must be coordinated with the Software Department for proper setup.
 
 ---
 
-## 8. Report Server Setup
+## 8. Reporting Server Setup
 
 ### 8.1 Create Database and Stored Procedure
 
 ```sql
--- Script 1 (Report Server)
+-- Script 1 (Reporting Server)
 -- =============================================
 -- Author: <A.Momen>
 -- Email: <amomen@gmail.com>
@@ -458,7 +458,7 @@ GO
 ### 8.2 Create SQL Agent Job
 
 ```sql
--- Script 2 (Report Server)
+-- Script 2 (Reporting Server)
 -- =============================================
 -- Author: <A.Momen>
 -- Email: <amomen@gmail.com>
@@ -685,7 +685,7 @@ GO
 ### 8.3 Configure Database Mail
 
 ```sql
--- Script 3 (Report Server)
+-- Script 3 (Reporting Server)
 -- =============================================
 -- Author: <A.Momen>
 -- Email: <amomen@gmail.com>
@@ -766,7 +766,7 @@ GO
 ### 8.4 Create Linked Server to WhatsUp
 
 ```sql
--- Script 4 (Report Server)
+-- Script 4 (Reporting Server)
 -- =============================================
 -- Author: <A.Momen>
 -- Email: <amomen@gmail.com>
@@ -858,7 +858,7 @@ GO
 
 ---
 
-## 12. Post-Restart Actions (Report Server `10.0.51.33`)
+## 12. Post-Restart Actions (Reporting Server `10.0.51.33`)
 
 After a system restart:
 
@@ -894,7 +894,7 @@ or via UNC path:
 
 ## 14. Notes
 
-- No `Microsoft Office` installation is required on the Report Server; Excel files are generated via the `openxlsx` R package.
+- No `Microsoft Office` installation is required on the Reporting Server; Excel files are generated via the `openxlsx` R package.
 - All usernames and passwords in this document reflect the current (original) system configuration.
 - Full execution sequence of scripts is required for initial provisioning.
 - The R external script execution depends on `SQL Server Launchpad` service being active.
@@ -910,7 +910,7 @@ NOC_Reporting.rar
 ```
 
 Naming conventions:
-- `5133` → Report Server
+- `5133` → Reporting Server
 - `5131` → WhatsUp Server
 - `10.0.53.45` → WLR Server (current)
 
@@ -922,7 +922,7 @@ Naming conventions:
 |------|--------|------------------|
 | 1 | Enable `R` in SQL setup |  |
 | 2 | Install & export R packages |  |
-| 3 | Copy `library` to Report Server |  |
+| 3 | Copy `library` to Reporting Server |  |
 | 4 | Create function on WhatsUp |  |
 | 5 | Create login `RSL` |  |
 | 6 | Execute dependency scripts |  |
