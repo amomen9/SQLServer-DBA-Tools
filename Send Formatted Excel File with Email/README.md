@@ -48,7 +48,7 @@ The `Branch List Database Server` (`BLDB`) provides authoritative, slowly changi
 - Branch code
 - IP address(es)
 - Province and city
-- Network link type(s) (e.g., MPLS, VSAT, ADSL, PTMP, ...)
+- Network link type(s) (e.g., MPLS, VSAT, ADSL, PTMP, Radio, ...)
 - Any additional classification attributes
 
 This reference data enables enrichment of the raw outage or status facts pulled from `BHDB`. During report assembly, branch IP or code fields from historical records are joined to BLDB’s dimension tables to produce human‑readable entries (name, location, code, link description) in the final Excel report. Proper indexing (e.g., on branch code and IP) is important to ensure efficient joins. BLDB may also store validity periods for attributes if branches relocate or links are upgraded.
