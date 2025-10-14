@@ -274,7 +274,9 @@ GO
 
 ### 7.3 Additional Dependency Scripts
 
-Execute the following (order-sensitive) provided scripts on ``BHDB Server`` (already authored elsewhere):
+Execute the following (order-sensitive) provided scripts on `BHDB Server` (already authored elsewhere)
+. The `5131_dbo.SolarDate.sql` script can be replaced by `SQL Server`'s
+built-in inline `FORMAT` function which is also a better solution:
 
 ```
 5131_dbo.SolarDate.sql
@@ -289,7 +291,7 @@ Execute the following (order-sensitive) provided scripts on ``BHDB Server`` (alr
 A script named (example):
 
 ```
-5131_<`Branch List Server` IP>_`Branch List Server`_Linked-Server.sql
+5131_<Branch List Server IP>_Branch List Server_Linked-Server.sql
 ```
 
 This must be coordinated with the Software Department for proper setup.
@@ -896,10 +898,10 @@ or via UNC path:
 
 ## 14. Notes
 
-- No `Microsoft Office` installation is required on the Reporting Server; Excel files are generated via the `openxlsx` R package.
+- No `Microsoft Office` installation is required on the Reporting Server; Excel files are generated via the `openxlsx` `R` package.
 - All usernames and passwords in this document reflect the current (original) system configuration.
 - Full execution sequence of scripts is required for initial provisioning.
-- The R external script execution depends on `SQL Server Launchpad` service being active.
+- The `R` external script execution depends on `SQL Server Launchpad` service being active.
 
 ---
 
