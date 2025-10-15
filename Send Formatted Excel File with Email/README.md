@@ -180,6 +180,12 @@ You need `Microsoft SQL Server Management Studio (SSMS)` (can be installed stand
 
 ## 7. `BHDB Server` Side Setup
 
+At this level, and after fetching the list of Branches with outages from the WhatsUp (or any alternate network monitoring tool) server (BHDB Server), an SSH connection with the branches' network devices/routers can be established to fetch the logs of the device at the time of downtime. Then these logs can be processed to prepare the reason for the outage in the "Notes" column of the final report. For example, get logs from `2025-09-17 13:**` to `2025-09-17 14:**`:
+
+```shell
+ssh -i pvtkeyfile root@10.0.18.12 "terminal length 0; show logging | include 'Sep 17 13:'; show logging | include 'Sep 17 14:0'"
+```
+
 ### 7.1 Create Schema and Function
 
 ```sql
