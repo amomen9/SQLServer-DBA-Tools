@@ -14,8 +14,6 @@ One goal of this article is to explain how to generate a dynamically formatted, 
 
 **Document Originally Written:** 1401/01/14 (2021‑04‑03 Gregorian)
 
-**Document Last Modified:** 1404/07/16 (2025‑10‑05 Gregorian)
-
 ---
 
 ## 1. Overview
