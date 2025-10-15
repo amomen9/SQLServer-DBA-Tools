@@ -1,12 +1,10 @@
-# Send an Email with a Conditionally Formatted Excel File Attached
+# Send an Email with a Conditionally Formatted Spreadsheet File Attached
 
-This article is part of the wider project of **"Automatic country-wide branch downtime report for the banking system"**.
- The rest of the project cannot be disclosed because it is an asset of the employer Bank, and also by
- policy they are defined within the confidentiality level of publish-prohibited materials.
+One goal of this article is to explain how to generate a dynamically formatted, polished spreadsheet populated with data using a spreadsheet-generation library such as Python or R and then send it as an email attachment. The example in this article is part of the larger project **"Automatic country-wide branch downtime report for the banking system"**.
 
- 
+ The rest of this sample project cannot be disclosed because it is an agreed asset of the employer Bank, and also by policy they are defined within the confidentiality level of publish-prohibited materials.
+
 ---
-
 
 # Automatic Daily Branch Network Outage Report Dispatch
 
