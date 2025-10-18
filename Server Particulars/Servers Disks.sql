@@ -177,7 +177,7 @@ BEGIN
 	) ds
 	LEFT JOIN sys.dm_os_cluster_nodes cn
 	ON ds.Server = cn.NodeName
-
+	WHERE cn.is_current_owner = 1
 END
 
 
