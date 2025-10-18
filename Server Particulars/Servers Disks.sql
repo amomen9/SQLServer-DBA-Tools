@@ -150,19 +150,33 @@ BEGIN
 	FROM results_in_GB rig
 	WHERE drive_type_desc = 'DRIVE_FIXED'
 
-
 	SELECT 
-		IIF(CHARINDEX('\',@@SERVERNAME)>0,SUBSTRING(@@SERVERNAME,1,CHARINDEX('\',@@SERVERNAME)-1),@@SERVERNAME) Server,
-		CONNECTIONPROPERTY('local_net_address') [IP Address],
-		[DriveLetter],
-		[logical_volume_name],
-		SuggestedNewCapacity [Extended Size],
-		[used_space %],
-		[Size_GB],
-		[free_space_GB],
-		drive_type_desc
-	FROM #DriveSpec
-	WHERE SuggestedNewCapacity<>'No extension needed'
+		ISNULL(cn.NodeName,ds.Server) Server,
+		ds.[IP Address],
+		ds.DriveLetter,
+		ds.logical_volume_name,
+		ds.[Extended Size],
+		ds.[used_space %],
+		ds.Size_GB,
+		ds.free_space_GB,
+		ds.drive_type_desc
+	FROM
+	(
+		SELECT 
+			IIF(CHARINDEX('\',@@SERVERNAME)>0,SUBSTRING(@@SERVERNAME,1,CHARINDEX('\',@@SERVERNAME)-1),@@SERVERNAME) Server,
+			CONNECTIONPROPERTY('local_net_address') [IP Address],
+			[DriveLetter],
+			[logical_volume_name],
+			SuggestedNewCapacity [Extended Size],
+			[used_space %],
+			[Size_GB],
+			[free_space_GB],
+			drive_type_desc
+		FROM #DriveSpec
+		WHERE SuggestedNewCapacity<>'No extension needed'
+	) ds
+	LEFT JOIN sys.dm_os_cluster_nodes cn
+	ON ds.Server = cn.NodeName
 
 END
 
