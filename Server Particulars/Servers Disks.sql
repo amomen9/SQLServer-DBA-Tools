@@ -24,19 +24,6 @@ GO
 */
 GO
 
-CREATE OR ALTER FUNCTION dbo.RemoveSuffix
-(
-    @ms nvarchar(max),
-    @s  nvarchar(max)
-)
-RETURNS nvarchar(max)
-AS
-BEGIN
-    RETURN CASE WHEN RIGHT(@ms, LEN(@s)) = @s
-                THEN LEFT(@ms, LEN(@ms) - LEN(@s))
-                ELSE @ms END;
-END
-GO
 
 DROP TABLE IF EXISTS #cmdsh
 DROP TABLE IF EXISTS #DriveSpec
@@ -165,8 +152,8 @@ BEGIN
 	WHERE drive_type_desc = 'DRIVE_FIXED'
 
 	SELECT 
-		ISNULL(cn.NodeName,ds.Server) Server,
-		IIF(cn.NodeName IS NULL, [IP Address], [IP Address]+' SQL_IP') [IP Address],
+		IIF(is_fci_clustered = 1, (SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner=1), ds.Server) Server,
+		IIF(is_fci_clustered = 1, [IP Address]+' SQL_IP', [IP Address]) [IP Address],
 		ds.DriveLetter,
 		ds.logical_volume_name,
 		ds.[Extended Size],
@@ -176,9 +163,10 @@ BEGIN
 		ds.drive_type_desc
 	FROM
 	(
-		SELECT 
+		SELECT
+			IIF(EXISTS (SELECT * FROM sys.dm_os_cluster_nodes), 1, 0) [is_fci_clustered],
 			CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
-			CONNECTIONPROPERTY('local_net_address') [IP Address],
+			CONVERT(NVARCHAR(60),CONNECTIONPROPERTY('local_net_address')) [IP Address],
 			[DriveLetter],
 			[logical_volume_name],
 			SuggestedNewCapacity [Extended Size],
@@ -189,10 +177,41 @@ BEGIN
 		FROM #DriveSpec
 		WHERE SuggestedNewCapacity<>'No extension needed'
 	) ds
-	CROSS JOIN (SELECT * FROM sys.dm_os_cluster_nodes UNION SELECT NULL,NULL,NULL,NULL) cn
+
+
+END
+
+
+
+SELECT * FROM sys.dm_os_cluster_properties
 
 
 --DROP PROC IF EXISTS dbo.GetLastWindowsUpdateDate
 --GO
+
+
+
+
+
+
+
+
+--DROP PROC IF EXISTS dbo.GetLastWindowsUpdateDate
+--GO
+
+
+
+
+
+
+
+
+--DROP PROC IF EXISTS dbo.GetLastWindowsUpdateDate
+--GO
+
+
+
+
+
 
 
