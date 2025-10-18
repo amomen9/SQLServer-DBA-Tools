@@ -3,7 +3,7 @@
 
 ## Hit the Star! :star:
 
-If you are planning to use this repo, please hit the star. Thanks!
+If this repo helps, please hit the star. Thanks!
 
 <br/>
 
