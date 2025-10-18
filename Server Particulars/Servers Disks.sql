@@ -22,7 +22,21 @@ BEGIN
 END
 GO
 */
+GO
 
+CREATE OR ALTER FUNCTION dbo.RemoveSuffix
+(
+    @ms nvarchar(max),
+    @s  nvarchar(max)
+)
+RETURNS nvarchar(max)
+AS
+BEGIN
+    RETURN CASE WHEN RIGHT(@ms, LEN(@s)) = @s
+                THEN LEFT(@ms, LEN(@ms) - LEN(@s))
+                ELSE @ms END;
+END
+GO
 
 DROP TABLE IF EXISTS #cmdsh
 DROP TABLE IF EXISTS #DriveSpec
@@ -152,7 +166,7 @@ BEGIN
 
 	SELECT 
 		ISNULL(cn.NodeName,ds.Server) Server,
-		ds.[IP Address],
+		IIF(cn.NodeName IS NULL, [IP Address], [IP Address]+' SQL_IP') [IP Address],
 		ds.DriveLetter,
 		ds.logical_volume_name,
 		ds.[Extended Size],
@@ -175,13 +189,7 @@ BEGIN
 		FROM #DriveSpec
 		WHERE SuggestedNewCapacity<>'No extension needed'
 	) ds
-	LEFT JOIN sys.dm_os_cluster_nodes cn
-	ON ds.Server = cn.NodeName
-	WHERE cn.is_current_owner = 1
-END
-
-
-
+	CROSS JOIN (SELECT * FROM sys.dm_os_cluster_nodes UNION SELECT NULL,NULL,NULL,NULL) cn
 
 
 --DROP PROC IF EXISTS dbo.GetLastWindowsUpdateDate
