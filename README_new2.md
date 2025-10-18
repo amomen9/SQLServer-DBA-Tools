@@ -155,7 +155,12 @@ SELECT * FROM msdb.dbo.v_view_business_jobs;
 ```
 
 Screenshots (referenced in repository):
+![1733013852761](image/README/1733013852761.png)
+
 - `1733013852761.png`
+
+![1733012910087](image/README/1733012910087.png)
+
 - `1733012910087.png`
 
 Credit for schedule decoding patterns: **Alan Jefferson**  
@@ -201,6 +206,8 @@ Generates dynamically formatted Excel output (branding, conditional styling, dyn
 ```tsql
 -- Sample code to be provided in future revision.
 ```
+
+![Screenshot_5.png](img/Screenshot_5.png)
 
 Sample screenshot: `Screenshot_5.png`
 
