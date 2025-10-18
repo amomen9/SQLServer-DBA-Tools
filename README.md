@@ -34,6 +34,7 @@ If this repo helps, please hit the star. Thanks!
 
 ## 2. 🧭 General Notes
 
+- These scripts are intended for various purposes. A brief explanation for each comes here. More verbose explanation about the script, if not already now, will be in the script's respective exclusive directory.
 - Most scripts target general-purpose `SQL Server` administration tasks.
 - Some scripts are intentionally simple (see the `Educational` directory) yet include subtle techniques.
 - Naming convention: many stored procedures start with `sp_` (personal preference); feel free to rename (`usp_` if desired).
