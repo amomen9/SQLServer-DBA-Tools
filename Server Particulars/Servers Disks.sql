@@ -163,7 +163,7 @@ BEGIN
 	FROM
 	(
 		SELECT 
-			IIF(CHARINDEX('\',@@SERVERNAME)>0,SUBSTRING(@@SERVERNAME,1,CHARINDEX('\',@@SERVERNAME)-1),@@SERVERNAME) Server,
+			CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
 			CONNECTIONPROPERTY('local_net_address') [IP Address],
 			[DriveLetter],
 			[logical_volume_name],
