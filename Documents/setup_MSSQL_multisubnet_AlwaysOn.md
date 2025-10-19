@@ -117,25 +117,45 @@ The gateway must be a router’s IP on your LAN which routes your server to the 
 
 1. Go to `DNS Manager`.
 2. Right-click on `Reverse Lookup Zones` → click `New Zone`.
+
    ![1736749190148](image/setup_MSSQL_multisubnet_AlwaysOn/1736749190148.png)
+   
    ![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
+   
 3. Choose the preferred zone type.
+
    ![1736749263628](image/setup_MSSQL_multisubnet_AlwaysOn/1736749263628.png)
+   
 4. Choose the secondary subnet IP version and click `Next`.
+
    ![1736749309396](image/setup_MSSQL_multisubnet_AlwaysOn/1736749309396.png)
+   
 5. Enter `Network ID` and click `Next`.
+
    ![1736749326724](image/setup_MSSQL_multisubnet_AlwaysOn/1736749326724.png)
+   
 6. Follow wizard screens:
+
    ![1736750120710](image/setup_MSSQL_multisubnet_AlwaysOn/1736750120710.png)
+   
    ![1736750136563](image/setup_MSSQL_multisubnet_AlwaysOn/1736750136563.png)
+   
    ![1736750178489](image/setup_MSSQL_multisubnet_AlwaysOn/1736750178489.png)
+   
 7. Sample IPv4 address configuration on 2 nodes (DNS server specification is important for joining the domain and finding the domain controller):
+   
    ![1736749362458](image/setup_MSSQL_multisubnet_AlwaysOn/1736749362458.png)
+   
    a. Same subnet:  
+   
    ![1736750213620](image/setup_MSSQL_multisubnet_AlwaysOn/1736750213620.png)  
+   
    b. Secondary subnet:  
+   
    ![1736750222123](image/setup_MSSQL_multisubnet_AlwaysOn/1736750222123.png)
+   
 8. Continue with reverse zone completion:
+
    ![1736750239253](image/setup_MSSQL_multisubnet_AlwaysOn/1736750239253.png)
 
 ### 6.2 Summary for Adding a Secondary Subnet Server to the Domain 📝
@@ -166,12 +186,19 @@ Joining servers on the same subnet as the domain controller is easy. For a multi
 | **10.10.10.113**    |
 
 3. Cluster validation wizard steps:  
+
    ![1736789306255](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789306255.png)
+   
 4. Validation reports:  
+
    ![1736789331807](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789331807.png)
+   
 5. Network configuration checks:  
+
    ![1736789357719](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789357719.png)
+   
 6. Node validation summary:  
+
    ![1736789373022](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789373022.png)
 
 A warning shows up:
@@ -185,17 +212,25 @@ Storage validation is unimportant right now:
 > This warning strongly recommends that the link between nodes is highly available and fault tolerant. Disregarded for the test case.
 
 7. Continue wizard:  
+
    ![1736789420213](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789420213.png)
+   
 8. Entering cluster IP addresses for both subnets. Windows Failover Cluster’s `Create Cluster Wizard` automatically detects multi-subnet based on nodes.
+   
    ![1736789447908](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789447908.png)
 
 If multiple subnets exist, all are listed.
 
 9. Confirmation screen:  
+
    ![1736789477875](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789477875.png)
+   
 10. Cluster creation progress:  
+
     ![1736789501646](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789501646.png)
+	
 11. Completion:  
+
     ![1736789523986](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789523986.png)
 
 ---
@@ -203,11 +238,15 @@ If multiple subnets exist, all are listed.
 ## 8. Setting Up the AlwaysOn Availability Group Role for the Cluster 🛡️
 
 1. Begin AG creation:
+
    ![1736789549757](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789549757.png)
+   
 2. Availability Group wizard steps:
+
    ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
 
 2. In the `New Availability Group` wizard, listener IP addresses for both subnets should be defined:
+
 ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
 
 The rest of the configurations are very similar to single-subnet Availability Group configurations.
@@ -256,6 +295,7 @@ After failover to the second subnet:
 When all nodes on the primary subnet failed, the cluster IP also switched:
 
 ![1736795688921](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795688921.png)
+
 ![1736795697520](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795697520.png)
 
 > Both cluster and listener can only be online on 1 subnet at a time. To serve applications transparently, you may require IP forwarding or dynamic connection string handling.
