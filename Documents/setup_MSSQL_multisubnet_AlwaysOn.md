@@ -1,351 +1,249 @@
-# Setting up SQL Server 2019 AlwaysOn Availability Group Clusters on a multi-subnet network with a domain
+# 🏗️ Setting up `SQL Server 2019` AlwaysOn Availability Group Clusters on a Multi-Subnet Network with a Domain
 
 ![1736748169174](image/setup_MSSQL_multisubnet_AlwaysOn/1736748169174.png)
 
-| 02/23/2023 |
-| ---------- |
+---
 
-Last updated:
+## 📅 Document Dates
 
-| 01/13/2025 |
-| ---------- |
+| Created | 02/23/2023 |
+|---------|------------|
+| Last Updated | 01/13/2025 |
 
-## Foreword:
+---
 
-* Sometimes you might need to setup a cluster which spans
-  multiple subnets and separate vLans. The nodes on this cluster need to
-  communicate using intermediary routing devices. A single datacenter can have multiple
-  subnets. Multi-subnet AlwaysOn cluster is recommended for replicas that are
-  situated in the same datacenter with strong and stable network connection.
+## 1. Foreword 📖
 
-  However, please note that if your multi-subnet cluster should span over a cross-datacenter architecture with separate geolocations for disaster recovery purposes, a “Distributed Availability Group (DAG)” is a better solution and have some advantages over traditional AlwaysOn clusters.
-* Also, as another remedy, you can create a virtual network on
-  top of a physically separated LANs using SDN solutions with only one subnet.
-  This way, the AlwaysOn cluster can be created on an ordinary single subnet network.
+* Sometimes you might need to set up a cluster which spans multiple subnets and separate VLANs. The nodes in this cluster need to communicate using intermediary routing devices. A single datacenter can have multiple subnets. A multi-subnet AlwaysOn cluster is recommended for replicas that are situated in the same datacenter with strong and stable network connection.  
+* However, please note that if your multi-subnet cluster should span over a cross-datacenter architecture with separate geolocations for disaster recovery purposes, a **Distributed Availability Group (`DAG`)** is a better solution and has some advantages over traditional AlwaysOn clusters.  
+* Also, as another remedy, you can create a virtual network on top of physically separated LANs using `SDN` solutions with only one subnet. This way, the AlwaysOn cluster can be created on an ordinary single-subnet network.
 
-## Preliminaries and Prerequisites:
+---
 
-* This document uses Windows Server 2019, and SQL Server 2019. Later, I tested it on Windows Server 2025 and
-  SQL Server 2022
-* This document assumes that
-  you have full control over your domain, servers, and network. If you do not,
-  you have to refer to respective infrastructure teams for your environment.
-* The full process for
-  creating SQL Server Availability Group are not explained here, and only the
-  difference between single-subnet and multi-subnet Availability Groups setup is
-  mentioned. For single-subnet details please refer to the online materials.
+## 2. Preliminaries and Prerequisites ✅
 
-**This test case specific IP addresses:**
+* This document uses `Windows Server 2019` and `SQL Server 2019`. Later, it was tested on `Windows Server 2025` and `SQL Server 2022`.
+* This document assumes that you have full control over your domain, servers, and network. If you do not, you have to refer to respective infrastructure teams for your environment.
+* The full process for creating a SQL Server Availability Group is not explained here—only the difference between single-subnet and multi-subnet Availability Group setup is mentioned. For single-subnet details please refer to online materials.
 
-Suppose that the following IP addresses belong to the DC,
-Node1, Node2, and disaster (secondary subnet) node respectively:
+---
 
-| DC: 192.168.241.240 |
-| ------------------- |
+## 3. Test Case Specific IP Addresses 🌐
 
-| Node1: 192.168.241.111 |
-| ---------------------- |
+Below are the IP addresses used for the test case:
 
-| Node2: 192.168.241.112 |
-| ---------------------- |
+### 3.1 Core Servers
 
-Secondary subnet Node:
+| Role  | IP Address        |
+|-------|-------------------|
+| DC    | 192.168.241.240   |
+| Node1 | 192.168.241.111   |
+| Node2 | 192.168.241.112   |
+| Node3 (Secondary Subnet) | 10.10.10.113 |
 
-| Node3: 10.10.10.113 |
-| ------------------- |
+### 3.2 Cluster & Listener
 
-Cluster IP addresses:
+| Type        | IP Addresses (Multi-Subnet) |
+|-------------|-----------------------------|
+| Cluster     | 192.168.241.114 & 10.10.10.114 |
+| Listener    | 192.168.241.115 & 10.10.10.115 |
 
-| 192.168.241.114 & 10.10.10.114 |
-| ------------------------------ |
+### 3.3 Routers (Gateways Between Subnets)
 
-Listener IP addresses:
+| Subnet | Gateway IP |
+|--------|------------|
+| 192.168.241.x | 192.168.241.2 |
+| 10.10.10.x    | 10.10.10.1    |
 
-| 192.168.241.115 & 10.10.10.115 |
-| ------------------------------ |
+---
 
-Router (Gateways between subnets) IP addresses:
+## 4. Port Requirements 🔌
 
-| 192.168.241.2 & 10.10.10.1 |
-| -------------------------- |
+Aside from mandatory `TCP` ports for SQL Server service (`1433` and `1434` for default instance) and endpoints (usually `5022`), the port `3343` is required for the cluster. You need to make sure it is reachable from every node to every other node.
 
-## **Port Requirements:**
+> No extra services or applications are installed on these VMs except `OpenSSH` (not mandatory). Only necessary applications were installed from raw Windows Server installation.
 
-Aside from mandatory TCP ports for SQL Server service (1433
-and 1434 for default instance) and endpoints (which is usually 5022) the port
-3343 is required for the cluster. You need to make sure that it is visible to
-every node from every other node.
-
-Note that no extra services or applications are installed on
-these VMs except OpenSSH (which is not mandatory) and only necessary
-applications have been installed from raw windows server installation.
-
-Here is a list of open listening TCP ports on my nodes that
-are not present on a Raw Windows Server 2019 Computer on a domain:
+Here is a list of open listening TCP ports on the nodes that are not present on a raw Windows Server 2019 computer on a domain:
 
 ![1736749076070](image/setup_MSSQL_multisubnet_AlwaysOn/1736749076070.png)
 
-Having these extra ports are recommended when setting up the
-Availability Group Cluster
+Having these extra ports is recommended when setting up the Availability Group Cluster.
 
-5357 is **Web Services on Devices (WSD) API** in Windows
-
-5985 is **WinRM and PowerShell remoting port over HTTP**
-
-9389 is **Active Directory Web Services (ADWS)**
+* `5357` → **Web Services on Devices (WSD) API**
+* `5985` → **WinRM / PowerShell remoting (HTTP)**
+* `9389` → **Active Directory Web Services (ADWS)**
 
 ![1736749085362](image/setup_MSSQL_multisubnet_AlwaysOn/1736749085362.png)
 
-## **List of test case open listening ports in detail**
+---
 
-Here is a major list of listening ports (apart from dynamic
-ports) in my test case on my different servers.
+## 5. List of Test Case Open Listening Ports in Detail 📊
 
-| DC: |
-| --- |
+Here is a major list of listening ports (apart from dynamic ports) in the test case on different servers.
+
+| Server | Notes |
+|--------|-------|
+| DC     | Screenshot below |
 
 ![1736749103871](image/setup_MSSQL_multisubnet_AlwaysOn/1736749103871.png)
 
- Simple raw windows server ports:
+Simple raw Windows Server ports:
 
 ![1736749120260](image/setup_MSSQL_multisubnet_AlwaysOn/1736749120260.png)
 
-For the 5985 or 5986 ports to be listening on, PowerShell
-Remoting feature over HTTP or HTTPS must be enabled.
+> For the `5985` or `5986` ports to be listening, PowerShell Remoting over HTTP or HTTPS must be enabled.
 
 The UDP ports serve the same subnet.
 
-The “intersect” of Node1 and Node2 and Node3 listening TCP
-ports is as follows:
+The intersection (`intersect`) of Node1, Node2, and Node3 listening TCP ports:
 
 ![1736749141896](image/setup_MSSQL_multisubnet_AlwaysOn/1736749141896.png)
 
-Note that port 22 is for OpenSSH and is NOT mandatory
-and 5022 is the port that I chose for SQL Server endpoints.
+> Note: Port `22` is for `OpenSSH` and is NOT mandatory; port `5022` is the chosen SQL Server endpoint port.
 
-If you have malfunctions in your cluster/AG, you can use a
-port scanner software to scan your server’s ports to see which ports are active
-and responding.
+If you have malfunctions in your cluster/AG, you can use a port scanner to see which ports are active and responding.
 
-## **Joining a different subnet Server to the domain:**
+---
 
-Make sure that your DNS and
-Active Directory service have the required configurations. A sample of the DNS
-Server's IP configuration can be the following:
+## 6. Joining a Different Subnet Server to the Domain 🔁
+
+Make sure that your `DNS` and `Active Directory` services have the required configurations. A sample of the DNS Server's IP configuration:
 
 ![1736749163671](image/setup_MSSQL_multisubnet_AlwaysOn/1736749163671.png)
 
-The gateway must be a router’s IP on your Local Area Network which
-routes your server to the second subnet.
+The gateway must be a router’s IP on your LAN which routes your server to the second subnet.
 
-Go to the DNS Manager.
+### 6.1 Steps in DNS Manager 🛠️
 
-Right-click on the “Reverse
-Lookup Zones” and click on “New Zone”
-
-![1736749190148](image/setup_MSSQL_multisubnet_AlwaysOn/1736749190148.png)
-
-![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
-
-5. The options are
-   self-expressive. The default is the second radio button but I prefer the first
-   one
-
+1. Go to `DNS Manager`.
+2. Right-click on `Reverse Lookup Zones` → click `New Zone`.
+   ![1736749190148](image/setup_MSSQL_multisubnet_AlwaysOn/1736749190148.png)
+   ![1736749238141](image/setup_MSSQL_multisubnet_AlwaysOn/1736749238141.png)
+3. Choose the preferred zone type.
    ![1736749263628](image/setup_MSSQL_multisubnet_AlwaysOn/1736749263628.png)
-6. Choose the second subnet IP
-   version and click next
-
+4. Choose the secondary subnet IP version and click `Next`.
    ![1736749309396](image/setup_MSSQL_multisubnet_AlwaysOn/1736749309396.png)
-7. Enter “Network ID” and click next
-
+5. Enter `Network ID` and click `Next`.
    ![1736749326724](image/setup_MSSQL_multisubnet_AlwaysOn/1736749326724.png)
-8. .
-
+6. Follow wizard screens:
    ![1736750120710](image/setup_MSSQL_multisubnet_AlwaysOn/1736750120710.png)
-9. .
-
    ![1736750136563](image/setup_MSSQL_multisubnet_AlwaysOn/1736750136563.png)
-
    ![1736750178489](image/setup_MSSQL_multisubnet_AlwaysOn/1736750178489.png)
-10. Sample IPv4 address
-    configuration on 2 of the nodes (DNS server specification is important for
-    joining the domain process to find the domain controller):
+7. Sample IPv4 address configuration on 2 nodes (DNS server specification is important for joining the domain and finding the domain controller):
+   ![1736749362458](image/setup_MSSQL_multisubnet_AlwaysOn/1736749362458.png)
+   a. Same subnet:  
+   ![1736750213620](image/setup_MSSQL_multisubnet_AlwaysOn/1736750213620.png)  
+   b. Secondary subnet:  
+   ![1736750222123](image/setup_MSSQL_multisubnet_AlwaysOn/1736750222123.png)
+8. Continue with reverse zone completion:
+   ![1736750239253](image/setup_MSSQL_multisubnet_AlwaysOn/1736750239253.png)
 
-    ![1736749362458](image/setup_MSSQL_multisubnet_AlwaysOn/1736749362458.png)
+### 6.2 Summary for Adding a Secondary Subnet Server to the Domain 📝
 
-a. Same subnet:
+Joining servers on the same subnet as the domain controller is easy. For a multi-subnet network:
 
-![1736750213620](image/setup_MSSQL_multisubnet_AlwaysOn/1736750213620.png)
-
-b. Secondary subnet:
-
-![1736750222123](image/setup_MSSQL_multisubnet_AlwaysOn/1736750222123.png)
-
-11. .
-
-![1736750239253](image/setup_MSSQL_multisubnet_AlwaysOn/1736750239253.png)
-
-**Summary for adding a secondary subnet server to the domain:**
-
-Joining Servers that are on the same subnet as the domain
-controller is easy and non-problematic. But as for a multi-subnet network, it
-becomes a bit tricky. There are 2 requirements:
-
-* You must manually add the
-  secondary subnet reverse zones to the DNS server.
-* For either of the same
-  subnet or secondary subnet servers to be able to resolve the domain name when
-  trying to join the domain, you have to obviously define a DNS server on the
-  server which is trying to join the domain, which can resolve the domain name.
-  This DNS server is usually setup on the domain controller itself.
-* If you get an error when
-  trying to join the VMs to the domain that the specified domain cannot be
-  contacted, some issues including DNS server problems might be the reason
-  including the following:
-
-a.
-You have not set the DNS
-server in the SQL VMs interface configurations.
-
-b.
-Try to enter the “Root
-domain name” or “fully qualified domain name” as well. Netbios might not work
-if it is not defined in the DNS server.
-
-* If you get a SID error
-  similar to this when trying to join your server to the domain, you have improperly
-  cloned your VM. To resolve this, you have to run “Sysprep” on your VM. For
-  information on how to do so, refer to online materials.
+* You must manually add the secondary subnet reverse zones to the DNS server.
+* Servers (same or secondary subnet) must define a DNS server capable of resolving the domain name.
+* If you get an error that the specified domain cannot be contacted, common causes include:
+  - Missing DNS server configuration.
+  - Try entering the `Root domain name` or `FQDN` (NetBIOS might not resolve otherwise).
+* If you get a SID error during domain join, you have improperly cloned your VM. Run `Sysprep` to fix this.
 
 ![1736750290961](image/setup_MSSQL_multisubnet_AlwaysOn/1736750290961.png)
 
-## Setting up multi-subnet SQL Server 2019 AlwaysOn HA:
+---
 
-## Brief steps:
+## 7. Setting Up Multi-Subnet SQL Server 2019 AlwaysOn HA 🧩
+
+### 7.1 Brief Steps
 
 ![1736750311755](image/setup_MSSQL_multisubnet_AlwaysOn/1736750311755.png)
 
+| Nodes (Example) |
+|-----------------|
 | **192.168.241.111** |
-| ------------------------- |
-
 | **192.168.241.112** |
-| ------------------------- |
+| **10.10.10.113**    |
 
-| **10.10.10.113** |
-| ---------------------- |
-
-3. .
-
+3. Cluster validation wizard steps:  
    ![1736789306255](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789306255.png)
-4. .
-
+4. Validation reports:  
    ![1736789331807](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789331807.png)
-5. .
-
+5. Network configuration checks:  
    ![1736789357719](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789357719.png)
-6. .
-
+6. Node validation summary:  
    ![1736789373022](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789373022.png)
 
 A warning shows up:
 
 ![1736789392227](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789392227.png)
 
-Storage validation is unimportant to us right now.
+Storage validation is unimportant right now:
 
 ![1736789400726](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789400726.png)
 
-This warning strongly recommends that the
-link between our nodes is highly available and fault tolerant. We disregard it
-for our test case.
+> This warning strongly recommends that the link between nodes is highly available and fault tolerant. Disregarded for the test case.
 
-7. .
-
+7. Continue wizard:  
    ![1736789420213](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789420213.png)
-8. Entering cluster IP addresses for both subnets. Windows server failover cluster’s “Create Cluster Wizard”
-   automatically detects that your cluster is multi-subnet based on the nodes you
-   have added.
+8. Entering cluster IP addresses for both subnets. Windows Failover Cluster’s `Create Cluster Wizard` automatically detects multi-subnet based on nodes.
+   ![1736789447908](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789447908.png)
 
-![1736789447908](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789447908.png)
+If multiple subnets exist, all are listed.
 
-If multiple subnets exist, all the subnets will be listed
-here.
-
-9. .
-
+9. Confirmation screen:  
    ![1736789477875](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789477875.png)
-10. .
-
+10. Cluster creation progress:  
     ![1736789501646](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789501646.png)
+11. Completion:  
+    ![1736789523986](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789523986.png)
 
-11. .
+---
 
-![1736789523986](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789523986.png)
+## 8. Setting Up the AlwaysOn Availability Group Role for the Cluster 🛡️
 
-## Setting up the AlwaysOn Availability group role for the cluster:
-
-1. .
-
+1. Begin AG creation:
    ![1736789549757](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789549757.png)
+2. Availability Group wizard steps:
+   ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
 
-2. .
-
+2. In the `New Availability Group` wizard, listener IP addresses for both subnets should be defined:
 ![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
 
-2. In the “New Availability Group” wizard, listener IP addresses for both subnets should be
-defined:
+The rest of the configurations are very similar to single-subnet Availability Group configurations.
 
-![1736789573225](image/setup_MSSQL_multisubnet_AlwaysOn-Copy/1736789573225.png)
+---
 
-The rest of the configurations are very similar to single-subnet
+## 9. Conclusion and Notable Points vs Single-Subnet AG 🧾
 
-Availability Group configurations.
+After joining secondary subnet servers to the domain, the cluster and AlwaysOn AG can be created normally with these multi-subnet concepts:
 
-* **Conclusion and notable points in contrast with the
-  single-subnet Availability Group:**
+* When setting the IP for the cluster, you must set an IP for each subnet (two IPs total). Only one of these IP addresses can be online at a time.
+* When setting up a listener for the AG, specify a listener IP for each subnet (two IPs total). Only one listener IP is online at a time per cluster state.
 
-After joining the secondary subnet servers to the domain,
-the cluster and AlwaysOn AG can be created as normal with the following new
-concepts:
+---
 
-When setting the IP for the
-cluster, you have to set an IP for each subnet (Overall 2 IPs). The
-functionality of these IPs has been explained in the “Some details about the
-cluster and listener behaviors” section. As noted, only one of these two IP
-addresses can be online at the same time in the cluster.
+# 📎 Appendix
 
-When setting up a listener
-for the AG, you have to specify a listener IP for each subnet (Overall 2 IPs).
-As noted, only one of these two IP addresses can be online at the same time in
-the cluster.
+## 1. Some Details About the Cluster and Listener Behaviors 🔍
 
-# Appendix:
+We know that the primary server holds the IP of the listener on its interfaces—calling the listener’s IP address on the network results in the **primary server responding**.
 
-## 1. **Some details about ****the cluster and listener**** behaviors**
-
-We know that the primary server holds the IP of the listener
-on its interfaces, meaning that calling the listener’s IP address on the
-network,  **results in the primary server responding** .
-
-ipconfig on the primary server of our example:
+`ipconfig` on the primary server (example):
 
 | Listener: |
-| --------- |
+|-----------|
 
 ![1736794588382](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736794588382.png)
 
-IP of the cluster will also be assigned to the interface of
-one of the servers which is usually the primary server but not necessarily. This is an example of a same-subnet
-secondary replica holding the cluster IP address:
+Cluster IP may be assigned to an interface of one of the servers (often primary, but not necessarily). Example of a same-subnet secondary replica holding cluster IP:
 
 | Cluster: |
-| -------- |
+|----------|
 
 ![1736794690093](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736794690093.png)
 
-The cluster and the listener in this cluster will have 2 IP
-addresses each. When the primary server is on subnet 241, the secondary subnet
-listener IP address will be offline:
+The cluster and listener each have 2 IP addresses. When the primary is on subnet `241`, the secondary subnet listener IP is offline:
 
 ![1736795622794](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795622794.png)
 
@@ -353,46 +251,34 @@ After failover to the second subnet:
 
 ![1736795651979](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795651979.png)
 
-However, regarding the cluster, it is reluctant to change
-its IP address and the host of its IP address by a mere failover. It is even
-reluctant to switch to another subnet so long as a healthy node on the same
-subnet of the current failing node exists. In our example the primary was at
-first Node1, then Node3, but the cluster IP address remained on Node2. It was
-on Node2 due to earlier circumstances.
+> The cluster is reluctant to change its IP address or host solely by failover if a healthy node remains in the original subnet. Example: primary moved Node1 → Node3, cluster IP remained on Node2.
 
-But when all the nodes on the primary subnet failed, the
-cluster IP address also switched to the second subnet:
+When all nodes on the primary subnet failed, the cluster IP also switched:
 
 ![1736795688921](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795688921.png)
-
 ![1736795697520](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795697520.png)
 
-Note that obviously both cluster and listener can only be
-online on 1 subnet at the same time, i.e. when they are online on one subnet,
-they will be offline on the other one. So, in order for the secondary subnet
-node to serve the application, either an IP forwarding service must redirect
-the requests to 192.168.241.115 to 10.10.10.115, or the application connection
-string must point to this new listener IP address with a different subnet.
+> Both cluster and listener can only be online on 1 subnet at a time. To serve applications transparently, you may require IP forwarding or dynamic connection string handling.
 
-When Node1 and Node2 failed and the AG automatically failed over to Node3:
+Failover example when Node1 & Node2 failed:
 
 ![1736795744514](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795744514.png)
 
-The interface of Node3 has 3 IP addresses above.
+The interface of Node3 shows 3 IP addresses above.
 
-## 2. Testing the Availability Group:
+---
 
+## 2. Testing the Availability Group 🧪
 
-Logically there will be no difference between any of the
-nodes in this cluster in terms of being primary, synchronous, asynchronous,
-automatic failover, etc.
+Logically there is no difference between any nodes in this cluster regarding roles (`primary`, `synchronous`, `asynchronous`, `automatic failover`, etc.).
 
-| Secondary subnet Node: |
-| ---------------------- |
+| Secondary Subnet Node: |
+|------------------------|
 
 ![1736795855762](image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795855762.png)
 
-All failover scenarios were tested. (Automatic failover,
-manual failover, manual forced failover to the secondary subnet node, etc.)
+All failover scenarios were tested (automatic failover, manual failover, forced failover to secondary subnet node, etc.).
 
-END  <img src="image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png" width="25" />
+---
+
+**END** <img src="image/setup_MSSQL_multisubnet_AlwaysOn-Copy(2)/1736795907385.png" width="25" />
