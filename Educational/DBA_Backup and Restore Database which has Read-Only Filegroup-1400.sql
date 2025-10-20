@@ -2,16 +2,13 @@
 use master
 go
 
-EXECUTE sp_execute_external_tsql @InputFiles = N'"%userprofile%\Dropbox\learning\SQL SERVER\InstNwnd.sql"' -- Delimited by a semicolon (;), executed by given order, enter the files which their path contains space within double quotations. Use full path or if not, relative paths must be relative to %systemroot%\system32
-                                     ,@InputFolder = ''	-- This sp executes every *.sql script that finds within the specified folder path. Quote addresses that contain space within double quotations.
-                                     ,@Server = NULL
-                                     ,@AuthenticationType = NULL -- any value which does not include the word 'sql' means Windows Authentication
-                                     ,@UserName = NULL
-                                     ,@Password = NULL
-                                     ,@DefaultDatabase = NULL
-                                     ,@Keep_xp_cmdshell_Enabled = 0
-                                     ,@isDAC = 0	-- run files with Dedicated Admin Connection
---SELECT * FROM sys.configurations WHERE name = 'xp_cmdshell'
+
+/*
+
+Create the database Northwind first
+
+*/
+
 
 alter database Northwind set recovery full
 
