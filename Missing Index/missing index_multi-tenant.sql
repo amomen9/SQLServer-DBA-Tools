@@ -9,10 +9,10 @@
 
 
 
-DROP TABLE IF EXISTS #ExistingCompanyNames
+DROP TABLE IF EXISTS #ExistingDatabaseNames
 GO
 
-SELECT name, create_date INTO #ExistingCompanyNames FROM sys.databases WHERE database_id>4 AND state = 0
+SELECT name, create_date INTO #ExistingDatabaseNames FROM sys.databases WHERE database_id>4 AND state = 0
 
 DECLARE @Index_FILEGROUP sysname = 'NIX'
 
@@ -30,29 +30,30 @@ CREATE TABLE #temp
 	[Included Columns] NVARCHAR(max) 
 )
 
-DECLARE @CoName sysname
+DECLARE @DBName sysname
 DECLARE @CoID UNIQUEIDENTIFIER
 	DECLARE @sql NVARCHAR(MAX)	
 	DECLARE @usedb NVARCHAR(MAX)
 	DECLARE @Stmts NVARCHAR(MAX)
 
-DECLARE CoFiller CURSOR FOR
-	SELECT NEWID(),name FROM #ExistingCompanyNames
+DECLARE DBIterator CURSOR FOR
+	SELECT name FROM #ExistingDatabaseNames
 	ORDER BY create_date
-DECLARE @ConnectionString NVARCHAR(MAX)
-OPEN CoFiller
-	FETCH NEXT FROM CoFiller INTO @CoID,@CoName
+
+OPEN DBIterator
+	FETCH NEXT FROM DBIterator INTO @DBName
 	WHILE @@FETCH_STATUS = 0
 	BEGIN
 
 		BEGIN TRY	
-			DECLARE @CompanyDBName sysname = @CoName
-			SET @usedb = 'use '+QUOTENAME(@CompanyDBName)+CHAR(10)
+
+			SET @usedb = 'use '+QUOTENAME(@DBName)+CHAR(10)
+
 
 			SET @sql = @usedb+CHAR(10)+
 			'
-				--select '''+@CompanyDBName+''' from sys.databases where name = '''+@CompanyDBName+'''
-				print('''+@CompanyDBName+''')
+				--select '''+@DBName+''' from sys.databases where name = '''+@DBName+'''
+				print('''+@DBName+''')
 				DECLARE @FILEGROUP_name sysname = ''PRIMARY''
 				DECLARE @Current_Collation VARCHAR(100) = convert(VARCHAR(100),DATABASEPROPERTYEX(DB_NAME(),''Collation''))
 				DECLARE @SQL NVARCHAR(MAX)
@@ -115,27 +116,27 @@ OPEN CoFiller
 			RAISERROR(@ErrMsg,16,1)
 		END CATCH
 	
-		FETCH NEXT FROM CoFiller INTO @CoID,@CoName    			
+		FETCH NEXT FROM DBIterator INTO @DBName    			
 	
 	
 	END
-CLOSE CoFiller
-DEALLOCATE CoFiller
+CLOSE DBIterator
+DEALLOCATE DBIterator
 
-SELECT COUNT(*) [Number of Databases] FROM #ExistingCompanyNames
+SELECT COUNT(*) [Number of Databases] FROM #ExistingDatabaseNames
 
 
 SELECT COUNT(Create_Statement) Create_Statement_Count, COUNT(DISTINCT Create_Statement) Distinct_Create_Statement_Count FROM #temp
 
 
 SELECT 
+		MIN(DatabaseName) [Databases],
 		TableName,
 		STRING_AGG(CONVERT(VARCHAR(50),Avg_Impact_Percentage)+':::'+[Covered Columns] + ISNULL('----' + [Included Columns],''),' || ') Columns,
 		AVG(Avg_Impact_Percentage) Avg_Impact_Percentage,
 		sum(user_seek_plus_scan) count_user_seek_plus_scan,
 		AVG(Avg_Impact_Percentage)*sum(user_seek_plus_scan) [avg impact],
-		MIN(DatabaseName) [Databases],
-		MIN([Database Count]) [Database Count],
+		MIN([Database Count]) [Database Count for this Table],
 		REPLACE(STRING_AGG('CREATE INDEX [IX_'+PARSENAME(dt.TableName,1)+'_'+REPLACE(REPLACE(REPLACE(REPLACE([Covered Columns],',','_'),' ',''),'[',''),']','')+']' + ' ON '+dt.TableName+'('+dt.[Covered Columns]+')'+CHAR(10)+IIF([Included Columns]='' OR [Included Columns] IS NULL,'',' INCLUDE ('+dt.[Included Columns]+') '/*+'ON '+QUOTENAME(@Index_FILEGROUP)*/),CHAR(10)+CHAR(10)),CHAR(10)+CHAR(10),'g90-4-hkgghkpddl') CreateStatement
 FROM
 (
@@ -150,6 +151,7 @@ FROM
 		MIN(dt.[Database Count]) [Database Count]
 	FROM 
 	(
+	
 		SELECT	
 				TableName,
 				[Covered Columns],
@@ -163,12 +165,11 @@ FROM
 		CROSS APPLY STRING_SPLIT([Included Columns],',') ss
 		GROUP BY TableName,	[Covered Columns], TRIM(ss.value)
 		
-
 	) dt
 	GROUP BY TableName, [Covered Columns]
 	ORDER BY TableName, [Covered Columns]
 ) dt
-WHERE DatabaseName LIKE '%co-%db%' -- Filtering multi-tenant databases, leave this condition empty to include all databases.
+--WHERE DatabaseName LIKE '%co-%db%' -- Filtering multi-tenant databases, leave this condition empty to include all databases.
 
 GROUP BY TableName
 --HAVING AVG(user_seek_plus_scan) > 10
