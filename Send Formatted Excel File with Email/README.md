@@ -1,4 +1,4 @@
-# Send an Email with a Conditionally Formatted Spreadsheet File Attached
+# Send an Email with a Generated Conditionally Formatted Spreadsheet File Attached
 
 Sample photo:
 
