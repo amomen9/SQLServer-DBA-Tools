@@ -3,14 +3,14 @@
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2022.08.08>
 -- Latest Update Date:	<22.08.08>
--- Description:			<Missing Index, all of the databases>
+-- Description:			<Missing Index, all databases>
 -- License:				<Please refer to the license file> 
 -- =============================================
 
 
-USE SQLAdministrationDB
 
 DROP TABLE IF EXISTS #ExistingCompanyNames
+GO
 
 SELECT name, create_date INTO #ExistingCompanyNames FROM sys.databases WHERE database_id>4 AND state = 0
 
