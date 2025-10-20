@@ -3,7 +3,7 @@
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			<2022.08.08>
 -- Latest Update Date:	<22.08.08>
--- Description:			<Missing Index, all databases>
+-- Description:			<Missing Index, all databases>, Developed over Pinal Dave's missing index query
 -- License:				<Please refer to the license file> 
 -- =============================================
 
