@@ -137,6 +137,7 @@ SELECT
 		sum(user_seek_plus_scan) count_user_seek_plus_scan,
 		AVG(Avg_Impact_Percentage)*sum(user_seek_plus_scan) [avg impact],
 		MIN([Database Count]) [Database Count for this Table],
+		COUNT([Covered Columns]) [No of Indexes],
 		REPLACE(STRING_AGG('CREATE INDEX [IX_'+PARSENAME(dt.TableName,1)+'_'+REPLACE(REPLACE(REPLACE(REPLACE([Covered Columns],',','_'),' ',''),'[',''),']','')+']' + ' ON '+dt.TableName+'('+dt.[Covered Columns]+')'+CHAR(10)+IIF([Included Columns]='' OR [Included Columns] IS NULL,'',' INCLUDE ('+dt.[Included Columns]+') '/*+'ON '+QUOTENAME(@Index_FILEGROUP)*/),CHAR(10)+CHAR(10)),CHAR(10)+CHAR(10),'g90-4-hkgghkpddl') CreateStatement
 FROM
 (
