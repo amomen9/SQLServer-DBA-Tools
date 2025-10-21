@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-03-24"
+-- Description:         "Job_duration_and_schedules_GroupByJob"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ﻿use msdb
 go
 
