@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-03-06"
+-- Description:         "Percent Complete"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 DROP FUNCTION IF EXISTS fn_udtvf_elapsedtime
 GO
 
