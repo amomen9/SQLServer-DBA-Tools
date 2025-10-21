@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-02-26"
+-- Description:         "Login Synchronizer Schema Creation"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE [SQLAdministrationDB]
 GO
 /****** Object:  UserDefinedFunction [dbo].[ufn_is_login_disabled]    Script Date: 2/21/2023 3:10:53 PM ******/
