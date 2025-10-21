@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-10-08"
+-- Description:         "Index Help"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ---- Before SQL2022
 --SELECT
 --	'['+DB_NAME()+'].'+'['+SCHEMA_NAME(ao.schema_id)+'].['+ao.name+']' [Table],
