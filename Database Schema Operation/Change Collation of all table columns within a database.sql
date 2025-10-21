@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-09-19"
+-- Description:         "Change Collation of all table columns within a database"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 CREATE OR ALTER PROC usp_Collation_Changer
 AS
 BEGIN
