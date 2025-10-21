@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-08-02"
+-- Description:         "Drop Databases been offline more than a specific amount of time"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ﻿USE SQLAdministrationDB
 GO
 
