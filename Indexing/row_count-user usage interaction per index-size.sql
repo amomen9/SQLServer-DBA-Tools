@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-12-25"
+-- Description:         "row_count-user usage interaction per index-size"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE JobVisionDB_test_test
 
 --DBCC UPDATEUSAGE(0)
