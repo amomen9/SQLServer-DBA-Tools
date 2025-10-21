@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-04-28"
+-- Description:         "Create JSON Property Index for Fast Surging"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 SELECT  COUNT(*) FROM dbo.RawData
 SELECT * FROM dbo.RawData
 
