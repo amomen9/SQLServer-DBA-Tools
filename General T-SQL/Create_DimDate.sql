@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-08-16"
+-- Description:         "Create_DimDate"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE SQLAdministrationDB
 go
 
