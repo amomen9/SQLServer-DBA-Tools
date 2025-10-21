@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2021-09-14"
+-- Description:         "usefull functions"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 select (exec msdb.dbo.sp_help_jobschedule @job_id = 'A1B17FAD-9DAD-4512-B8B6-766FE7BFD22B') from msdb..sysjobs
 
 
