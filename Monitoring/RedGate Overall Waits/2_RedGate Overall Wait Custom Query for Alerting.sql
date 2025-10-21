@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-12-20"
+-- Description:         "2_RedGate Overall Wait Custom Query for Alerting"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 --batch_text	
 --RedGateIgnore          
 SET NOCOUNT ON;
