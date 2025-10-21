@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-06-05"
+-- Description:         "Automatic Correct Server Name Discrepency"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 select @@SERVERNAME, SERVERPROPERTY(N'ServerName')
 
 DECLARE @actualname NVARCHAR(100)
