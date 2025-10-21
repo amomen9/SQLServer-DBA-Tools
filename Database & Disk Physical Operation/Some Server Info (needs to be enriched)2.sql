@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2021-08-25"
+-- Description:         "Some Server Info (needs to be enriched)2"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 
         declare @HkeyLocal nvarchar(18)
         declare @ServicesRegPath nvarchar(34)
