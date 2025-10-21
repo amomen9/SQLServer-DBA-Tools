@@ -1,3 +1,8 @@
+-- Do the following operation in the Database Engine's normal mode.
+-- It does not require that you bring the Database Engine up with
+-- any specific startup parameters including enabling/diabling any trace flags 
+
+
 USE [master];
 GO
 ALTER DATABASE msdb SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
