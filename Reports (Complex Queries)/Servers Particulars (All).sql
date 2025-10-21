@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-09-22"
+-- Description:         "Servers Particulars (All)"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 DROP TABLE IF EXISTS #cmdsh
 DROP TABLE IF EXISTS #DriveSpec
 GO
