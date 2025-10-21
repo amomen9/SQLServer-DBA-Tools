@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2021-12-04"
+-- Description:         "Correct Page Checksum Guide (for corrupt pages)"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 
 
 USE Northwind
