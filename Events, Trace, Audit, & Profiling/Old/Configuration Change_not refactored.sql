@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-07-30"
+-- Description:         "Configuration Change_not refactored"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 SELECT value_in_use FROM sys.configurations 
 WHERE name LIKE '%cmdshell%'
 
