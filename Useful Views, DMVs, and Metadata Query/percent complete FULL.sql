@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-02-04"
+-- Description:         "percent complete FULL"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 CREATE OR ALTER FUNCTION fn_udtvf_elapsedtime(@start_time DATETIME2(3))
 RETURNS TABLE
 AS
