@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-12-20"
+-- Description:         "1_RedGate query"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 --batch_text	--RedGateIgnore          
 SET NOCOUNT ON;
 SELECT TOP 200
