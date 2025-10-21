@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-01-21"
+-- Description:         "DateTime Useful Functions"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 
 -- higher precision functions 
 SELECT SYSDATETIME()       AS 'DateAndTime';        -- return datetime2(7)       
