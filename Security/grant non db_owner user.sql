@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-09-22"
+-- Description:         "grant non db_owner user"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 CREATE LOGIN [Mofid\Man.Asgari] FROM WINDOWS
 CREATE LOGIN [Mofid\F.Nazari]	FROM WINDOWS
 CREATE LOGIN tadbir WITH PASSWORD = N'987321@bB'
