@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-05-26"
+-- Description:         "search find and delete files in windows disk file system"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ﻿------- Search/Delete Except C Drive------------------------------------------------------------
 DECLARE @par NVARCHAR(500)
 
