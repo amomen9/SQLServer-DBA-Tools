@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-06-01"
+-- Description:         "trigger"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 DROP TRIGGER if exists [ddl_master] ON DATABASE
 GO
 
