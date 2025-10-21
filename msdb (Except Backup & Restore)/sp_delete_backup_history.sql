@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-01-25"
+-- Description:         "sp_delete_backup_history"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE master
 GO
 
