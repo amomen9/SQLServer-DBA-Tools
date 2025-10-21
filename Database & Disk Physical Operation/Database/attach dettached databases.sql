@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-01-15"
+-- Description:         "attach dettached databases"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 DROP TABLE IF EXISTS #DataFilePaths
 DROP TABLE IF EXISTS #DBDetails
 SET NOCOUNT ON
