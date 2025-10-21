@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-10-20"
+-- Description:         "How to Backup and Restore Database with Read-Only Filegroup"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ------ First creating Northwind anew
 use master
 go
