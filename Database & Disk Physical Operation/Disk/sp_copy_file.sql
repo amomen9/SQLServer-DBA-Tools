@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-10-14"
+-- Description:         "sp_copy_file"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 --DROP TYPE IF EXISTS File_Table
 IF not EXISTS (SELECT 1 FROM sys.types WHERE name = 'File_Table')
 	CREATE TYPE File_Table AS TABLE   
