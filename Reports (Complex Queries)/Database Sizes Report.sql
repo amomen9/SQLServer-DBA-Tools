@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-09-20"
+-- Description:         "Database Sizes Report"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE master;
 GO
 
