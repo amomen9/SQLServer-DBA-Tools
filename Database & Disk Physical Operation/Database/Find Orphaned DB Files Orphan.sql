@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-03-13"
+-- Description:         "Find Orphaned DB Files Orphan"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE master
 GO
 
