@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-12-20"
+-- Description:         "important SPs and Functions and Commands"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 EXEC sp_help 'dbo.mytable';
 
 --------------------------------------------------------------------
