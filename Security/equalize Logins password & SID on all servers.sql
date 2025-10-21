@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-01-03"
+-- Description:         "equalize Logins password & SID on all servers"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 SELECT LOGINPROPERTY('n.shavandi','PasswordHash'), SUSER_SID('n.shavandi'),SUSER_SID('dsfsdfsdfdsff')
 
 
