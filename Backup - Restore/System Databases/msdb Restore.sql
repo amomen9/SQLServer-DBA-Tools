@@ -3,6 +3,7 @@ GO
 ALTER DATABASE msdb SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 GO
 
+-- Restore and replace database msdb to desired target location
 RESTORE DATABASE msdb
    FROM DISK = '\\FSFSQL\Backups\FSFSQL\msdb\FULL\FSFSQL_msdb_FULL_20250909_032522.bak'
    WITH 
