@@ -26,9 +26,11 @@ GO
 
 USE [msdb];
 GO
--- Sample log path: M:\MSSQL15.MSSQLSERVER\MSSQL\Log\SQLAGENT.OUT
-DECLARE @agent_log_path NVARCHAR(256)
-SELECT @agent_log_path =
+-- Rectify the restored msdb's original log path and set it to be at the "Current server's error log directory"
+-- Sample server's log path: M:\MSSQL15.MSSQLSERVER\MSSQL\Log\SQLAGENT.OUT
+DECLARE @agent_new_log_path NVARCHAR(256)
+-- Find current server's error log directory and assign it to @agent_new_log_path
+SELECT @agent_new_log_path =
 	LEFT(dt.ErrLogFile, LEN(dt.ErrLogFile)-dt.backslash_pos+1) + 'SQLAgent.out'
 FROM 
 (
@@ -36,10 +38,11 @@ FROM
 ) dt
 
 EXEC msdb.dbo.sp_set_sqlagent_properties 
-    @errorlog_file=@agent_log_path;
+    @errorlog_file=@agent_new_log_path;
 GO
 
 
+-- Update jobs, set their steps to skip execution if the current server is not the primary replica
 UPDATE js
 SET js.command=
 'IF NOT EXISTS (SELECT * FROM sys.dm_hadr_availability_group_states WHERE primary_replica=@@SERVERNAME)
@@ -55,10 +58,15 @@ WHERE
 	j.name LIKE 'Database%' AND j.name NOT LIKE '%system%'
 
 
+-- purge msdb job history
 EXEC msdb.dbo.sp_purge_jobhistory
+
+
+-- purge msdb backup history
 DECLARE @oldest_date DATETIME2(3) = GETDATE()
 EXEC msdb.dbo.sp_delete_backuphistory @oldest_date = @oldest_date
-DBCC CHECKDB('master') WITH NO_INFOMSGS
+
+-- Perform a CHECKDB of the restored msdb database to ensure its health
 DBCC CHECKDB('msdb') WITH NO_INFOMSGS
 
 
