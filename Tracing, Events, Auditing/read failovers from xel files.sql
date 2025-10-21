@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-01-02"
+-- Description:         "read failovers from xel files"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -- Script to determine failover times in Availability Group  
  
 ;WITH cte_HADR AS (SELECT object_name, CONVERT(XML, event_data) AS data 
