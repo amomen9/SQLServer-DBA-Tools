@@ -70,6 +70,3 @@ EXEC msdb.dbo.sp_delete_backuphistory @oldest_date = @oldest_date
 DBCC CHECKDB('msdb') WITH NO_INFOMSGS
 
 
-declare @newdir varchar(128)= 'F:\DB-Data\ShardDB'+CONVERT(VARCHAR(1),REPLACE('ORBISDB5','ORBISDB','')*2-1)
-EXEC sys.xp_create_subdir @newdir
-EXEC sys.xp_create_subdir 'E:\MSSQL15.FORBISDB5SQL\MSSQL\DATA'
