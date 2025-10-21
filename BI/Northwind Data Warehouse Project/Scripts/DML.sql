@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-05-12"
+-- Description:         "DML"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 SELECT * FROM dbo.DimCustomers
 UPDATE Northwind.dbo.Customers
 SET Country='Iran'
