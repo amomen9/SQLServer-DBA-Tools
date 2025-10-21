@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-12-15"
+-- Description:         "Stop Traces"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -- Risky: stop traces for your important copyright queries, you do not want the server to fetch
 /*
 SELECT * FROM sys.traces
