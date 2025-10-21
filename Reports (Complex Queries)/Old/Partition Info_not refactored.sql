@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-05-10"
+-- Description:         "Partition Info_not refactored"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
 
 DROP TABLE IF EXISTS ##temp
