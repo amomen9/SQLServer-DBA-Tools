@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-10-01"
+-- Description:         "Convert LSN Formats & Datetime by Using CDC"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ﻿
 
 
