@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-02-15"
+-- Description:         "Random_Pass_Generate"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 USE master
 GO
 
