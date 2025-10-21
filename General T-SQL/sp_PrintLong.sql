@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-12-14"
+-- Description:         "sp_PrintLong"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 ﻿--USE master
 --DROP PROC dbo.sp_PrintLong
 
