@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2021-12-18"
+-- Description:         "CardinalityCalc_sp"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 use master
 go
 
