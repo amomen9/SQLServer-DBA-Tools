@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2021-01-03"
+-- Description:         "R Packages Query"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 DROP TABLE IF EXISTS myTable;
 
 CREATE TABLE myTable (
