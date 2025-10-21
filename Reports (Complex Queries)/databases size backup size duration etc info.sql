@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-08-13"
+-- Description:         "databases size backup size duration etc info"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 
 DROP TABLE IF EXISTS #FULL
 DROP TABLE IF EXISTS #DIFF
