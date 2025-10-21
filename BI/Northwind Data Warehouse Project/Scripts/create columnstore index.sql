@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-06-05"
+-- Description:         "create columnstore index"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 
 USE [NorthwindDW2]
 GO
