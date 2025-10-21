@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-03-03"
+-- Description:         "service accounts and local administrators group members"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 CREATE TABLE #temptable ( [Server Name] nvarchar(256), [CMDOUTPUT] nvarchar(512) )
 
 INSERT INTO #temptable ([Server Name], [CMDOUTPUT])
