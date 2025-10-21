@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-03-06"
+-- Description:         "Configuration Change"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -- Check if 'cmdshell' is enabled in SQL Server configurations
 SELECT value_in_use 
 FROM sys.configurations 
