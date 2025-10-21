@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2023-12-20"
+-- Description:         "kill particular running jobs"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -------------------------- Using kill
 DECLARE @SQL NVARCHAR(max)
 
