@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-03-06"
+-- Description:         "msdb Backup and Restore history"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -- Refactored and optimized script for querying SQL Server backup and restore history
 -- Purpose: Retrieve and analyze backup and restore history, including database space usage.
 
