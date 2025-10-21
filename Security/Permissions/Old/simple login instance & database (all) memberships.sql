@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-09-22"
+-- Description:         "simple login instance & database (all) memberships"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -- Drop temporary table if it exists
 DROP TABLE IF EXISTS #temp;
 
