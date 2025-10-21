@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2024-07-27"
+-- Description:         "msdb backup historynot refactored"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 /*
 declare @t nvarchar(23) = ''
 
