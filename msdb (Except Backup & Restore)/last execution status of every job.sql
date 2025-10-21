@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2022-08-31"
+-- Description:         "last execution status of every job"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 
 SELECT 
 	*
