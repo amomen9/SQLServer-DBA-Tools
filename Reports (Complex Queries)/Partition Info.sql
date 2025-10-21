@@ -1,3 +1,13 @@
+-- =============================================
+-- Author:              "a-momen"
+-- Contact & Report:    "amomen@gmail.com"
+-- Update date:         "2025-03-06"
+-- Description:         "Partition Info"
+-- License:             "Please refer to the license file"
+-- =============================================
+
+
+
 -- Set isolation level to avoid locking issues during read operations
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
