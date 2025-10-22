@@ -27,7 +27,6 @@ If this repo helps, please hit the star. Thanks!
 10. Troubleshooting and Incident Response
 
 
-
 # 📚 SQL Server DBA Tools – Curated `T-SQL` Scripts Collection
 
 > A practical toolbox of `T-SQL` scripts for SQL Server administrators and developers: automation, recovery, migrations, maintenance, auditing, and educational examples.
