@@ -13,6 +13,21 @@ If this repo helps, please hit the star. Thanks!
 
 
 
+* These are an RDBMS DBA's major responsibilities:
+
+1. Installation, Configuration, Provisioning, and Capacity Planning
+2. Data Safeguarding, Backup and Recovery
+3. High Availability and Disaster Recovery
+4. Performance Tuning and Query Optimization
+5. Schema Design and Data Modeling
+6. Change Management and Migrations
+7. Security and Compliance, Auditing
+8. Monitoring and Alerting
+9. Maintenance, Housekeeping, Automation, and Scripting
+10. Troubleshooting and Incident Response
+
+
+
 # 📚 SQL Server DBA Tools – Curated `T-SQL` Scripts Collection
 
 > A practical toolbox of `T-SQL` scripts for SQL Server administrators and developers: automation, recovery, migrations, maintenance, auditing, and educational examples.
