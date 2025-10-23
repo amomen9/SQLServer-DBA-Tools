@@ -4,7 +4,7 @@
 
 ## 1. Overview 📘
 
-This document presents a custom `T-SSQL` monitoring script intended for integration with RedGate SQL Monitor (as a Custom Metric / Alert).  
+This document presents a custom `T-SQL` monitoring script intended for integration with RedGate SQL Monitor (as a Custom Metric / Alert).  
 It calculates the average non-signal wait time per second over a 2‑minute interval, excluding a curated set of benign or idle wait types.
 
 ---
