@@ -8,8 +8,12 @@
 
 
 
---batch_text	
---RedGateIgnore          
+-- This script can be used to create a custom metric & alert in RedGate SQL Monitor
+-- It calculates the average wait time per second over a 2-minute period, excluding certain wait types.
+-- The script first captures the total wait time and signal wait time, then calculates the average wait time per second
+-- by subtracting the signal wait time from the total wait time, dividing by 1000.0 to convert milliseconds to seconds,
+-- and finally dividing by 120 to get the average over the 2-minute period.
+
 SET NOCOUNT ON;
 
 declare @wait INT
