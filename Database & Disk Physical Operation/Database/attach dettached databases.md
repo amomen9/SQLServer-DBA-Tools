@@ -1,3 +1,115 @@
+# 🗄️ Automated Attachment of Detached Databases (`sys.sp_attach_db` Utility)
+
+---
+
+## 1. Overview 📘
+This markdown documents a single `T-SQL` automation script that:
+- Scans a root directory for detached `*.mdf` data files.
+- Extracts metadata using `DBCC CHECKPRIMARYFILE`.
+- Dynamically builds and executes `sys.sp_attach_db` statements.
+- Implements structured error handling (choice of `PRINT` or `RAISERROR`).
+- Attaches each discovered database without altering original functionality.
+
+The explanation header from the script is preserved below.
+
+---
+
+## 2. Script Header (Original Explanation) 📝
+```
+-- Script:              Automated attachment of detached databases
+-- Purpose:             Enumerate *.mdf files in a root folder, extract metadata with DBCC CHECKPRIMARYFILE,
+--                      then build and execute sys.sp_attach_db for each set of files. Provides robust
+--                      error handling with optional PRINT vs RAISERROR output mode.
+```
+
+---
+
+## 3. Execution Flow 🔄
+
+### 3.1 Setup
+1. Enable `SET NOCOUNT ON`.
+2. Drop any leftover temp tables.
+
+### 3.2 Metadata Structures
+1. Create `#DataFilePaths` for file-level records.
+2. Create `#DBDetails` for database properties (includes database name).
+
+### 3.3 Enumeration
+1. Cursor (`Attacher`) lists all `*.mdf` files via `sys.dm_os_enumerate_filesystem`.
+
+### 3.4 Per-File Processing
+1. Clear temp tables.
+2. Run `DBCC CHECKPRIMARYFILE` option `3` (file list).
+3. Run `DBCC CHECKPRIMARYFILE` option `2` (properties).
+4. Construct dynamic `EXEC sys.sp_attach_db` statement with parameters.
+5. Print and execute the attachment command.
+
+### 3.5 Error Handling
+1. Inner TRY/CATCH: attachment-specific failures.
+2. Outer TRY/CATCH: metadata extraction failures.
+3. Output mode controlled by `@PRINT_or_RAISERROR` (1 vs 2).
+
+### 3.6 Cleanup
+1. Advance cursor.
+2. Close and deallocate after loop.
+
+---
+
+## 4. Key Components 🧩
+
+| Component | Purpose |
+|-----------|---------|
+| `sys.dm_os_enumerate_filesystem` | Lists files matching pattern (`*.mdf`). |
+| `DBCC CHECKPRIMARYFILE` | Extracts file list & database name from primary file. |
+| `STRING_AGG` | Builds parameter list for dynamic attach statement. |
+| `sys.sp_attach_db` | Attaches the collected file set as a database. |
+| `TRY...CATCH` | Captures and formats errors. |
+
+---
+
+## 5. Variables & Controls ⚙️
+
+| Variable | Description |
+|----------|-------------|
+| `@path` | Current `.mdf` file full path. |
+| `@PRINT_or_RAISERROR` | Error reporting mode (`1 = PRINT`, `2 = RAISERROR`). |
+| `@SQL` | Dynamic command buffer. |
+| `@UDErrMsg` | Formatted unified error message. |
+
+---
+
+## 6. Error Strategy ⚠️
+- Each failure generates a detailed message (number, severity, state, line).
+- Attachment continues to next file even after an error.
+- No functional changes applied—behavior preserved.
+
+---
+
+## 7. Usage Recommendations ✅
+1. Run under an account with rights to the target data file path.
+2. Ensure log (`.ldf`) files are co-located or attachable implicitly.
+3. Run inside a controlled maintenance window.
+4. Consider capturing output to a logging table (future enhancement).
+
+---
+
+## 8. Glossary 🔍
+
+| Term | Meaning |
+|------|--------|
+| `Detached Database` | Database removed from instance; files remain. |
+| `Primary File` | Main data file (`.mdf`) containing metadata header. |
+| `Dynamic SQL` | Constructed at runtime for variable file lists. |
+| `sp_attach_db` | Legacy attach proc (works; modern recommendation is `CREATE DATABASE ... FOR ATTACH`). |
+
+---
+
+## 9. Full Script Source 💻
+
+<details>
+<summary>(click to expand) The 145 script:</summary>
+
+```sql
 -- =============================================
 -- Author:              a-momen
 -- Contact & Report:    amomen@gmail.com
@@ -143,3 +255,30 @@ END;
 
 CLOSE Attacher;
 DEALLOCATE Attacher;
+```
+
+</details>
+
+---
+
+## 10. Verification Checklist ✅
+
+| Check | Expected |
+|-------|----------|
+| File enumeration path valid | Returns rows |
+| DBCC metadata extracted | Populates temp tables |
+| Dynamic SQL built | Printed prior to execution |
+| Attach success | No errors raised |
+| Error path | Formatted messages output |
+
+---
+
+## 11. Future Enhancements 🚀
+- Replace `sys.sp_attach_db` with `CREATE DATABASE ... FOR ATTACH`.
+- Add logging table for audit trail.
+- Support `.ndf` file grouping validation.
+- Add retry logic on transient I/O errors.
+
+---
+
+**End of Document** ✨
