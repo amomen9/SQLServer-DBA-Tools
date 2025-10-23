@@ -8,7 +8,7 @@
 
 
 
-﻿------- Search/Delete Except C Drive------------------------------------------------------------
+------- Search/Delete Except C Drive------------------------------------------------------------
 DECLARE @par NVARCHAR(500)
 
 SELECT @par = fs.full_filesystem_path FROM 

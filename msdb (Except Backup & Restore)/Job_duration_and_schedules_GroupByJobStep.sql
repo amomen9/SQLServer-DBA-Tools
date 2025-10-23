@@ -8,7 +8,7 @@
 
 
 
-﻿use msdb
+use msdb
 go
 
 CREATE or alter FUNCTION fn_IntToTimeString (@time INT) -- This function has been taken from the following URL written by Alan Jefferson:

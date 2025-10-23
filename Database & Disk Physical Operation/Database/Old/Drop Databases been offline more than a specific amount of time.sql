@@ -8,7 +8,7 @@
 
 
 
-USE SQLAdministrationDB
+USE master
 GO
 
 CREATE OR ALTER PROC drop_databases_that_have_been_offline_for_more_than_a_specific_amount_of_time

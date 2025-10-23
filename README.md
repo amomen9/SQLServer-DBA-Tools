@@ -242,7 +242,7 @@ Sample screenshot: `Screenshot_5.png`
 
 **Example:**
 ```tsql
-EXECUTE sqladministrationdb..sp_execute_external_tsql 
+EXECUTE master..sp_execute_external_tsql 
       @Change_Directory_To_CD             = ''
     , @InputFiles                         = ''
     , @InputFolder                        = '"C:\Users\Administrator\Desktop\test"'
@@ -253,7 +253,7 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
     , @AuthenticationType                 = NULL
     , @UserName                           = NULL
     , @Password                           = NULL
-    , @DefaultDatabase                    = 'SQLAdministrationDB'
+    , @DefaultDatabase                    = 'master'
     , @Keep_xp_cmdshell_Enabled           = 1
     , @isDAC                              = 0
     , @Debug_Mode                         = 2
@@ -412,7 +412,7 @@ Batch + `.ini` + helper `T-SQL` scripts orchestrate:
 - SQLCMD installation
 - Firewall + port configuration
 - Rename `sa`
-- Restore baseline databases (`dbWarden`, `SQLAdministrationDB`)
+- Restore baseline databases (`dbWarden`, `master`)
 - System restart (conditional)
 
 **Batch Execution Example:**

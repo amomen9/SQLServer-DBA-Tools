@@ -8,7 +8,7 @@
 
 
 
-﻿--USE master
+--USE master
 --DROP PROC dbo.sp_PrintLong
 
 USE master

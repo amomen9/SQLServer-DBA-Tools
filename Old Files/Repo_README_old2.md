@@ -106,8 +106,8 @@ EXEC sp_restore_latest_backups
 	@BackupFinishDate_EndDATETIME = '',
 						
 										-- (Optional)
-	@USE_SQLAdministrationDB_Database = 1,
-										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside SQLAdministrationDB database for faster access to backup file records and their details.
+	@USE_master_Database = 1,
+										-- (Optional, Highly Recommended to be set to 1) Create or Update DiskBackupFiles table inside master database for faster access to backup file records and their details.
 
 	@Exclude_system_databases = 1,		-- (Optional) set to 1 to avoid system databases' backups
 	@Exclude_DBName_Filter = N'  %adventure%,  %DW%',	
@@ -251,7 +251,7 @@ SELECT * FROM msdb.dbo.v_view_business_jobs
 		@copy_recipients,
 		@blind_copy_recipients,
 		@Create_or_Update_IndexTransferResults_Table = 0
-								-- Creates or updates IndexTransferResults table within the SQLAdministrationDB database
+								-- Creates or updates IndexTransferResults table within the master database
 
 ```
 
@@ -276,7 +276,7 @@ Sample Code:
    **Example:**
 
 ```tsql
-EXECUTE sqladministrationdb..sp_execute_external_tsql 
+EXECUTE master..sp_execute_external_tsql 
 		  @Change_Directory_To_CD = ''
 		 ,@InputFiles = ''--N'D:\CandoMigration\test\3).sql'	-- Semicolon delimited list of script files to execute.
 		 ,@InputFolder = '"C:\Users\Administrator\Desktop\test"'
@@ -288,8 +288,8 @@ EXECUTE sqladministrationdb..sp_execute_external_tsql
 		 ,@AuthenticationType = NULL 				-- any value which does not include the word 'sql' means Windows Authentication
 		 ,@UserName = NULL
 		 ,@Password = NULL
-		 --,@DefaultDatabase = 'SQLAdministrationDB'
-		 ,@DefaultDatabase = 'SQLAdministrationDB'		-- Enter the name of the database unquoted, even if it has special characters or space. Leaving empty means "master"
+		 --,@DefaultDatabase = 'master'
+		 ,@DefaultDatabase = 'master'		-- Enter the name of the database unquoted, even if it has special characters or space. Leaving empty means "master"
 		 ,@Keep_xp_cmdshell_Enabled = 1
 		 ,@isDAC = 0	-- run files with Dedicated Admin Connection
 		 ,@Debug_Mode = 2	--  none = 0 | simple = 1 | show = 2 | verbose = 3
@@ -421,7 +421,7 @@ EXEC dbo.Create_DimDate @StartDate_Gregorian = '19900101', -- varchar(8)
 * Also, you need to either provide the following missing files or remove their reference from the batch files:
   * dbWarden_DB1_truncated_22.05.31.bak: backup file of dbWarden database
   * MsSqlCmdLnUtils.msi: MSI installation file for SQLCMD from Microsoft
-  * SQLADDB_22.06.06.bak: backup file of SQLAdministrationDB database
+  * SQLADDB_22.06.06.bak: backup file of master database
   * SSMS Setup
   * dbWarden-Jobs.sql
 * Please note that SQL port-firewall.bat includes changing the default port number for the default instance. If you do not intend to do that, simply remove the commands.

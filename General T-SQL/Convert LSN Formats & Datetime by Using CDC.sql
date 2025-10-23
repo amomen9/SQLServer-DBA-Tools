@@ -8,7 +8,7 @@
 
 
 
-﻿
+
 
 
 CREATE OR ALTER FUNCTION HexCombLSN2Dec(@HexCombLSN NVARCHAR(23))
