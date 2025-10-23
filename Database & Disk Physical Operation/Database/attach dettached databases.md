@@ -107,7 +107,7 @@ The explanation header from the script is preserved below.
 ## 9. Full Script Source 💻
 
 <details>
-<summary>(click to expand) The 145 script:</summary>
+<summary>(click to expand) The complete 145-line script:</summary>
 
 ```sql
 -- =============================================
