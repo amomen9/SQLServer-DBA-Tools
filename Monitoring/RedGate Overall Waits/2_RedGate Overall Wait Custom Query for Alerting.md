@@ -97,6 +97,9 @@ Filtering enhances signal-to-noise ratio for real workload stress indicators (e.
 
 ## 9. Full Script Source Code 💻
 
+<details>
+<summary>(click to expand) The complete script:</summary>
+
 ```sql
 -- =============================================
 -- Author:              "a-momen"
@@ -189,6 +192,8 @@ FROM (
     ORDER BY wait_time_ms DESC, signal_wait_time_ms DESC
 ) dt;
 ```
+
+<details>
 
 ---
 
