@@ -193,7 +193,7 @@ FROM (
 ) dt;
 ```
 
-<details>
+</details>
 
 ---
 
