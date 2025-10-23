@@ -1,13 +1,116 @@
--- =============================================
--- Author:              "a-momen"
--- Contact & Report:    "amomen@gmail.com"
--- Update date:         "2022-08-02"
--- Description:         "Drop Databases been offline more than a specific amount of time"
--- License:             "Please refer to the license file"
--- =============================================
+# 🗃️ Automated Cleanup: Drop Databases Offline Beyond a Threshold
 
+---
 
+## 1. Overview 📘
+This document explains a `T-SQL` stored procedure that inspects SQL Server error logs to identify databases which have remained in the `OFFLINE` state longer than a configurable number of days (`@interval_days`). It can either:
+- Preview (report only) the candidate databases, or
+- Bring them `ONLINE` (attempt), set them to `SINGLE_USER`, and drop them.
 
+The logic depends on parsing error log messages of the pattern:
+`Setting database option OFFLINE to ON for database '<DatabaseName>'`.
+
+---
+
+## 2. Embedded Script Header 📝
+```
+-- Automated drop of databases offline longer than given interval
+```
+
+---
+
+## 3. What the Procedure Does 🔍
+1. Determines the SQL Server error log directory and base name.
+2. Enumerates error log files using `xp_dirtree`.
+3. Reads each log with `sp_readerrorlog`, filtering for OFFLINE transition messages.
+4. Extracts the most recent OFFLINE timestamp per database.
+5. Lists databases with:
+   - Days elapsed since OFFLINE event.
+   - Whether they still exist and are currently `OFFLINE`.
+6. Filters those exceeding `@interval_days`.
+7. For each candidate (when not in preview mode):
+   - Attempts to set `ONLINE`.
+   - Forces `SINGLE_USER WITH ROLLBACK IMMEDIATE`.
+   - Drops the database.
+8. Prints counts before and after.
+
+---
+
+## 4. Parameters ⚙️
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `@interval_days` | INT | 60 | Minimum days OFFLINE before action. |
+| `@Only_Show_Databases_Do_Not_Drop` | BIT | 0 | `1` = preview only (no drop); `0` = perform drop. |
+
+---
+
+## 5. Processing Steps 🧪
+
+### 5.1 Initialization
+- Counts user databases (excludes system DBs by `database_id > 4`).
+- Resolves error log path via `SERVERPROPERTY('ErrorLogFileName')`.
+
+### 5.2 Log Enumeration
+- Uses `xp_dirtree` to list log files and counts those matching the base pattern.
+
+### 5.3 Log Parsing Loop
+- Iterates backward through logs.
+- Inserts matching OFFLINE events into `#ErrLog_Entries`.
+
+### 5.4 Offline Derivation
+- Builds `#OfflineDatabases` with latest OFFLINE time per database.
+
+### 5.5 Reporting
+- Outputs offline duration and existence/state check.
+
+### 5.6 Action Phase
+- Cursor iterates stale OFFLINE databases.
+- Tries to bring ONLINE (best effort).
+- Switches to `SINGLE_USER`.
+- Drops database (unless preview flag set).
+
+### 5.7 Finalization
+- Recounts remaining databases.
+- Prints summary.
+
+---
+
+## 6. Safety & Considerations ⚠️
+
+| Aspect | Note |
+|--------|------|
+| Log Dependency | Missing/rotated logs may omit older OFFLINE events. |
+| Permissions | Requires `xp_dirtree`, `sp_readerrorlog`, and `ALTER/DROP DATABASE`. |
+| Edge Cases | Failed ONLINE attempts still proceed to DROP attempt. |
+| Preview Mode | Use `@Only_Show_Databases_Do_Not_Drop = 1` first. |
+
+---
+
+## 7. Example Usage ▶️
+Preview only:
+```
+EXEC dbo.drop_databases_that_have_been_offline_for_more_than_a_specific_amount_of_time
+     @interval_days = 90,
+     @Only_Show_Databases_Do_Not_Drop = 1;
+```
+
+Execute cleanup:
+```
+EXEC dbo.drop_databases_that_have_been_offline_for_more_than_a_specific_amount_of_time
+     @interval_days = 90,
+     @Only_Show_Databases_Do_Not_Drop = 0;
+```
+
+---
+
+## 8. Full Stored Procedure Source 💻
+
+<details>
+<summary>(click to expand) The complete 137-line script:</summary>
+
+```sql
+-- filepath: c:\Users\Ali\git\MyGitHubRepos\SQLServer-DBA-Tools\Database & Disk Physical Operation\Database\Drop Databases been offline more than a specific amount of time.sql
 -- Automated drop of databases offline longer than given interval
 USE master;
 GO
@@ -144,3 +247,22 @@ EXEC dbo.drop_databases_that_have_been_offline_for_more_than_a_specific_amount_o
      @interval_days = 60,
      @Only_Show_Databases_Do_Not_Drop = 1;
 GO
+```
+
+</details>
+
+---
+
+## 9. Quick Checklist ✅
+
+| Task | Status |
+|------|--------|
+| Preview run completed | ☐ |
+| Threshold validated | ☐ |
+| Permissions confirmed | ☐ |
+| Error logs retained | ☐ |
+| Post-drop file cleanup reviewed | ☐ |
+
+---
+
+**END** ✨
