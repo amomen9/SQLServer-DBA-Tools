@@ -1,11 +1,131 @@
+# 📦 SQL Server File Copy / Move Utility (ROBOCOPY Wrapper)
+
+---
+
+## 1. Header Explanation 📝
+
+Purpose: Copy or move files/directories using ROBOCOPY via xp_cmdshell with basic validation and status output.
 
 
+---
 
+## 2. Overview 📘
+This script defines a lightweight toolkit to batch copy or move files and directories on the SQL Server host (or reachable paths) using `ROBOCOPY`, driven from T-SQL:
+1. User passes a table-valued parameter (`File_Table`) listing source paths and target destinations.
+2. The stored procedure `sp_copy_files` validates sources and destinations.
+3. It normalizes path formatting (trailing slashes, quoting).
+4. It enables `xp_cmdshell` temporarily to run `ROBOCOPY`.
+5. It performs copy or move operations (controlled by `@move`).
+6. It reports per-item success or warnings and then disables `xp_cmdshell`.
 
--- Author: a-momen | Contact: amomen@gmail.com
--- Purpose: Copy or move files/directories using ROBOCOPY via xp_cmdshell with basic validation and status output.
+---
 
--- Define table type for input list of source paths and destinations.
+## 3. Components 🧩
+
+| Component | Type | Purpose |
+|-----------|------|---------|
+| `File_Table` | Table Type | Supplies a list of source paths and destination directories. |
+| `sp_copy_files` | Stored Procedure | Executes ROBOCOPY operations with validation and messaging. |
+| Demo Block | T-SQL Batch | Shows procedure invocation and optional cleanup. |
+
+---
+
+## 4. Procedure Parameters ⚙️
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `@File_Table` | `File_Table` (TVP) | (Required) | Source + destination rows. |
+| `@move` | `BIT` | `0` | `1` = move (remove source); `0` = copy. |
+| `@Replace_String_Replacement` | `SYSNAME` | `''` | Placeholder (not implemented). |
+| `@Replace_Pattern` | `SYSNAME` | `''` | Placeholder (not implemented). |
+| `@NO_INFOMSGS` | `BIT` | `0` | Suppress success messages if `1`. |
+
+---
+
+## 5. Processing Flow 🔄
+
+1. Input rows staged into temp table.
+2. Paths sanitized (quotes removed, trailing slashes normalized).
+3. Destination paths enforced to end with `\`.
+4. Advanced options + `xp_cmdshell` enabled.
+5. Validate:
+   - At least one non-empty destination.
+   - At least one existing source (file or directory).
+6. Cursor iterates each row:
+   - Creates destination directory if needed.
+   - Builds `ROBOCOPY` command (file vs directory mode).
+   - Executes via `xp_cmdshell`, logs output to `#tmp`.
+   - Scans output for the token `ERROR`.
+   - Prints success or warning.
+7. Disables `xp_cmdshell` and advanced options.
+8. Demo shows execution and optional cleanup.
+
+---
+
+## 6. ROBOCOPY Options Used 🛠️
+
+| Option | Meaning |
+|--------|---------|
+| `/J` | Unbuffered I/O (reduces memory usage). |
+| `/COPY:DATSOU` | Copies all file attributes (Data, Attributes, Timestamps, Security, Owner, Audit). |
+| `/MOV` / `/MOVE` | Move (remove source) when `@move = 1`. |
+| `/MT:8` | Multithreaded (8 threads). |
+| `/R:3 /W:1` | Retry 3 times, wait 1 second between attempts. |
+| `/E` | Include subdirectories (for directory copy). |
+| `/COMPRESS` | Enables NTFS compression during transfer (directory mode). |
+| `/UNILOG+:ROBOout.log` | Append Unicode log file. |
+| `/TEE /UNICODE` | Echo output to console, ensure Unicode logging. |
+
+---
+
+## 7. Messaging & Error Handling ⚠️
+
+| Aspect | Behavior |
+|--------|----------|
+| Validation Failure | Raises error and exits early. |
+| ROBOCOPY Error Token | Captured via output scan; prints warning. |
+| Success Output | Printed unless `@NO_INFOMSGS = 1`. |
+| Catch Block | Prints structured diagnostic block per failed iteration. |
+| Cleanup | Ensures `xp_cmdshell` disabled post-run. |
+
+---
+
+## 8. Use Cases 💡
+
+| Scenario | How |
+|----------|-----|
+| One-off server file migration | Populate TVP with sources → run `@move = 1`. |
+| Prepare seed files for other host | Use copy mode (`@move = 0`). |
+| Scheduled housekeeping | Wrap in SQL Agent job (ensure security review). |
+| Bulk directory replication | Provide root folder as a “directory” row. |
+
+---
+
+## 9. Security Considerations 🔐
+
+| Concern | Mitigation |
+|---------|------------|
+| `xp_cmdshell` exposure | Enabled only inside procedure scope; disabled afterward. |
+| Unauthorized paths | Restrict execution to trusted principals. |
+| Log file growth (`ROBOout.log`) | Periodically archive/truncate. |
+| UNC path permissions | Ensure service account access. |
+
+---
+
+## 10. Performance Notes 🚀
+
+| Factor | Impact |
+|--------|--------|
+| `/MT:8` threads | Parallelism improves throughput; adjust for IO constraints. |
+| Large directory trees | Use staging or split into batches. |
+| Network share latency | Consider testing RTT before large moves. |
+
+---
+
+## 11. Table Type Definition 📄
+
+```sql
+-- Table type for supplying source and destination paths
 IF NOT EXISTS (SELECT 1 FROM sys.types WHERE name = 'File_Table')
     CREATE TYPE File_Table AS TABLE
     (
@@ -13,7 +133,16 @@ IF NOT EXISTS (SELECT 1 FROM sys.types WHERE name = 'File_Table')
         [Destination]       NVARCHAR(2000) NOT NULL
     );
 GO
+```
 
+---
+
+## 12. Stored Procedure Source ⚙️
+
+<details>
+<summary>(click to expand) The complete 176-line script:</summary>
+
+```sql
 -- Stored procedure: copy or move files/directories provided in a File_Table TVP.
 CREATE OR ALTER PROC dbo.sp_copy_files
     @File_Table                File_Table READONLY,
@@ -191,7 +320,15 @@ BEGIN
     EXEC sys.sp_configure 'show advanced options', 0; RECONFIGURE;
 END;
 GO
+```
 
+</details>
+
+---
+
+## 13. Demo Execution & Cleanup ▶️
+
+```sql
 -- Demo execution block: prepare input table and invoke copy/move.
 DECLARE @File_Table File_Table;
 INSERT @File_Table ([file or directory], Destination)
@@ -200,13 +337,42 @@ VALUES
     (N'D:\1\f1.docx',  N'D:\2');
 
 EXEC dbo.sp_copy_files
-     @File_Table                = @File_Table,
-     @move                      = 1,
+     @File_Table                 = @File_Table,
+     @move                       = 1,
      @Replace_String_Replacement = '',
-     @Replace_Pattern           = '',
-     @NO_INFOMSGS               = 0;
+     @Replace_Pattern            = '',
+     @NO_INFOMSGS                = 0;
 GO
 
--- Cleanup example: drop the procedure if no longer needed.
+-- Optional cleanup
 DROP PROCEDURE dbo.sp_copy_files;
 GO
+```
+
+---
+
+## 14. Operational Checklist ✅
+
+| Step | Done |
+|------|------|
+| Validate source paths | ☐ |
+| Confirm destination permissions | ☐ |
+| Decide copy vs move (`@move`) | ☐ |
+| Review ROBOCOPY log (`ROBOout.log`) | ☐ |
+| Disable `xp_cmdshell` verified | ☐ |
+
+---
+
+## 15. Enhancement Ideas 🚀
+
+| Idea | Benefit |
+|------|---------|
+| Add retry logic parsing ROBOCOPY exit codes | Robust failure handling. |
+| Implement rename placeholders | Dynamic filename transformations. |
+| Add dry-run mode | Safety preview. |
+| Aggregate summary table | Auditing & metrics. |
+| Parameter for thread count (`/MT`) | Tunable performance. |
+
+---
+
+**End** ✨
