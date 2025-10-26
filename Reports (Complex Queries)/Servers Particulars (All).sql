@@ -27,7 +27,8 @@ GO
 	--) ds
 	--WHERE LEN([IP Address])-LEN(REPLACE([IP Address],'.',''))=3 AND ds.[IP Address] NOT LIKE '169.%' AND ds.[IP Address] NOT LIKE '127.%'
 DECLARE @os_server_name NVARCHAR(256),
-		@os_server_ip VARCHAR(15)
+		@os_server_ip VARCHAR(15),
+		@sql_port VARCHAR(5)
 
 SELECT 
 	@os_server_name = MIN(ISNULL(ds.fci_node_name, ds.Server)),
@@ -43,6 +44,10 @@ FROM
 ) ds
 WHERE LEN([IP Address])-LEN(REPLACE([IP Address],'.',''))=3 AND ds.[IP Address] NOT LIKE '169.%' AND ds.[IP Address] NOT LIKE '127.%'
 
+SELECT
+	@sql_port = CONVERT(VARCHAR(5),value_data)
+FROM sys.dm_server_registry
+WHERE registry_key LIKE N'%SuperSocketNetLib%IPAll%' AND value_name = N'TcpPort';
 
 
 CREATE TABLE #DriveSpec ( [DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(5,2), [drive_type_desc] NVARCHAR(256), SuggestedNewCapacity VARCHAR(103) )
@@ -215,13 +220,13 @@ BEGIN
 	--PRINT @SQL
 	--EXEC(@SQL)
 END
-GO
+--GO
 
 
 
 
 
-DECLARE @columns NVARCHAR(MAX), @sql NVARCHAR(MAX);
+DECLARE @columns NVARCHAR(MAX), @SQL2 NVARCHAR(MAX);
 -- Construct the column list for the IN clause
 -- Either through getting distinct entries from #DriveSpec:
 /*
@@ -233,8 +238,8 @@ SELECT @columns = '[C:\], [D:\], [E:\], [F:\], [G:\], [H:\], [I:\], [J:\], [K:\]
 
 
 -- Construct the full pivot query
-SET @sql = '
-	SELECT ' + @columns + '
+SET @SQL2 = '
+	SELECT '''+@os_server_name+''' [Server Name], '''+@os_server_ip+''' [Server IP],' + @columns + '
 	FROM (
 		SELECT 
 		DriveLetter,
@@ -249,7 +254,7 @@ SET @sql = '
 ';
 
 -- Execute the pivot query
-EXEC sp_executesql @sql;
+EXEC sp_executesql @SQL2;
 GO
 
 
