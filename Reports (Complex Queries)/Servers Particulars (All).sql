@@ -13,6 +13,38 @@ DROP TABLE IF EXISTS #DriveSpec
 GO
 
 
+	--SELECT 
+	--	IIF(is_fci_clustered = 1, (SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner=1), ds.Server) Server,
+	--	MIN([IP Address])
+	--FROM
+	--(
+	--	SELECT
+	--		IIF(EXISTS (SELECT * FROM sys.dm_os_cluster_nodes), 1, 0) [is_fci_clustered],
+	--		CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
+	--		CONVERT(NVARCHAR(60),value_data) [IP Address]
+	--	FROM sys.dm_server_registry
+	--	WHERE value_name = 'IpAddress'
+	--) ds
+	--WHERE LEN([IP Address])-LEN(REPLACE([IP Address],'.',''))=3 AND ds.[IP Address] NOT LIKE '169.%' AND ds.[IP Address] NOT LIKE '127.%'
+DECLARE @os_server_name NVARCHAR(256),
+		@os_server_ip VARCHAR(15)
+
+SELECT 
+	@os_server_name = MIN(ISNULL(ds.fci_node_name, ds.Server)),
+	@os_server_ip = MIN([IP Address])
+FROM
+(
+	SELECT
+		IIF(EXISTS (SELECT * FROM sys.dm_os_cluster_nodes), (SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner=1), NULL) fci_node_name,
+		CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
+		CONVERT(NVARCHAR(60),value_data) [IP Address]
+	FROM sys.dm_server_registry
+	WHERE value_name = 'IpAddress'
+) ds
+WHERE LEN([IP Address])-LEN(REPLACE([IP Address],'.',''))=3 AND ds.[IP Address] NOT LIKE '169.%' AND ds.[IP Address] NOT LIKE '127.%'
+
+
+
 CREATE TABLE #DriveSpec ( [DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(5,2), [drive_type_desc] NVARCHAR(256), SuggestedNewCapacity VARCHAR(103) )
 
 DECLARE @SQL VARCHAR(8000) 
@@ -120,8 +152,8 @@ BEGIN
 	WHERE drive_type_desc = 'DRIVE_FIXED'
 
 	SELECT 
-		IIF(is_fci_clustered = 1, (SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner=1), ds.Server) Server,
-		IIF(is_fci_clustered = 1, [IP Address]+' SQL_IP', [IP Address]) [IP Address],
+		@os_server_name [Server Name],
+		@os_server_ip [Server IP],
 		ds.DriveLetter,
 		ds.logical_volume_name,
 		ds.[Extended Size],
@@ -132,9 +164,6 @@ BEGIN
 	FROM
 	(
 		SELECT
-			IIF(EXISTS (SELECT * FROM sys.dm_os_cluster_nodes), 1, 0) [is_fci_clustered],
-			CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
-			CONVERT(NVARCHAR(60),CONNECTIONPROPERTY('local_net_address')) [IP Address],
 			[DriveLetter],
 			[logical_volume_name],
 			SuggestedNewCapacity [Extended Size],
@@ -205,18 +234,19 @@ SELECT @columns = '[C:\], [D:\], [E:\], [F:\], [G:\], [H:\], [I:\], [J:\], [K:\]
 
 -- Construct the full pivot query
 SET @sql = '
-SELECT ' + @columns + '
-FROM (
-SELECT 
-DriveLetter,
-Size_GB + IIF(LEN(REPLACE(REPLACE(logical_volume_name, CHAR(32), ''''), CHAR(13), '''')) > 0, '' ('' + logical_volume_name + '') '', '' (No Logical Name)'') AS VolumeInfo
-FROM #DriveSpec
-WHERE drive_type_desc = ''DRIVE_FIXED''
-) AS SourceTable
-PIVOT (
-MAX(VolumeInfo)
-FOR DriveLetter IN (' + @columns + ')
-) AS PivotTable;';
+	SELECT ' + @columns + '
+	FROM (
+		SELECT 
+		DriveLetter,
+		Size_GB + IIF(LEN(REPLACE(REPLACE(logical_volume_name, CHAR(32), ''''), CHAR(13), '''')) > 0, '' ('' + logical_volume_name + '') '', '' (No Logical Name)'') AS VolumeInfo
+		FROM #DriveSpec
+		WHERE drive_type_desc = ''DRIVE_FIXED''
+	) AS SourceTable
+	PIVOT (
+	MAX(VolumeInfo)
+	FOR DriveLetter IN (' + @columns + ')
+	) AS PivotTable;
+';
 
 -- Execute the pivot query
 EXEC sp_executesql @sql;
