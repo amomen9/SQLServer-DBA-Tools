@@ -13,7 +13,7 @@ DROP TABLE IF EXISTS #DriveSpec
 GO
 
 
-CREATE TABLE #DriveSpec ( /*[Server (IP + Port + Server Name)] NVARCHAR(256), */[DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(4,2), [drive_type_desc] NVARCHAR(256) )
+CREATE TABLE #DriveSpec ( [DriveLetter] NVARCHAR(3), [logical_volume_name] NVARCHAR(4000), [Size_GB] VARCHAR(103), [free_space_GB] VARCHAR(103), [used_space %] DECIMAL(5,2), [drive_type_desc] NVARCHAR(256), SuggestedNewCapacity VARCHAR(103) )
 
 DECLARE @SQL VARCHAR(8000) 
 IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
@@ -97,17 +97,54 @@ BEGIN
 		) dt JOIN sys.dm_os_enumerate_fixed_drives fd
 		ON fd.fixed_drive_path = LEFT(dt.Drives,1)+':\'
 	)
+	, results_in_GB AS
+	(
+		SELECT
+			[DriveLetter], [logical_volume_name],
+			CONVERT(DEC(20,2),cte.Size_bytes/1024.0/1024/1024) [Size_GB], 
+			CONVERT(DEC(20,2),cte.free_space_bytes/1024.0/1024/1024) [free_space_GB],		
+			(cte.Size_bytes-cte.free_space_bytes)*100.0/cte.Size_bytes used_space_percentage,
+			[drive_type_desc]
+		FROM cte
+	)
 	INSERT INTO #DriveSpec
 	SELECT
 		[DriveLetter], [logical_volume_name],
-		CONVERT(VARCHAR(103),CONVERT(DEC(20,2),cte.Size_bytes/1024.0/1024/1024))+' GB' [Size_GB], 
-		CONVERT(VARCHAR(103),CONVERT(DEC(20,2),cte.free_space_bytes/1024.0/1024/1024))+' GB' [free_space_GB],
-		
-		(cte.Size_bytes-cte.free_space_bytes)*100.0/cte.Size_bytes used_space_percentage,
-		[drive_type_desc]
-	FROM cte
+		CONVERT(VARCHAR(103),[Size_GB]) +' GB' [Size_GB],
+		CONVERT(VARCHAR(103),[free_space_GB])+' GB' [free_space_GB],
+		rig.used_space_percentage,
+		rig.drive_type_desc,
+		-- Return the target desired drive size value if it requires extension
+		IIF(rig.used_space_percentage>=80,CONVERT(VARCHAR(103),CEILING((rig.Size_GB-rig.free_space_GB)/70.0)*100)+ ' GB','No extension needed') SuggestedNewCapacity
+	FROM results_in_GB rig
+	WHERE drive_type_desc = 'DRIVE_FIXED'
 
-	SELECT * FROM #DriveSpec
+	SELECT 
+		IIF(is_fci_clustered = 1, (SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner=1), ds.Server) Server,
+		IIF(is_fci_clustered = 1, [IP Address]+' SQL_IP', [IP Address]) [IP Address],
+		ds.DriveLetter,
+		ds.logical_volume_name,
+		ds.[Extended Size],
+		ds.[used_space %],
+		ds.Size_GB,
+		ds.free_space_GB,
+		ds.drive_type_desc
+	FROM
+	(
+		SELECT
+			IIF(EXISTS (SELECT * FROM sys.dm_os_cluster_nodes), 1, 0) [is_fci_clustered],
+			CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
+			CONVERT(NVARCHAR(60),CONNECTIONPROPERTY('local_net_address')) [IP Address],
+			[DriveLetter],
+			[logical_volume_name],
+			SuggestedNewCapacity [Extended Size],
+			[used_space %],
+			[Size_GB],
+			[free_space_GB],
+			drive_type_desc
+		FROM #DriveSpec
+--		WHERE SuggestedNewCapacity<>'No extension needed'
+	) ds
 
 
 END ELSE
@@ -157,9 +194,13 @@ GO
 
 DECLARE @columns NVARCHAR(MAX), @sql NVARCHAR(MAX);
 -- Construct the column list for the IN clause
+-- Either through getting distinct entries from #DriveSpec:
+/*
 SELECT @columns = COALESCE(@columns + ',','') + QUOTENAME(DriveLetter)
 FROM (SELECT DISTINCT DriveLetter FROM #DriveSpec WHERE drive_type_desc = 'DRIVE_FIXED') AS DriveLetters;
-
+*/
+-- Or using all drive letters regardless of what drives exist on the system.
+SELECT @columns = '[C:\], [D:\], [E:\], [F:\], [G:\], [H:\], [I:\], [J:\], [K:\], [L:\], [M:\], [N:\], [O:\], [P:\], [Q:\], [R:\], [S:\], [T:\], [U:\], [V:\], [W:\], [X:\], [Y:\], [Z:\]'
 
 
 -- Construct the full pivot query
@@ -288,85 +329,85 @@ GO
 --SELECT feature_name, feature_id
 --FROM sys.dm_db_persisted_sku_features;
 
-IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
-BEGIN
-	
-	DECLARE @cmdshell_initial_status BIT = (SELECT CONVERT(CHAR(1),value_in_use) FROM sys.configurations WHERE name ='xp_cmdshell')
-
-	IF @cmdshell_initial_status=0
-	BEGIN
-		EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE; EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE;
-	END
-
-
-	TRUNCATE TABLE #cmdsh
-	INSERT #cmdsh
-	EXEC sys.xp_cmdshell 'powershell "get-wmiobject win32_product | where {$_.Name -match \"SQL\" -AND $_.vendor -eq \"Microsoft Corporation\"}"'
-	
-	DELETE FROM #cmdsh WHERE output IS NULL OR (output NOT LIKE 'Name%' AND output NOT LIKE 'Version%') 
-
-	IF @cmdshell_initial_status = 0
-	BEGIN
-		EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; --EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
-	END
-
-
-	; WITH cte AS
-    (
-		SELECT 
-			ROW_NUMBER() over (ORDER BY id) + ROW_NUMBER() over (ORDER BY id)%2 in_row,
-			* 
-		FROM #cmdsh
-	)
-	, cte2
-	AS
-    (
-		SELECT cte.in_row
-		FROM cte
-		WHERE output LIKE '%vend%' 
-		OR output LIKE '%IdentifyingNumber%' 
-		OR output LIKE '%caption%' 
-		OR output LIKE '%SQL Server Management Studio%'
-		OR output LIKE '%Microsoft ODBC Driver%'
-		OR output LIKE '%Microsoft OLE DB Driver%'
-		OR output LIKE '%Database Engine Shared%'
-		OR output LIKE '%T-SQL%'
-		OR output LIKE '%XEvent%'
-		OR output LIKE '%Connection Info%'
-		OR output LIKE '%common%'
-		OR output LIKE '%RsFx%'
-		OR output LIKE '%VSS Writer for SQL Server%'
-		OR output LIKE '%Microsoft SQL Server%Setup%'
-		OR output LIKE '%Shared%'
-		OR output LIKE '%Browser for SQL Server%'
-		OR output LIKE '%Extension%'
-		OR output LIKE '%Diagnostic%'
-		OR output LIKE '%Batch%'
-		OR output LIKE '%DMF%'
-		OR output LIKE '%Native Client%'
-		OR output LIKE '%Diagnostic%'
-		OR output LIKE '%Diagnostic%'
-	)
-	, cte3 as
-	(
-		SELECT cte.id, cte.in_row, LEAD(cte.in_row) OVER (ORDER BY id) lead_row, cte.output + REPLICATE(CHAR(32),11) + LEAD(cte.output) OVER (ORDER BY id) feature_details FROM cte left JOIN cte2
-		ON cte.in_row = cte2.in_row
-		WHERE cte2.in_row IS NULL
-	)
-	, cte4 as
-	(
-		SELECT DISTINCT
-			cte3.feature_details
-		FROM cte3
-		WHERE in_row = lead_row
-	)
-	SELECT ROW_NUMBER() OVER (ORDER BY cte4.feature_details) row,
-		cte4.feature_details
-	FROM cte4
-
-
-END ELSE		
-		SELECT 'Getting installed features is not available on Linux.' [Error Message]
+--IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
+--BEGIN
+--	
+--	DECLARE @cmdshell_initial_status BIT = (SELECT CONVERT(CHAR(1),value_in_use) FROM sys.configurations WHERE name ='xp_cmdshell')
+--
+--	IF @cmdshell_initial_status=0
+--	BEGIN
+--		EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE; EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE;
+--	END
+--
+--
+--	TRUNCATE TABLE #cmdsh
+--	INSERT #cmdsh
+--	EXEC sys.xp_cmdshell 'powershell "get-wmiobject win32_product | where {$_.Name -match \"SQL\" -AND $_.vendor -eq \"Microsoft Corporation\"}"'
+--	
+--	DELETE FROM #cmdsh WHERE output IS NULL OR (output NOT LIKE 'Name%' AND output NOT LIKE 'Version%') 
+--
+--	IF @cmdshell_initial_status = 0
+--	BEGIN
+--		EXECUTE sp_configure 'xp_cmdshell', 0; RECONFIGURE; --EXECUTE sp_configure 'show advanced options', 0; RECONFIGURE;
+--	END
+--
+--
+--	; WITH cte AS
+--    (
+--		SELECT 
+--			ROW_NUMBER() over (ORDER BY id) + ROW_NUMBER() over (ORDER BY id)%2 in_row,
+--			* 
+--		FROM #cmdsh
+--	)
+--	, cte2
+--	AS
+--    (
+--		SELECT cte.in_row
+--		FROM cte
+--		WHERE output LIKE '%vend%' 
+--		OR output LIKE '%IdentifyingNumber%' 
+--		OR output LIKE '%caption%' 
+--		OR output LIKE '%SQL Server Management Studio%'
+--		OR output LIKE '%Microsoft ODBC Driver%'
+--		OR output LIKE '%Microsoft OLE DB Driver%'
+--		OR output LIKE '%Database Engine Shared%'
+--		OR output LIKE '%T-SQL%'
+--		OR output LIKE '%XEvent%'
+--		OR output LIKE '%Connection Info%'
+--		OR output LIKE '%common%'
+--		OR output LIKE '%RsFx%'
+--		OR output LIKE '%VSS Writer for SQL Server%'
+--		OR output LIKE '%Microsoft SQL Server%Setup%'
+--		OR output LIKE '%Shared%'
+--		OR output LIKE '%Browser for SQL Server%'
+--		OR output LIKE '%Extension%'
+--		OR output LIKE '%Diagnostic%'
+--		OR output LIKE '%Batch%'
+--		OR output LIKE '%DMF%'
+--		OR output LIKE '%Native Client%'
+--		OR output LIKE '%Diagnostic%'
+--		OR output LIKE '%Diagnostic%'
+--	)
+--	, cte3 as
+--	(
+--		SELECT cte.id, cte.in_row, LEAD(cte.in_row) OVER (ORDER BY id) lead_row, cte.output + REPLICATE(CHAR(32),11) + LEAD(cte.output) OVER (ORDER BY id) feature_details FROM cte left JOIN cte2
+--		ON cte.in_row = cte2.in_row
+--		WHERE cte2.in_row IS NULL
+--	)
+--	, cte4 as
+--	(
+--		SELECT DISTINCT
+--			cte3.feature_details
+--		FROM cte3
+--		WHERE in_row = lead_row
+--	)
+--	SELECT ROW_NUMBER() OVER (ORDER BY cte4.feature_details) row,
+--		cte4.feature_details
+--	FROM cte4
+--
+--
+--END ELSE		
+--		SELECT 'Getting installed features is not available on Linux.' [Error Message]
 		
 
 
