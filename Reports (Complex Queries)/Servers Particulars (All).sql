@@ -255,7 +255,7 @@ SET @SQL2 = '
 
 -- Execute the pivot query
 EXEC sp_executesql @SQL2;
-GO
+--GO
 
 
 
@@ -271,28 +271,27 @@ GO
 --SELECT DISTINCT local_net_address, local_tcp_port FROM sys.dm_exec_connections c  JOIN sys.dm_exec_sessions s
 --ON s.session_id = c.session_id
 --WHERE local_net_address IS NOT NULL 
-GO
+--GO
 
 
 IF (SELECT host_platform FROM sys.dm_os_host_info) = 'Windows'
 	SELECT 
 		dto.server,
 		STRING_AGG(local_net_address,', ') [IPAddress(s)],
-		dto.PORT,
+		@sql_port [PORT],
 		dto.SQLVersion,
 		dto.CU,
 		REPLACE(dto.os_version_name,'(Hypervisor)','') os_version_name,
 		IIF(dto.os_version_name LIKE '%(Hypervisor)%','VM','Physical') machine_type
 	FROM 
 	(
-		SELECT DISTINCT dt1.server, dt1.SQLVersion, dt1.CU, dt2.PORT, dt1.os_version_name
-		FROM (SELECT @@SERVERNAME server,SERVERPROPERTY('ProductMajorVersion') SQLVersion, SERVERPROPERTY('ProductUpdateLevel') CU,SUBSTRING(@@VERSION, CHARINDEX('on Windows', @@VERSION) + 10, LEN(@@VERSION)) AS os_version_name) dt1,
-		(select RIGHT(ar.read_only_routing_url,CHARINDEX(':',REVERSE(ar.read_only_routing_url))-1) PORT from sys.availability_replicas ar WHERE ar.replica_server_name = @@SERVERNAME) dt2
+		SELECT DISTINCT dt1.server, dt1.SQLVersion, dt1.CU, dt1.os_version_name
+		FROM (SELECT @@SERVERNAME server,SERVERPROPERTY('ProductMajorVersion') SQLVersion, SERVERPROPERTY('ProductUpdateLevel') CU,SUBSTRING(@@VERSION, CHARINDEX('on Windows', @@VERSION) + 10, LEN(@@VERSION)) AS os_version_name) dt1 		
 	) dto
 		CROSS JOIN (SELECT DISTINCT local_net_address, local_tcp_port FROM sys.dm_exec_connections c  JOIN sys.dm_exec_sessions s
 		ON s.session_id = c.session_id
 		WHERE local_net_address IS NOT NULL) dt3
-		GROUP BY dto.server, dto.SQLVersion, dto.CU, dto.PORT, dto.os_version_name	
+		GROUP BY dto.server, dto.SQLVersion, dto.CU, dto.os_version_name	
 ELSE
 	SELECT dt1.server, STRING_AGG(local_net_address,', ') [IPAddress(s)], dt1.SQLVersion, dt1.CU, dt1.os_version_name
 	FROM (SELECT @@SERVERNAME server,SERVERPROPERTY('ProductMajorVersion') SQLVersion, SERVERPROPERTY('ProductUpdateLevel') CU,SUBSTRING(@@VERSION, CHARINDEX('on Windows', @@VERSION) + 10, LEN(@@VERSION)) AS os_version_name) dt1
