@@ -15,17 +15,32 @@ USE msdb;
 GO
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName sysname,   -- Target database
-		@StopAt       datetime = NULL,    -- Point-in-time inside last DIFF/LOG
-		@WithReplace  bit     = 0        -- Include REPLACE on RESTORE DATABASE	
+		@DatabaseName sysname,				-- Target database
+		@StopAt       datetime = NULL,		-- Point-in-time inside last DIFF/LOG
+		@WithReplace  bit     = 0,			-- Include REPLACE on RESTORE DATABASE
+		@IncludeLogs  BIT     = 1,			-- Include log backups	
+		@IncludeDiffs BIT     = 1			-- Include differential backups
 AS
 BEGIN
+	------------------------------------------------------------
+	-- Header
+	------------------------------------------------------------
+	PRINT '
+	-- =============================================
+	-- Author:				<a.momen>
+	-- Contact & Report:	<amomen@gmail.com>
+	-- Create date:			
+	-- Latest Update Date:	
+	-- Description:			
+	-- License:				<Please refer to the license file> 
+	-- =============================================
+	'
 	------------------------------------------------------------
 	-- Parameters
 	------------------------------------------------------------
 	DECLARE 
-		@Execute      bit     = 0,        -- 1 = execute restore chain
-		@Debug        bit     = 0;        -- If executing, but only PRINT dynamic SQL
+		@Execute      bit     = 0,			-- 1 = execute restore chain
+		@Debug        bit     = 0;			-- If executing, but only PRINT dynamic SQL
 
 	IF DB_ID(@DatabaseName) IS NULL
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
@@ -80,6 +95,7 @@ BEGIN
 	  AND b.[type] = 'I'
 	  AND b.differential_base_lsn = f.checkpoint_lsn
 	  AND b.backup_finish_date > f.backup_finish_date
+	  AND @IncludeDiffs = 1
 	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.differential_base_lsn
 	ORDER BY b.backup_finish_date DESC;
@@ -106,6 +122,7 @@ BEGIN
 	WHERE b.database_name = @DatabaseName
 	  AND b.[type] = 'L'
 	  AND b.backup_finish_date > @BaseFinish
+	  AND @IncludeLogs = 1
 	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.database_backup_lsn
 	ORDER BY b.first_lsn;
@@ -263,9 +280,9 @@ BEGIN
 END
 GO
 
---EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'TBS', -- sysname
---                                         @StopAt = NULL,       -- datetime
---                                         @WithReplace = 0      -- bit
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'TBS', -- sysname
+                                         @StopAt = NULL,       -- datetime
+                                         @WithReplace = 0      -- bit
 GO
 
 
