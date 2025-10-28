@@ -23,25 +23,25 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@Recovery     BIT		= 0,			-- Specify whether to eventually recover the database or not 
 		@RestoreUpTo_TIMESTAMP 
 				 DATETIME2(3)	= NULL,			-- Backup files started after this TIMESTAMP will be excluded 
-		@Execute      bit     = 0,				-- 1 = execute the produced script
-		@Debug        bit     = 0				-- If executing and @Debug = 1 the produced script will also be printed.
+		@Execute      BIT		= 0,				-- 1 = execute the produced script
+		@Verbose        bit     = 1				-- If executing and @Verbose = 1 the produced script will also be printed.
 AS
 BEGIN
 	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
-	PRINT '
-	-- =============================================
-	-- Author:				<a.momen>
-	-- Contact & Report:	<amomen@gmail.com>
-	-- Create date:			
-	-- Latest Update Date:	
-	-- Description:			
-	-- License:				<Please refer to the license file> 
-	-- =============================================
+	IF @Verbose = 1
+		PRINT '
+		-- =============================================
+		-- Author:				<a.momen>
+		-- Contact & Report:	<amomen@gmail.com>
+		-- Create date:			
+		-- Latest Update Date:	
+		-- Description:			
+		-- License:				<Please refer to the license file> 
+		-- =============================================
 	
-	
-	'
+		'
 	------------------------------------------------------------
 	-- Parameter validation
 	------------------------------------------------------------
@@ -262,12 +262,19 @@ BEGIN
 		@LogCount int = (SELECT COUNT(*) FROM #RestoreChain WHERE BackupType='LOG');
 
 	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' ----------------------------------------';
-	PRINT '-- ```RESTORE CHAIN BUILDER```';
-	PRINT '-- Full: ' + @FullInfo;
-	IF @HasDiff = 1 PRINT '-- Diff: ' + @DiffInfo ELSE PRINT '-- Diff: (none)';
-	PRINT '-- Log backups: ' + CAST(@LogCount AS varchar(12));
-	PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
-											 WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
+	IF @Verbose = 1
+	BEGIN
+		PRINT '-- ```RESTORE CHAIN BUILDER```';
+		PRINT '-- Full: ' + @FullInfo;
+		IF @HasDiff = 1 PRINT '-- Diff: ' + @DiffInfo ELSE PRINT '-- Diff: (none)';
+		PRINT '-- Log backups: ' + CAST(@LogCount AS varchar(12));
+		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
+												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
+	END
+	ELSE 
+		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
+												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
+
 	IF @LogsChainValid = 0
 		PRINT 'WARNING: Log chain appears broken (gap detected).';
 	IF @StopAt IS NOT NULL
@@ -290,13 +297,21 @@ BEGIN
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',	-- sysname
                                          @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
-										 @IncludeLogs = 1,
-										 @IncludeDiffs = 1,
-										 @RestoreUpTo_TIMESTAMP = '2025-10-28 09:52:10.553'
+										 @IncludeLogs = 0,
+										 @IncludeDiffs = 0,
+										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
+										 @Verbose = 0
 										 
 GO
 
 
+----------- Database: master ----------------------------------------
+-- ```RESTORE CHAIN BUILDER```
+-- Full: FullFinish=2025-08-01 19:00:00;
+-- Diff: (none)
+-- Log backups: 0
+-- Log chain LSN continuity: N/A (no logs)
+------------------------------------------------------------------
