@@ -47,6 +47,7 @@ BEGIN
 
 	IF DB_ID(@DatabaseName) IS NULL
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
+	
 	IF @StopAt = '' SET @StopAt = NULL
 
 	------------------------------------------------------------
