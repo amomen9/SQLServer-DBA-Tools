@@ -19,7 +19,8 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@StopAt       datetime = NULL,		-- Point-in-time inside last DIFF/LOG
 		@WithReplace  bit     = 0,			-- Include REPLACE on RESTORE DATABASE
 		@IncludeLogs  BIT     = 1,			-- Include log backups	
-		@IncludeDiffs BIT     = 1			-- Include differential backups
+		@IncludeDiffs BIT     = 1,			-- Include differential backups
+		@Recovery     BIT     = 0			-- Specify whether to eventually recover the database or not 
 AS
 BEGIN
 	------------------------------------------------------------
@@ -220,7 +221,7 @@ BEGIN
 			WHEN 'FULL' THEN
 				N'RESTORE DATABASE [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' +
 				N'STATS = 5' + @ReplaceClause + 
-				CASE WHEN rc.StepNumber = @LastStep THEN N', NORECOVERY;' ELSE N', NORECOVERY;' END
+				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'DIFF' THEN
 				N'RESTORE DATABASE [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' +
 				(CASE 
@@ -229,7 +230,7 @@ BEGIN
 					ELSE N''
 				 END) +
 				N'STATS = 5' +
-				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 THEN N', NORECOVERY;' ELSE N', NORECOVERY;' END
+				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'LOG' THEN
 				N'RESTORE LOG [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' +
 				(CASE 
@@ -238,7 +239,7 @@ BEGIN
 					ELSE N''
 				 END) +
 				N'STATS = 5' +
-				CASE WHEN rc.StepNumber = @LastStep THEN N', NORECOVERY;' ELSE N', NORECOVERY;' END
+				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 		END
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
