@@ -43,10 +43,15 @@ BEGIN
 	
 		'
 	------------------------------------------------------------
+	-- Parameter definition
+	------------------------------------------------------------
+	DECLARE @last_full_backup_backup_set_id int
+	
+	------------------------------------------------------------
 	-- Parameter validation
 	------------------------------------------------------------
 
-	IF DB_ID(@DatabaseName) IS NULL
+	IF DB_ID(@DatabaseName) IS NULL AND @Verbose = 1
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
 	
 	IF @StopAt = '' SET @StopAt = NULL
@@ -72,7 +77,8 @@ BEGIN
 	WHERE b.database_name = @DatabaseName
 	  AND b.[type] = 'D'
 	  AND b.is_copy_only = 0
-	  AND b.backup_start_date <= COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
+	  AND mf.mirror = 0
+	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
 	GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
 	ORDER BY b.backup_finish_date DESC;
@@ -83,6 +89,8 @@ BEGIN
 		RETURN;
 	END
 
+	SELECT @last_full_backup_backup_set_id = backup_set_id
+	FROM #Full 
 	------------------------------------------------------------
 	-- DIFF (latest tied to that FULL)
 	------------------------------------------------------------
@@ -102,9 +110,10 @@ BEGIN
 	WHERE b.database_name = @DatabaseName
 	  AND b.[type] = 'I'
 	  AND b.differential_base_lsn = f.checkpoint_lsn
+	  AND mf.mirror = 0
 	  AND b.backup_finish_date > f.backup_finish_date
 	  AND @IncludeDiffs = 1
-	  AND b.backup_start_date <= COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
+	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
 	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.differential_base_lsn
 	ORDER BY b.backup_finish_date DESC;
@@ -130,9 +139,10 @@ BEGIN
 	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
 	WHERE b.database_name = @DatabaseName
 	  AND b.[type] = 'L'
+	  AND mf.mirror = 0
 	  AND b.backup_finish_date > @BaseFinish
 	  AND @IncludeLogs = 1
-	  AND b.backup_start_date <= COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
+	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
 	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.database_backup_lsn
 	ORDER BY b.first_lsn;
@@ -297,13 +307,13 @@ BEGIN
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',	-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
                                          @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 0,
 										 @IncludeDiffs = 0,
 										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
-										 @Verbose = 0
+										 @Verbose = 1
 										 
 GO
 
