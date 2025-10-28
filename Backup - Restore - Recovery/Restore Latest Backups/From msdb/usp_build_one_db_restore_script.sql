@@ -16,11 +16,13 @@ GO
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@DatabaseName sysname,				-- Target database
-		@StopAt       datetime = NULL,		-- Point-in-time inside last DIFF/LOG
-		@WithReplace  bit     = 0,			-- Include REPLACE on RESTORE DATABASE
-		@IncludeLogs  BIT     = 1,			-- Include log backups	
-		@IncludeDiffs BIT     = 1,			-- Include differential backups
-		@Recovery     BIT     = 0			-- Specify whether to eventually recover the database or not 
+		@StopAt       datetime	= NULL,		-- Point-in-time inside last DIFF/LOG
+		@WithReplace  bit		= 0,			-- Include REPLACE on RESTORE DATABASE
+		@IncludeLogs  BIT		= 1,			-- Include log backups	
+		@IncludeDiffs BIT		= 1,			-- Include differential backups
+		@Recovery     BIT		= 0,			-- Specify whether to eventually recover the database or not 
+		@RestoreUpTo_TIMESTAMP 
+				 DATETIME2(3)	= NULL		-- Backup files started after this TIMESTAMP will be excluded 
 AS
 BEGIN
 	------------------------------------------------------------
@@ -49,6 +51,7 @@ BEGIN
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
 	
 	IF @StopAt = '' SET @StopAt = NULL
+	IF @RestoreUpTo_TIMESTAMP = '' SET @RestoreUpTo_TIMESTAMP = NULL
 
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -70,6 +73,7 @@ BEGIN
 	WHERE b.database_name = @DatabaseName
 	  AND b.[type] = 'D'
 	  AND b.is_copy_only = 0
+	  AND b.backup_start_date <= COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
 	GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
 	ORDER BY b.backup_finish_date DESC;
@@ -101,6 +105,7 @@ BEGIN
 	  AND b.differential_base_lsn = f.checkpoint_lsn
 	  AND b.backup_finish_date > f.backup_finish_date
 	  AND @IncludeDiffs = 1
+	  AND b.backup_start_date <= COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
 	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.differential_base_lsn
 	ORDER BY b.backup_finish_date DESC;
@@ -128,6 +133,7 @@ BEGIN
 	  AND b.[type] = 'L'
 	  AND b.backup_finish_date > @BaseFinish
 	  AND @IncludeLogs = 1
+	  AND b.backup_start_date <= COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
 	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 			 b.first_lsn, b.last_lsn, b.database_backup_lsn
 	ORDER BY b.first_lsn;
