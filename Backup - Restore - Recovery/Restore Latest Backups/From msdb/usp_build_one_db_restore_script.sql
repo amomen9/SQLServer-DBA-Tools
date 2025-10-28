@@ -100,7 +100,7 @@ BEGIN
 	------------------------------------------------------------
 	-- Create directories for each database file
 	------------------------------------------------------------
-	SELECT @create_directories = STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
+	SELECT @create_directories = '-- Create datafiles directories' + CHAR(10) + STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
 	FROM (
 		SELECT DISTINCT 'EXEC sys.xp_create_subdir N''' +
 							LEFT(mf.physical_name, LEN(mf.physical_name) - CHARINDEX('\', REVERSE(mf.physical_name))) + '''' AS create_dir
