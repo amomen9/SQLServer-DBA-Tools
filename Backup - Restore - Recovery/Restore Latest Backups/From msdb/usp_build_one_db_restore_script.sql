@@ -15,21 +15,22 @@ USE msdb;
 GO
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName sysname,				-- Target database
-		@add_move_clauses	BIT = 1,
-		@StopAt       datetime	= NULL,		-- Point-in-time inside last DIFF/LOG
-		@WithReplace  bit		= 0,			-- Include REPLACE on RESTORE DATABASE
-		@IncludeLogs  BIT		= 1,			-- Include log backups	
-		@IncludeDiffs BIT		= 1,			-- Include differential backups
-		@Recovery     BIT		= 0,			-- Specify whether to eventually recover the database or not 
+		@DatabaseName			sysname,				-- Target database
+		@create_datafile_dirs	BIT = 1,
+		@add_move_clauses		BIT = 1,
+		@StopAt		DATETIME		= NULL,		-- Point-in-time inside last DIFF/LOG
+		@WithReplace			BIT	= 0,			-- Include REPLACE on RESTORE DATABASE
+		@IncludeLogs			BIT	= 1,			-- Include log backups	
+		@IncludeDiffs			BIT = 1,			-- Include differential backups
+		@Recovery				BIT = 0,			-- Specify whether to eventually recover the database or not 
 		@RestoreUpTo_TIMESTAMP 
-				 DATETIME2(3)	= NULL,			-- Backup files started after this TIMESTAMP will be excluded 
-		@Execute      BIT		= 0,				-- 1 = execute the produced script
-		@Verbose        bit     = 1				-- If executing and @Verbose = 1 the produced script will also be printed.
+					DATETIME2(3)	= NULL,			-- Backup files started after this TIMESTAMP will be excluded 
+		@Execute				BIT	= 0,				-- 1 = execute the produced script
+		@Verbose				BIT = 1				-- If executing and @Verbose = 1 the produced script will also be printed.
 AS
 BEGIN
 	------------------------------------------------------------
-	-- Header
+	-- Author tag
 	------------------------------------------------------------
 	IF @Verbose = 1
 		PRINT '
@@ -59,19 +60,10 @@ BEGIN
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' SET @RestoreUpTo_TIMESTAMP = NULL
 
-
 	------------------------------------------------------------
-	-- Create directories for each database file
+	-- Header
 	------------------------------------------------------------
-	SELECT @create_directories = STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
-	FROM (
-		SELECT DISTINCT 'EXEC sys.xp_create_subdir N''' +
-							LEFT(mf.physical_name, LEN(mf.physical_name) - CHARINDEX('\', REVERSE(mf.physical_name))) + '''' AS create_dir
-		FROM sys.master_files mf
-		WHERE mf.database_id = DB_ID('das_atiyeh')
-		  AND mf.physical_name LIKE '%\%'
-	) d;
-	IF @Execute = 1 EXEC(@create_directories)
+	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' ----------------------------------------';
 
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -104,6 +96,25 @@ BEGIN
 		RAISERROR('No FULL backup found for %s.',16,1,@DatabaseName);
 		RETURN;
 	END
+
+	------------------------------------------------------------
+	-- Create directories for each database file
+	------------------------------------------------------------
+	SELECT @create_directories = STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
+	FROM (
+		SELECT DISTINCT 'EXEC sys.xp_create_subdir N''' +
+							LEFT(mf.physical_name, LEN(mf.physical_name) - CHARINDEX('\', REVERSE(mf.physical_name))) + '''' AS create_dir
+		FROM sys.master_files mf
+		WHERE mf.database_id = DB_ID(@DatabaseName)
+		  AND mf.physical_name LIKE '%\%'
+	) d;
+	IF @create_datafile_dirs = 1
+		IF @create_directories IS NULL PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10)
+		ELSE 
+		BEGIN
+			PRINT @create_directories + CHAR(10)
+			IF @Execute = 1 EXEC(@create_directories)
+		END
 
 	------------------------------------------------------------
 	-- DIFF (latest tied to that FULL)
@@ -247,7 +258,7 @@ BEGIN
 			FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
 		,1,2,'') + ',' + CHAR(10);
 	IF @MoveClauses IS NULL AND @add_move_clauses = 1
-		SET @MoveClauses = '-- Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
+		SET @MoveClauses = '--** Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
 	SET @MoveClauses = CHAR(10) + @MoveClauses
 	IF @add_move_clauses = 0
 		SET @MoveClauses = ''
@@ -302,7 +313,6 @@ BEGIN
 										  + ';' FROM #Diff),
 		@LogCount int = (SELECT COUNT(*) FROM #RestoreChain WHERE BackupType='LOG');
 
-	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' ----------------------------------------';
 	IF @Verbose = 1
 	BEGIN
 		PRINT '-- ```RESTORE CHAIN BUILDER```';
@@ -344,18 +354,9 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
                                          @add_move_clauses = 1,
 										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
-										 @IncludeLogs = 0,
-										 @IncludeDiffs = 0,
+										 @IncludeLogs = 1,
+										 @IncludeDiffs = 1,
 										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
 										 @Verbose = 0
 										 
 GO
-
-
------------ Database: master ----------------------------------------
--- ```RESTORE CHAIN BUILDER```
--- Full: FullFinish=2025-08-01 19:00:00;
--- Diff: (none)
--- Log backups: 0
--- Log chain LSN continuity: N/A (no logs)
-------------------------------------------------------------------
