@@ -22,7 +22,9 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@IncludeDiffs BIT		= 1,			-- Include differential backups
 		@Recovery     BIT		= 0,			-- Specify whether to eventually recover the database or not 
 		@RestoreUpTo_TIMESTAMP 
-				 DATETIME2(3)	= NULL		-- Backup files started after this TIMESTAMP will be excluded 
+				 DATETIME2(3)	= NULL,			-- Backup files started after this TIMESTAMP will be excluded 
+		@Execute      bit     = 0,				-- 1 = execute the produced script
+		@Debug        bit     = 0				-- If executing and @Debug = 1 the produced script will also be printed.
 AS
 BEGIN
 	------------------------------------------------------------
@@ -41,11 +43,8 @@ BEGIN
 	
 	'
 	------------------------------------------------------------
-	-- Parameters
+	-- Parameter validation
 	------------------------------------------------------------
-	DECLARE 
-		@Execute      bit     = 0,			-- 1 = execute restore chain
-		@Debug        bit     = 0;			-- If executing, but only PRINT dynamic SQL
 
 	IF DB_ID(@DatabaseName) IS NULL
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
@@ -295,7 +294,9 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
                                          @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
-										 @IncludeDiffs = 1
+										 @IncludeDiffs = 1,
+										 @RestoreUpTo_TIMESTAMP = '2025-10-28 09:52:10.553'
+										 
 GO
 
 
