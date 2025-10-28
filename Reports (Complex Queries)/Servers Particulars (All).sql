@@ -27,7 +27,10 @@ GO
 	--) ds
 	--WHERE LEN([IP Address])-LEN(REPLACE([IP Address],'.',''))=3 AND ds.[IP Address] NOT LIKE '169.%' AND ds.[IP Address] NOT LIKE '127.%'
 DECLARE @os_server_name NVARCHAR(256),
+		@sql_name NVARCHAR(256) = LEFT(@@SERVERNAME, CHARINDEX('\', @@SERVERNAME + '\') - 1),
 		@os_server_ip VARCHAR(15),
+		@sql_ip VARCHAR(15) = CONVERT(VARCHAR(15),CONNECTIONPROPERTY('local_net_address'))
+DECLARE @sql_net_prefix VARCHAR(9) = LEFT(@sql_ip, LEN(@sql_ip) - CHARINDEX('.', REVERSE(@sql_ip))),
 		@sql_port VARCHAR(5)
 
 SELECT 
@@ -39,14 +42,16 @@ FROM
 		IIF(EXISTS (SELECT * FROM sys.dm_os_cluster_nodes), (SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner=1), NULL) fci_node_name,
 		CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')) Server,
 		CONVERT(NVARCHAR(60),value_data) [IP Address]
-	FROM sys.dm_server_registry
+	FROM sys.dm_server_registry sr
+	JOIN (SELECT registry_key FROM sys.dm_server_registry WHERE value_name = 'Active' AND value_data = CONVERT(SQL_VARIANT,1)) active_sr
+	ON active_sr.registry_key = sr.registry_key
 	WHERE value_name = 'IpAddress'
 ) ds
 WHERE LEN([IP Address])-LEN(REPLACE([IP Address],'.',''))=3 AND ds.[IP Address] NOT LIKE '169.%' AND ds.[IP Address] NOT LIKE '127.%'
 
 SELECT
 	@sql_port = CONVERT(VARCHAR(5),value_data)
-FROM sys.dm_server_registry
+FROM sys.dm_server_registry 
 WHERE registry_key LIKE N'%SuperSocketNetLib%IPAll%' AND value_name = N'TcpPort';
 
 
@@ -157,8 +162,12 @@ BEGIN
 	WHERE drive_type_desc = 'DRIVE_FIXED'
 
 	SELECT 
-		@os_server_name [Server Name],
+		@os_server_name [Server_Name],
+		@sql_name [SQL Name],
 		@os_server_ip [Server IP],
+		@sql_ip [SQL IP],
+		--@sql_net_prefix [SQL Net Prefix],
+		@sql_port [SQL Port],
 		ds.DriveLetter,
 		ds.logical_volume_name,
 		ds.[Extended Size],
@@ -239,7 +248,7 @@ SELECT @columns = '[C:\], [D:\], [E:\], [F:\], [G:\], [H:\], [I:\], [J:\], [K:\]
 
 -- Construct the full pivot query
 SET @SQL2 = '
-	SELECT '''+@os_server_name+''' [Server Name], '''+@os_server_ip+''' [Server IP],' + @columns + '
+	SELECT '''+@os_server_name+''' [Server_Name], '''+@os_server_ip+''' [Server IP], '+@sql_port+' [Port],' + @columns + '
 	FROM (
 		SELECT 
 		DriveLetter,
