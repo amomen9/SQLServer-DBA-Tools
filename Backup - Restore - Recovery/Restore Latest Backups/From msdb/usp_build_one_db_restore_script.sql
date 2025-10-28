@@ -16,6 +16,7 @@ GO
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@DatabaseName sysname,				-- Target database
+		@add_move_clauses	BIT = 1,
 		@StopAt       datetime	= NULL,		-- Point-in-time inside last DIFF/LOG
 		@WithReplace  bit		= 0,			-- Include REPLACE on RESTORE DATABASE
 		@IncludeLogs  BIT		= 1,			-- Include log backups	
@@ -45,7 +46,8 @@ BEGIN
 	------------------------------------------------------------
 	-- Parameter definition
 	------------------------------------------------------------
-	DECLARE @last_full_backup_backup_set_id int
+	DECLARE @MoveClauses NVARCHAR(MAX)
+    DECLARE @create_directories NVARCHAR(MAX)
 	
 	------------------------------------------------------------
 	-- Parameter validation
@@ -56,6 +58,20 @@ BEGIN
 	
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' SET @RestoreUpTo_TIMESTAMP = NULL
+
+
+	------------------------------------------------------------
+	-- Create directories for each database file
+	------------------------------------------------------------
+	SELECT @create_directories = STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
+	FROM (
+		SELECT DISTINCT 'EXEC sys.xp_create_subdir N''' +
+							LEFT(mf.physical_name, LEN(mf.physical_name) - CHARINDEX('\', REVERSE(mf.physical_name))) + '''' AS create_dir
+		FROM sys.master_files mf
+		WHERE mf.database_id = DB_ID('das_atiyeh')
+		  AND mf.physical_name LIKE '%\%'
+	) d;
+	IF @Execute = 1 EXEC(@create_directories)
 
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -89,8 +105,6 @@ BEGIN
 		RETURN;
 	END
 
-	SELECT @last_full_backup_backup_set_id = backup_set_id
-	FROM #Full 
 	------------------------------------------------------------
 	-- DIFF (latest tied to that FULL)
 	------------------------------------------------------------
@@ -221,6 +235,23 @@ BEGIN
 	INTO #DiskClauses
 	FROM #RestoreChain rc;
 
+	------------------------------------------------------------
+	-- Precompute MOVE clauses (avoid aggregates in UPDATE)
+	------------------------------------------------------------
+	SELECT @MoveClauses =
+		STUFF((
+			SELECT ',' + /*CHAR(10)*/ + ' MOVE N''' + mf.name + ''' TO N''' + mf.physical_name + ''''
+			FROM sys.master_files AS mf
+			WHERE mf.database_id = DB_ID(@DatabaseName)
+			ORDER BY mf.type, mf.file_id
+			FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
+		,1,2,'') + ',' + CHAR(10);
+	IF @MoveClauses IS NULL AND @add_move_clauses = 1
+		SET @MoveClauses = '-- Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
+	SET @MoveClauses = CHAR(10) + @MoveClauses
+	IF @add_move_clauses = 0
+		SET @MoveClauses = ''
+
 	-- Mark last step
 	DECLARE @LastStep int = (SELECT MAX(StepNumber) FROM #RestoreChain);
 
@@ -236,7 +267,7 @@ BEGIN
 	SET RestoreCommand =
 		CASE rc.BackupType
 			WHEN 'FULL' THEN
-				N'RESTORE DATABASE [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' +
+				N'RESTORE DATABASE [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' + @MoveClauses +
 				N'STATS = 5' + @ReplaceClause + 
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'DIFF' THEN
@@ -281,15 +312,17 @@ BEGIN
 		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
 												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
 	END
-	ELSE 
-		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
-												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
+	ELSE IF @LogCount > 0 AND @LogsChainValid = 0
+		PRINT '-- Log chain LSN continuity: BROKEN!!!';
 
 	IF @LogsChainValid = 0
+	BEGIN
 		PRINT 'WARNING: Log chain appears broken (gap detected).';
+		PRINT '------------------------------------------------------------------';
+	END
+
 	IF @StopAt IS NOT NULL
 		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
-	PRINT '------------------------------------------------------------------';
 
 	------------------------------------------------------------
 	-- PRINT commands
@@ -308,12 +341,13 @@ END
 GO
 
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
-                                         @StopAt = '',				-- datetime
+                                         @add_move_clauses = 1,
+										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 0,
 										 @IncludeDiffs = 0,
 										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
-										 @Verbose = 1
+										 @Verbose = 0
 										 
 GO
 
