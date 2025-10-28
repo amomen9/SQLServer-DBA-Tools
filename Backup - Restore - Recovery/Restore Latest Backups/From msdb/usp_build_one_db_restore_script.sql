@@ -47,6 +47,7 @@ BEGIN
 
 	IF DB_ID(@DatabaseName) IS NULL
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
+	IF @StopAt = '' SET @StopAt = NULL
 
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -284,10 +285,10 @@ END
 GO
 
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
-                                         @StopAt = NULL,				-- datetime
-                                         @WithReplace = 0,				-- bit
+                                         @StopAt = '',				-- datetime
+                                         @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
-										 @IncludeDiffs = 0
+										 @IncludeDiffs = 1
 GO
 
 
