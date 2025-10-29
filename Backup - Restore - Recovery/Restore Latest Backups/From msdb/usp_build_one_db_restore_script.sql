@@ -15,18 +15,23 @@ USE msdb;
 GO
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName			sysname,				-- Target database
-		@create_datafile_dirs	BIT = 1,
-		@add_move_clauses		BIT = 1,
+		@DatabaseName			sysname,		-- Target database
+		@create_datafile_dirs	BIT = 1,		-- Create original parent directories of the database files in target
+		@add_move_clauses		BIT = 1,		-- Add move clauses in the restore statement for the database files
 		@StopAt		DATETIME		= NULL,		-- Point-in-time inside last DIFF/LOG
-		@WithReplace			BIT	= 0,			-- Include REPLACE on RESTORE DATABASE
-		@IncludeLogs			BIT	= 1,			-- Include log backups	
-		@IncludeDiffs			BIT = 1,			-- Include differential backups
-		@Recovery				BIT = 0,			-- Specify whether to eventually recover the database or not 
+		@WithReplace			BIT	= 0,		-- Include REPLACE on RESTORE DATABASE
+		@IncludeLogs			BIT	= 1,		-- Include log backups	
+		@IncludeDiffs			BIT = 1,		-- Include differential backups
+		@Recovery				BIT = 0,		-- Specify whether to eventually recover the database or not 
 		@RestoreUpTo_TIMESTAMP 
-					DATETIME2(3)	= NULL,			-- Backup files started after this TIMESTAMP will be excluded 
-		@Execute				BIT	= 0,				-- 1 = execute the produced script
-		@Verbose				BIT = 1				-- If executing and @Verbose = 1 the produced script will also be printed.
+					DATETIME2(3)	= NULL,		-- Backup files started after this TIMESTAMP will be excluded 
+		@backup_path_replace_string				
+					NVARCHAR(4000)	= NULL,		-- Write t-sql formula to be executed on the backup files full path stored in the
+												-- parameter "Devices". 
+												-- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')))
+
+		@Execute				BIT	= 0,		-- 1 = execute the produced script
+		@Verbose				BIT = 1			-- If executing and @Verbose = 1 the produced script will also be printed.
 AS
 BEGIN
 	------------------------------------------------------------
@@ -49,6 +54,7 @@ BEGIN
 	------------------------------------------------------------
 	DECLARE @MoveClauses NVARCHAR(MAX)
     DECLARE @create_directories NVARCHAR(MAX)
+	DECLARE @SQL NVARCHAR(MAX)
 	
 	------------------------------------------------------------
 	-- Parameter validation
@@ -234,6 +240,19 @@ BEGIN
 	ORDER BY first_lsn;
 
 	------------------------------------------------------------
+	-- Update restore chain backup paths using 
+	-- @backup_path_replace_string
+	------------------------------------------------------------
+	IF ISNULL(@backup_path_replace_string,'') <> ''
+	BEGIN
+		SET @SQL =
+		'
+			UPDATE #RestoreChain SET Devices = ' + @backup_path_replace_string + '
+		'
+		EXEC(@SQL)
+	END
+
+	------------------------------------------------------------
 	-- Precompute DISK clauses (avoid aggregates in UPDATE)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#DiskClauses') IS NOT NULL DROP TABLE #DiskClauses;
@@ -357,6 +376,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
 										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
+										 @backup_path_replace_string = 'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @Verbose = 0
 										 
 GO
