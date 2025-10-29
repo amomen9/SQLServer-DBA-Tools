@@ -15,7 +15,8 @@ USE msdb;
 GO
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName			sysname,		-- Target database
+		@DatabaseName			sysname,		-- Source database
+		@RestoreDBName			sysname = NULL,		-- Destination database
 		@create_datafile_dirs	BIT = 1,		-- Create original parent directories of the database files in target
 		@add_move_clauses		BIT = 1,		-- Add move clauses in the restore statement for the database files
 		@StopAt		DATETIME		= NULL,		-- Point-in-time inside last DIFF/LOG
@@ -65,11 +66,12 @@ BEGIN
 	
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' SET @RestoreUpTo_TIMESTAMP = NULL
+	IF ISNULL(@RestoreDBName,'') = '' SET @RestoreDBName = @DatabaseName
 
 	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
-	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' ----------------------------------------';
+	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -297,11 +299,11 @@ BEGIN
 	SET RestoreCommand =
 		CASE rc.BackupType
 			WHEN 'FULL' THEN
-				N'RESTORE DATABASE [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' + @MoveClauses +
+				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + N' WITH ' + @MoveClauses +
 				N'STATS = 5' + @ReplaceClause + 
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'DIFF' THEN
-				N'RESTORE DATABASE [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' +
+				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + N' WITH ' +
 				(CASE 
 					WHEN rc.StepNumber = @LastStep AND @StopAt IS NOT NULL AND @HasLogs = 0
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
@@ -310,7 +312,7 @@ BEGIN
 				N'STATS = 5' +
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'LOG' THEN
-				N'RESTORE LOG [' + @DatabaseName + N'] FROM ' + dc.Disks + N' WITH ' +
+				N'RESTORE LOG [' + @RestoreDBName + N'] FROM ' + dc.Disks + N' WITH ' +
 				(CASE 
 					WHEN rc.StepNumber = @LastStep AND @StopAt IS NOT NULL
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
@@ -369,13 +371,15 @@ BEGIN
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'MF_Tavan',	-- sysname
-                                         @add_move_clauses = 1,
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',	-- sysname
+                                         @RestoreDBName = 'master2',
+										 @add_move_clauses = 1,
 										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
 										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
+										 @Recovery = 1,
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @Verbose = 0
 										 
