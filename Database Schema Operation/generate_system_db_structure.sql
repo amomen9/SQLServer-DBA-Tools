@@ -86,7 +86,8 @@ END
 GO
 
 CREATE OR ALTER PROCEDURE usp_get_sys_databases_script
-	@TempdbSizesOverride_MB decimal(18,2) = NULL -- Set to a value (in MB) to override all tempdb file sizes
+	@TempDB_Sizes_Override_MB decimal(18,2) = NULL, -- Set to a value (in MB) to override all tempdb file sizes
+	@Show_DB_Sizes_Info BIT = 1						-- Show sizes report for the databases data files
 AS
 BEGIN
 
@@ -170,7 +171,7 @@ BEGIN
 			CASE WHEN mf.max_size > 0 THEN CAST(mf.max_size AS decimal(18,6)) / 128.0 END AS MaxMB
 	) AS calc
 	CROSS APPLY (
-		SELECT CASE WHEN db.name = N'tempdb' AND @TempdbSizesOverride_MB IS NOT NULL THEN CAST(@TempdbSizesOverride_MB AS decimal(18,6)) ELSE calc.BaseSizeMB END AS FinalSizeMB
+		SELECT CASE WHEN db.name = N'tempdb' AND @TempDB_Sizes_Override_MB IS NOT NULL THEN CAST(@TempDB_Sizes_Override_MB AS decimal(18,6)) ELSE calc.BaseSizeMB END AS FinalSizeMB
 	) AS finalsizes
 	CROSS APPLY (
 		SELECT
@@ -308,20 +309,21 @@ BEGIN
 		SET @Script += @FileScript + @CRLF;
 	END;
 
-	SELECT
-		database_name,
-		STRING_AGG(logical_name + N' (' + size_mb_text + N' MB)', N'; ') WITHIN GROUP (ORDER BY file_id) AS files_and_sizes,
-		CONVERT(decimal(18,2), SUM(size_mb_numeric)) AS total_size_mb
-	FROM #Formatted
-	GROUP BY database_name
-	ORDER BY CASE database_name
-				 WHEN N'tempdb' THEN 0
-				 WHEN N'model' THEN 1
-				 WHEN N'msdb' THEN 2
-				 WHEN N'model_replicatedmaster' THEN 3
-				 WHEN N'model_msdb' THEN 4
-				 ELSE 5
-			 END;
+	IF @Show_DB_Sizes_Info = 1
+		SELECT
+			database_name,
+			STRING_AGG(logical_name + N' (' + size_mb_text + N' MB)', N'; ') WITHIN GROUP (ORDER BY file_id) AS files_and_sizes,
+			CONVERT(decimal(18,2), SUM(size_mb_numeric)) AS total_size_mb
+		FROM #Formatted
+		GROUP BY database_name
+		ORDER BY CASE database_name
+					 WHEN N'tempdb' THEN 0
+					 WHEN N'model' THEN 1
+					 WHEN N'msdb' THEN 2
+					 WHEN N'model_replicatedmaster' THEN 3
+					 WHEN N'model_msdb' THEN 4
+					 ELSE 5
+				 END;
 
 	-- Prepend header metadata for clarity.
 	SET @Script = N'-- Generated on ' + CONVERT(nvarchar(30), SYSDATETIME(), 126) + N' from ' + QUOTENAME(@@SERVERNAME) + @CRLF +
@@ -335,4 +337,6 @@ BEGIN
 END
 GO
 
-EXEC dbo.usp_get_sys_databases_script @TempdbSizesOverride_MB = NULL -- decimal(18, 2)
+EXEC dbo.usp_get_sys_databases_script 
+			@TempDB_Sizes_Override_MB = NULL, -- decimal(18, 2)
+			@Show_DB_Sizes_Info = 0
