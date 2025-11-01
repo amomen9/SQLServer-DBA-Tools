@@ -237,28 +237,28 @@ BEGIN
 	SET logical_name_escaped = REPLACE(logical_name, NCHAR(39), NCHAR(39) + NCHAR(39)),
 		physical_basename_escaped = REPLACE(physical_basename, NCHAR(39), NCHAR(39) + NCHAR(39))
 
-
-	INSERT #Formatted
-	SELECT
-		models.database_name,
-		models.file_id,
-		models.type_desc,
-		models.logical_name,
-		LEFT(f.physical_name, LEN(f.physical_name) - CHARINDEX('\', REVERSE(f.physical_name))) + '\' + models.physical_basename physical_name,
-		directory_path,
-		size_kb,
-		size_mb_numeric,
-		max_size,
-		growth,
-		is_percent_growth,
-		models.logical_name_escaped,
-		LEFT(f.physical_name, LEN(f.physical_name_escaped) - CHARINDEX('\', REVERSE(f.physical_name_escaped))) + '\' + models.physical_basename_escaped physical_name_escaped,
-		size_mb_text,
-		size_mb_command,
-		growth_text,
-		maxsize_text
-	FROM #Formatted f JOIN #submodels models
-	ON f.database_name = models.parentdb AND models.file_id = f.file_id
+	IF CONVERT(INT,SERVERPROPERTY('ProductMajorVersion'))>15
+		INSERT #Formatted
+		SELECT
+			models.database_name,
+			models.file_id,
+			models.type_desc,
+			models.logical_name,
+			LEFT(f.physical_name, LEN(f.physical_name) - CHARINDEX('\', REVERSE(f.physical_name))) + '\' + models.physical_basename physical_name,
+			directory_path,
+			size_kb,
+			size_mb_numeric,
+			max_size,
+			growth,
+			is_percent_growth,
+			models.logical_name_escaped,
+			LEFT(f.physical_name, LEN(f.physical_name_escaped) - CHARINDEX('\', REVERSE(f.physical_name_escaped))) + '\' + models.physical_basename_escaped physical_name_escaped,
+			size_mb_text,
+			size_mb_command,
+			growth_text,
+			maxsize_text
+		FROM #Formatted f JOIN #submodels models
+		ON f.database_name = models.parentdb AND models.file_id = f.file_id
 
 
 
