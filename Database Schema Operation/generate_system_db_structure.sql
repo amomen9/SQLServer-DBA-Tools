@@ -448,8 +448,14 @@ BEGIN
 	SELECT value 
 	FROM STRING_SPLIT(REPLACE(@Script,CHAR(13),''),CHAR(10))
 	WHERE ISNULL(@SQLCMD_Connect_Clause,'') = '' OR 
-		(ISNULL(@SQLCMD_Connect_Clause,'') <> '' AND TRIM(value)<>'GO');
+		(ISNULL(@SQLCMD_Connect_Clause,'') <> '' AND TRIM(value)<>'GO')
+	UNION ALL
+	SELECT v.Script
+	FROM (VALUES ('GO'), (''), ('')) AS v(Script)
+	WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 
+
+	
 	EXEC dbo.usp_PrintLong  @Script
 END
 GO
