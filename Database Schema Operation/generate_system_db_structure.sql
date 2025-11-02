@@ -280,25 +280,74 @@ BEGIN
 
 
 	-- @FileScript is for database file MOVE,Change Size, Change Autogrowth, etc statements
+	DECLARE @RemoveScript nvarchar(max);
+
 	SELECT @FileScript =
-		STRING_AGG(CONVERT(NVARCHAR(MAX),
+		STRING_AGG(CONVERT(nvarchar(max),
 			N'-- Database: ' + QUOTENAME(database_name) + N' | File: ' + logical_name + N' (' + type_desc + N')' + @CRLF +
-			N'-- Size (MB): ' + size_mb_text + N' | Growth setting: ' + growth_text + N' | ' + maxsize_text + @CRLF +
-			N'ALTER DATABASE ' + QUOTENAME(database_name) + N' MODIFY FILE ( NAME = N''' + logical_name_escaped + N''', FILENAME = N''' + physical_name_escaped + N''', SIZE = ' + size_mb_command + N'MB, FILEGROWTH = ' + growth_text + N', ' + maxsize_text + N' );' + @CRLF +
-		N'GO')
-		, @DoubleCRLF
-		) WITHIN GROUP (
-			ORDER BY CASE database_name
-						 WHEN N'tempdb' THEN 0
-						 WHEN N'model' THEN 1
-						 WHEN N'msdb' THEN 2
-						 WHEN N'model_replicatedmaster' THEN 3
-						 WHEN N'model_msdb' THEN 4
-						 ELSE 5
-					 END,
-					 file_id
-		)
+			N'IF EXISTS (SELECT 1 FROM sys.master_files WHERE database_id = DB_ID(N''' + database_name + N''') AND file_id = ' + CAST(file_id AS nvarchar(10)) + N')' + @CRLF +
+			N'BEGIN' + @CRLF +
+			N'    ALTER DATABASE ' + QUOTENAME(database_name) + N' MODIFY FILE ( NAME = N''' + logical_name_escaped + N''', FILENAME = N''' + physical_name_escaped + N''', SIZE = ' + size_mb_command + N'MB, FILEGROWTH = ' + growth_text + N', ' + maxsize_text + N' );' + @CRLF +
+			N'END' + @CRLF +
+			N'ELSE' + @CRLF +
+			N'BEGIN' + @CRLF +
+			N'    DECLARE @Override decimal(18,2) = TRY_CONVERT(decimal(18,2), NULLIF(@TempDB_Sizes_Override_MB, N''''));' + @CRLF +
+			N'    DECLARE @BaseSizeMB decimal(18,2);' + @CRLF +
+			N'    DECLARE @BaseGrowthText nvarchar(100);' + @CRLF +
+			N'    DECLARE @BaseMaxText nvarchar(100);' + @CRLF +
+			N'    SELECT @BaseSizeMB = CASE WHEN N''' + database_name + N''' = N''tempdb'' AND @Override IS NOT NULL THEN @Override ELSE CEILING(size / 128.0) END,' + @CRLF +
+			N'           @BaseGrowthText = CASE WHEN is_percent_growth = 1 THEN N''FILEGROWTH = '' + CAST(growth AS nvarchar(20)) + N''%'' WHEN growth = 0 THEN N''FILEGROWTH = 0MB'' ELSE N''FILEGROWTH = '' + CAST(CEILING(growth / 128.0) AS nvarchar(20)) + N''MB'' END,' + @CRLF +
+			N'           @BaseMaxText = CASE WHEN max_size = -1 THEN N''MAXSIZE = UNLIMITED'' WHEN max_size = 0 THEN N''MAXSIZE = 0MB'' ELSE N''MAXSIZE = '' + CAST(CEILING(max_size / 128.0) AS nvarchar(20)) + N''MB'' END' + @CRLF +
+			N'    FROM sys.master_files' + @CRLF +
+			N'    WHERE database_id = DB_ID(N''' + database_name + N''') AND file_id = 1;' + @CRLF +
+			N'    IF @BaseSizeMB IS NULL SET @BaseSizeMB = ' + size_mb_command + N';' + @CRLF +
+			N'    IF @BaseGrowthText IS NULL SET @BaseGrowthText = N''FILEGROWTH = ' + growth_text + N''';' + @CRLF +
+			N'    IF @BaseMaxText IS NULL SET @BaseMaxText = N''' + maxsize_text + N''';' + @CRLF +
+			N'    DECLARE @AddSql nvarchar(max) = N''ALTER DATABASE ' + QUOTENAME(database_name) + N' ADD ' + CASE WHEN type_desc = N'LOG' THEN N'LOG ' ELSE N'' END + N'FILE ( NAME = N''' + logical_name_escaped + N''', FILENAME = N''' + physical_name_escaped + N''', SIZE = '' + CONVERT(nvarchar(30), @BaseSizeMB) + N''MB, '' + @BaseGrowthText + N'', '' + @BaseMaxText + N'' );'';' + @CRLF +
+			N'    EXEC sys.sp_executesql @AddSql;' + @CRLF +
+			N'END' + @CRLF +
+			N'GO'
+		), @DoubleCRLF)
+		WITHIN GROUP (ORDER BY CASE database_name WHEN N'tempdb' THEN 0 WHEN N'model' THEN 1 WHEN N'msdb' THEN 2 WHEN N'model_replicatedmaster' THEN 3 WHEN N'model_msdb' THEN 4 ELSE 5 END, file_id)
 	FROM #Formatted;
+
+	WITH Desired AS
+	(
+		SELECT database_name, file_id, logical_name
+		FROM #Formatted
+	),
+	ExtraFiles AS
+	(
+		SELECT db.name AS database_name,
+			   mf.file_id,
+			   mf.name AS logical_name
+		FROM sys.master_files AS mf
+		INNER JOIN sys.databases AS db ON db.database_id = mf.database_id
+		WHERE db.name IN (N'tempdb', N'model', N'msdb', N'model_replicatedmaster', N'model_msdb')
+		  AND NOT EXISTS (
+				SELECT 1
+				FROM Desired AS d
+				WHERE d.database_name = db.name
+				  AND d.file_id = mf.file_id
+			)
+	)
+	SELECT @RemoveScript =
+		STRING_AGG(CONVERT(nvarchar(max),
+			N'IF EXISTS (SELECT 1 FROM sys.master_files WHERE database_id = DB_ID(N''' + database_name + N''') AND file_id = ' + CAST(file_id AS nvarchar(10)) + N')' + @CRLF +
+			N'BEGIN' + @CRLF +
+			N'    ALTER DATABASE ' + QUOTENAME(database_name) + N' REMOVE FILE ' + QUOTENAME(logical_name) + N';' + @CRLF +
+			N'END' + @CRLF +
+			N'GO'
+		), @DoubleCRLF)
+	FROM ExtraFiles;
+
+	IF LEN(ISNULL(@RemoveScript, N'')) > 0
+	BEGIN
+		IF LEN(ISNULL(@FileScript, N'')) > 0
+			SET @FileScript += @DoubleCRLF + @RemoveScript;
+		ELSE
+			SET @FileScript = @RemoveScript;
+	END;
 
 	IF @FileScript IS NOT NULL
 	BEGIN
