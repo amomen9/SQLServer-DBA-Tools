@@ -32,7 +32,10 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 												-- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')))
 
 		@Execute				BIT	= 0,		-- 1 = execute the produced script
-		@Verbose				BIT = 1			-- If executing and @Verbose = 1 the produced script will also be printed.
+		@Verbose				BIT = 1,		-- If executing and @Verbose = 1 the produced script will also be printed.
+		@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL	
+												-- Connection string to be written in front of :connect if you want to
+												-- execute the query on the target machine using SQLCMD Mode
 AS
 BEGIN
 	------------------------------------------------------------
@@ -368,11 +371,41 @@ BEGIN
 		SET @i += 1;
 	END
 	PRINT '--##############################################################--'+REPLICATE(CHAR(10),2);
+
+	------------------------------------------------------------
+	-- Giving the script as a result set
+	------------------------------------------------------------
+
+	SELECT dt.Script FROM 
+	(
+		SELECT ':connect '+@SQLCMD_Connect_Clause Script, 0 StepNumber, 1 SortOrder
+		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+		UNION ALL
+		SELECT '', 0 StepNumber, 2 SortOrder
+		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+		UNION ALL
+		SELECT Script, Commands.StepNumber, Commands.SortOrder
+		FROM
+		(
+			SELECT
+				'-- Step ' + CAST(StepNumber AS varchar(10)) AS Script,
+				StepNumber,
+				1 AS SortOrder
+			FROM #RestoreChain
+			UNION ALL
+			SELECT
+				RestoreCommand,
+				StepNumber,
+				2 AS SortOrder
+			FROM #RestoreChain
+		) AS Commands
+	) dt
+	ORDER BY StepNumber, SortOrder
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',	-- sysname
-                                         @RestoreDBName = 'master2',
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'msdb',	-- sysname
+                                         @RestoreDBName = 'msdb2',
 										 @add_move_clauses = 1,
 										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
@@ -381,6 +414,8 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',	-- sysname
 										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
 										 @Recovery = 1,
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
-										 @Verbose = 0
+										 @Verbose = 0,
+										 @SQLCMD_Connect_Clause = 'asdsadsaddassd'
+
 										 
 GO
