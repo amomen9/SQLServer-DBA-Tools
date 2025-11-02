@@ -86,38 +86,38 @@ END
 GO
 
 CREATE OR ALTER PROCEDURE usp_get_sys_databases_script
-	@TempDB_Sizes_Override_MB decimal(18,2) = NULL, -- Set to a value (in MB) to override all tempdb file sizes
+	@TempDB_Sizes_Override_MB DECIMAL(18,2) = NULL, -- Set to a value (in MB) to override all tempdb file sizes
 	@Show_DB_Sizes_Info BIT = 1						-- Show sizes report for the databases data files
 AS
 BEGIN
 
 	SET NOCOUNT ON;
 
-	DECLARE @CRLF            nchar(2) = NCHAR(13) + NCHAR(10);
-	DECLARE @DoubleCRLF      nchar(4) = NCHAR(13) + NCHAR(10) + NCHAR(13) + NCHAR(10);
-	DECLARE @Script          nvarchar(MAX) = N'';
-	DECLARE @DirectoryScript nvarchar(MAX);
-	DECLARE @FileScript      nvarchar(MAX);
+	DECLARE @CRLF            NCHAR(2) = NCHAR(13) + NCHAR(10);
+	DECLARE @DoubleCRLF      NCHAR(4) = NCHAR(13) + NCHAR(10) + NCHAR(13) + NCHAR(10);
+	DECLARE @Script          NVARCHAR(MAX) = N'';
+	DECLARE @DirectoryScript NVARCHAR(MAX);
+	DECLARE @FileScript      NVARCHAR(MAX);
 
 	CREATE TABLE #Formatted
 	(
 		database_name        sysname,
-		file_id              int,
-		type_desc            nvarchar(60),
+		file_id              INT,
+		type_desc            NVARCHAR(60),
 		logical_name         sysname,
-		physical_name        nvarchar(260),
-		directory_path       nvarchar(4000),
-		size_kb              bigint,
-		size_mb_numeric      decimal(18,6),
-		max_size             int,
-		growth               int,
-		is_percent_growth    bit,
-		logical_name_escaped nvarchar(520),
-		physical_name_escaped nvarchar(520),
-		size_mb_text         nvarchar(30),
-		size_mb_command      nvarchar(30),
-		growth_text          nvarchar(40),
-		maxsize_text         nvarchar(60)
+		physical_name        NVARCHAR(260),
+		directory_path       NVARCHAR(4000),
+		size_kb              BIGINT,
+		size_mb_numeric      DECIMAL(18,6),
+		max_size             INT,
+		growth               INT,
+		is_percent_growth    BIT,
+		logical_name_escaped NVARCHAR(520),
+		physical_name_escaped NVARCHAR(520),
+		size_mb_text         NVARCHAR(30),
+		size_mb_command      NVARCHAR(30),
+		growth_text          NVARCHAR(40),
+		maxsize_text         NVARCHAR(60)
 	);
 
 	INSERT INTO #Formatted
@@ -175,13 +175,9 @@ BEGIN
 	) AS finalsizes
 	CROSS APPLY (
 		SELECT
-			finalsizes.FinalSizeMB AS SizeNumeric,
-			CONVERT(nvarchar(30), CONVERT(decimal(18,2), finalsizes.FinalSizeMB)) AS SizeText,
-			CASE
-				WHEN ABS(finalsizes.FinalSizeMB - FLOOR(finalsizes.FinalSizeMB)) < 0.000001
-					THEN CONVERT(nvarchar(30), CONVERT(bigint, FLOOR(finalsizes.FinalSizeMB)))
-				ELSE CONVERT(nvarchar(30), CONVERT(decimal(18,2), finalsizes.FinalSizeMB))
-			END AS SizeCommand,
+			CAST(CEILING(finalsizes.FinalSizeMB) AS decimal(18,0)) AS SizeNumeric,
+			CONVERT(nvarchar(30), CONVERT(bigint, CEILING(finalsizes.FinalSizeMB))) AS SizeText,
+			CONVERT(nvarchar(30), CONVERT(bigint, CEILING(finalsizes.FinalSizeMB))) AS SizeCommand,
 			CASE
 				WHEN mf.is_percent_growth = 1 THEN CAST(mf.growth AS nvarchar(20)) + N'%'
 				WHEN calc.GrowthMB IS NULL OR calc.GrowthMB = 0 THEN N'0MB'
