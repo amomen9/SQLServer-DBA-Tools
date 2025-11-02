@@ -378,13 +378,13 @@ BEGIN
 
 	SELECT dt.Script FROM 
 	(
-		SELECT ':connect '+@SQLCMD_Connect_Clause Script, 0 StepNumber, 1 SortOrder
+		SELECT 0 OverallStep, ':connect '+@SQLCMD_Connect_Clause Script, 0 StepNumber, 1 SortOrder
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 		UNION ALL
-		SELECT '', 0 StepNumber, 2 SortOrder
+		SELECT 1 OverallStep, '', 0 StepNumber, 2 SortOrder
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 		UNION ALL
-		SELECT Script, Commands.StepNumber, Commands.SortOrder
+		SELECT 2 OverallStep, Script, Commands.StepNumber, Commands.SortOrder
 		FROM
 		(
 			SELECT
@@ -399,8 +399,14 @@ BEGIN
 				2 AS SortOrder
 			FROM #RestoreChain
 		) AS Commands
+		WHERE ISNULL(@SQLCMD_Connect_Clause,'') = '' OR 
+			(ISNULL(@SQLCMD_Connect_Clause,'') <> '' AND TRIM(Commands.Script)<>'GO')
+		UNION ALL
+		SELECT 3 OverallStep, v.Script, 1, 1
+		FROM (VALUES ('GO'), (''), ('')) AS v(Script)
+		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 	) dt
-	ORDER BY StepNumber, SortOrder
+	ORDER BY dt.OverallStep, StepNumber, SortOrder
 END
 GO
 
