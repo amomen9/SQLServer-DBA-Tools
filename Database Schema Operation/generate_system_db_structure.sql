@@ -87,7 +87,9 @@ GO
 
 CREATE OR ALTER PROCEDURE usp_get_sys_databases_script
 	@TempDB_Sizes_Override_MB decimal(18,2) = NULL, -- Set to a value (in MB) to override all tempdb file sizes
-	@Show_DB_Sizes_Info BIT = 1					-- Show sizes report for the databases data files
+	@Show_DB_Sizes_Info BIT = 1,					-- Show sizes report for the databases data files
+	@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL	-- Connection string to be written in front of :connect if you want to
+													-- execute the query on the target machine using SQLCMD Mode
 AS
 BEGIN
 
@@ -98,6 +100,7 @@ BEGIN
 	DECLARE @Script          nvarchar(MAX) = N'';
 	DECLARE @DirectoryScript nvarchar(MAX);
 	DECLARE @FileScript      nvarchar(MAX);
+
 
 	CREATE TABLE #Formatted
 	(
@@ -436,7 +439,13 @@ BEGIN
 				  N'-- Execute on target server to align system database file layout with source.' + @CRLF + @CRLF +
 				  @Script;
 
-	SELECT value Script
+	SELECT ':connect '+@SQLCMD_Connect_Clause Script
+	WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+	UNION ALL
+	SELECT ''
+	WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+	UNION ALL
+	SELECT value 
 	FROM STRING_SPLIT(REPLACE(@Script,CHAR(13),''),CHAR(10));
 
 	EXEC dbo.usp_PrintLong  @Script
@@ -445,4 +454,5 @@ GO
 
 EXEC dbo.usp_get_sys_databases_script 
 			@TempDB_Sizes_Override_MB = NULL, -- decimal(18, 2)
-			@Show_DB_Sizes_Info = 0
+			@Show_DB_Sizes_Info = 0,
+			@SQLCMD_Connect_Clause = ''
