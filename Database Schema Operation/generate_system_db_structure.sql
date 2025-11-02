@@ -446,7 +446,9 @@ BEGIN
 	WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 	UNION ALL
 	SELECT value 
-	FROM STRING_SPLIT(REPLACE(@Script,CHAR(13),''),CHAR(10));
+	FROM STRING_SPLIT(REPLACE(@Script,CHAR(13),''),CHAR(10))
+	WHERE ISNULL(@SQLCMD_Connect_Clause,'') = '' OR 
+		(ISNULL(@SQLCMD_Connect_Clause,'') <> '' AND TRIM(value)<>'GO');
 
 	EXEC dbo.usp_PrintLong  @Script
 END
