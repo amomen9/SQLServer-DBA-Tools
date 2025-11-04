@@ -381,7 +381,7 @@ BEGIN
 	           REPLACE(mf.name, N'''', N'''''') AS logical_name_escaped
 	    FROM sys.master_files AS mf
 	    JOIN sys.databases AS db ON db.database_id = mf.database_id
-	    WHERE db.name IN (N'tempdb', N'model', N'msdb', N'model_replicatedmaster', N'model_msdb')
+	    WHERE db.name IN (N'tempdb')
 	      AND NOT EXISTS (
 	            SELECT 1
 	            FROM Desired AS d
