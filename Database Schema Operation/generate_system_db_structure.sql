@@ -85,14 +85,16 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER PROCEDURE usp_get_sys_databases_script
+
+-----------##########################################################---------------
+CREATE OR ALTER PROCEDURE usp_modify_target_server_sys_databases_from_source
 	@TempDB_Sizes_Override_MB decimal(18,2) = NULL, -- Set to a value (in MB) to override all tempdb file sizes
 	@Show_DB_Sizes_Info BIT = 1,					-- Show sizes report for the databases data files
-	@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL	-- Connection string to be written in front of :connect if you want to
+	@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL,	-- Connection string to be written in front of :connect if you want to
 													-- execute the query on the target machine using SQLCMD Mode
+
 AS
 BEGIN
-
 	SET NOCOUNT ON;
 
 	DECLARE @CRLF            nchar(2) = NCHAR(13) + NCHAR(10);
@@ -460,7 +462,7 @@ BEGIN
 END
 GO
 
-EXEC dbo.usp_get_sys_databases_script 
+EXEC dbo.usp_modify_target_server_sys_databases_from_source 
 			@TempDB_Sizes_Override_MB = NULL, -- decimal(18, 2)
 			@Show_DB_Sizes_Info = 0,
 			@SQLCMD_Connect_Clause = ''
