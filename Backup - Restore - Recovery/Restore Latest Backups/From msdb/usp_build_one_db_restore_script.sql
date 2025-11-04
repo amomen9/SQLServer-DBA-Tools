@@ -304,16 +304,8 @@ SELECT @MoveClauses =
     ,1,1,'');
 
 
-	--IF @MoveClauses IS NULL AND @add_move_clauses = 1
-	--	SET @MoveClauses = '--** Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
-	--SET @MoveClauses = CHAR(10) + @MoveClauses
-	--IF @add_move_clauses = 0
-	--	SET @MoveClauses = ''
-	IF @MoveClauses IS NULL AND @add_move_clauses = 1
-		SET @MoveClauses = '--** Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
 	SET @MoveClauses = CHAR(10) + @MoveClauses
-	IF @add_move_clauses = 0
-		SET @MoveClauses = ''
+
 
 	-- Mark last step
 	DECLARE @LastStep int = (SELECT MAX(StepNumber) FROM #RestoreChain);
@@ -387,7 +379,7 @@ SELECT @MoveClauses =
 		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
 
 	------------------------------------------------------------
-	-- PRINT commands
+	-- Giving the script in the STDOUT (PRINT)
 	------------------------------------------------------------
 
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
@@ -434,9 +426,11 @@ SELECT @MoveClauses =
 		FROM (VALUES ('GO'), (''), ('')) AS v(Script)
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 	) dt
+
 	ORDER BY dt.OverallStep, StepNumber, SortOrder
 END
 GO
+
 
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'msdb',	-- sysname
                                          @RestoreDBName = 'msdb2',
