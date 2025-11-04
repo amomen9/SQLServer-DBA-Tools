@@ -19,6 +19,8 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@RestoreDBName			sysname = NULL,		-- Destination database
 		@create_datafile_dirs	BIT = 1,		-- Create original parent directories of the database files in target
 		@add_move_clauses		BIT = 1,		-- Add move clauses in the restore statement for the database files
+		@Restore_DataPath		NVARCHAR(1000) = NULL,
+		@Restore_LogPath		NVARCHAR(1000) = NULL,
 		@StopAt		DATETIME		= NULL,		-- Point-in-time inside last DIFF/LOG
 		@WithReplace			BIT	= 0,		-- Include REPLACE on RESTORE DATABASE
 		@IncludeLogs			BIT	= 1,		-- Include log backups	
@@ -273,14 +275,40 @@ BEGIN
 	------------------------------------------------------------
 	-- Precompute MOVE clauses (avoid aggregates in UPDATE)
 	------------------------------------------------------------
-	SELECT @MoveClauses =
-		STUFF((
-			SELECT ',' + /*CHAR(10)*/ + ' MOVE N''' + mf.name + ''' TO N''' + mf.physical_name + ''''
-			FROM sys.master_files AS mf
-			WHERE mf.database_id = DB_ID(@DatabaseName)
-			ORDER BY mf.type, mf.file_id
-			FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
-		,1,2,'') + ',' + CHAR(10);
+	--SELECT @MoveClauses =
+	--	STUFF((
+	--		SELECT ',' + /*CHAR(10)*/ + ' MOVE N''' + mf.name + ''' TO N''' + mf.physical_name + ''''
+	--		FROM sys.master_files AS mf
+	--		WHERE mf.database_id = DB_ID(@DatabaseName)
+	--		ORDER BY mf.type, mf.file_id
+	--		FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
+	--	,1,2,'') + ',' + CHAR(10);
+SELECT @MoveClauses =
+    STUFF((
+        SELECT ',' + ' MOVE N''' + mf.name + ''' TO N''' +
+               CASE
+                   WHEN mf.type_desc = 'LOG' AND ISNULL(@Restore_LogPath,'') <> '' THEN
+                       @Restore_LogPath +
+                       CASE WHEN RIGHT(@Restore_LogPath,1) IN ('\','/') THEN '' ELSE '\' END +
+                       RIGHT(mf.physical_name, CHARINDEX('\', REVERSE(mf.physical_name)) - 1)
+                   WHEN mf.type_desc <> 'LOG' AND ISNULL(@Restore_DataPath,'') <> '' THEN
+                       @Restore_DataPath +
+                       CASE WHEN RIGHT(@Restore_DataPath,1) IN ('\','/') THEN '' ELSE '\' END +
+                       RIGHT(mf.physical_name, CHARINDEX('\', REVERSE(mf.physical_name)) - 1)
+                   ELSE mf.physical_name
+               END + ''''
+        FROM sys.master_files AS mf
+        WHERE mf.database_id = DB_ID(@DatabaseName)
+        ORDER BY mf.type, mf.file_id
+        FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
+    ,1,1,'');
+
+
+	--IF @MoveClauses IS NULL AND @add_move_clauses = 1
+	--	SET @MoveClauses = '--** Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
+	--SET @MoveClauses = CHAR(10) + @MoveClauses
+	--IF @add_move_clauses = 0
+	--	SET @MoveClauses = ''
 	IF @MoveClauses IS NULL AND @add_move_clauses = 1
 		SET @MoveClauses = '--** Database does not exist on the instance, thus move statements were skipped.' + CHAR(10)
 	SET @MoveClauses = CHAR(10) + @MoveClauses
@@ -413,6 +441,8 @@ GO
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'msdb',	-- sysname
                                          @RestoreDBName = 'msdb2',
 										 @add_move_clauses = 1,
+										 @Restore_DataPath = 'D:\Data\',
+										 @Restore_LogPath = 'D:\Log',
 										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
