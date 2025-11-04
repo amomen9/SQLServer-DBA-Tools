@@ -90,7 +90,7 @@ GO
 CREATE OR ALTER PROCEDURE usp_modify_target_server_sys_databases_from_source
 	@TempDB_Sizes_Override_MB decimal(18,2) = NULL, -- Set to a value (in MB) to override all tempdb file sizes
 	@Show_DB_Sizes_Info BIT = 1,					-- Show sizes report for the databases data files
-	@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL,	-- Connection string to be written in front of :connect if you want to
+	@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL		-- Connection string to be written in front of :connect if you want to
 													-- execute the query on the target machine using SQLCMD Mode
 
 AS
@@ -335,7 +335,8 @@ BEGIN
 	    ),
 	    @DoubleCRLF
 	) WITHIN GROUP (ORDER BY CASE database_name WHEN N'tempdb' THEN 0 WHEN N'model' THEN 1 WHEN N'msdb' THEN 2 ELSE 3 END, file_id)
-	FROM F;
+	FROM F
+	WHERE F.database_name IN ('TempDB');
 	
 	-- Step 2: Generate the script for removing extra files and store it in @RemoveScript.
 	--DECLARE @RemoveScript nvarchar(max) = N'';
