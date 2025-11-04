@@ -9,7 +9,7 @@
     xp_create_subdir calls for any directories required by those files.
 */
 
-CREATE OR ALTER PROC usp_PrintLong
+CREATE OR ALTER PROC usp_PrintLong 
 	@String NVARCHAR(MAX),
 	@Max_Chunk_Size SMALLINT = 4000,
 	@Print_String_Length BIT = 0
