@@ -435,7 +435,8 @@ SELECT @MoveClauses =
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 		-----------------------------
 		UNION ALL
-		SELECT 1 OverallStep, @BeforeRestoreScript, 1 StepNumber, 1 SortOrder
+		SELECT 1 OverallStep, LineText, 1 StepNumber, ordinal SortOrder
+		FROM dbo.fn_SplitStringByLine(@BeforeRestoreScript)
 		UNION ALL
 		-----------------------------
 		SELECT 2 OverallStep, REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30), 0, 0
@@ -500,9 +501,22 @@ FROM
 	UNION ALL SELECT 'FPOUYAFC1',      'FPOUYASQL',      '172.23.148.4',  'FPouyaDBDR',    '172.23.148.201', '1569'
 ) dt WHERE dt.[SQL Name] = CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName'))
 DECLARE @BeforeRestoreScript NVARCHAR(MAX) = '
+BEGIN TRY
+	EXEC xp_servicecontrol ''stop'', ''SQLAgent$DBDR'';
+END TRY
+BEGIN CATCH
+END CATCH
+
+EXEC xp_servicecontrol ''querystate'', ''SQLAgent$DBDR'';
 ALTER DATABASE msdb SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 '
 DECLARE @AfterRestoreScript NVARCHAR(MAX) = '
+BEGIN TRY
+	EXEC xp_servicecontrol ''start'', ''SQLAgent$DBDR'';
+END TRY
+BEGIN CATCH
+END CATCH
+
 EXEC sp_CONFIGURE ''SHOW ADVANCED OPTIONS'',1;
 RECONFIGURE WITH OVERRIDE;
 EXEC sp_CONFIGURE ''AGENT'',1;
