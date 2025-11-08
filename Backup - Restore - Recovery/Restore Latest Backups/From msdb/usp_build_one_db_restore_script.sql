@@ -501,7 +501,12 @@ FROM
 	UNION ALL SELECT 'FPOUYAFC1',      'FPOUYASQL',      '172.23.148.4',  'FPouyaDBDR',    '172.23.148.201', '1569'
 ) dt WHERE dt.[SQL Name] = CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName'))
 DECLARE @BeforeRestoreScript NVARCHAR(MAX) = '
+
+DECLARE @AgentServiceName NVARCHAR(256)
+SELECT @AgentServiceName = IIF(@@SERVICENAME=''MSSQLSERVER'',''SQLSERVERAGENT'',''SQLAgent$''+@@SERVICENAME)
+
 BEGIN TRY
+	IF EXISTS (SELECT * FROM sys.dm_server_services WHERE status_desc = ''Running'' AND servicename LIKE ''SQL Server Agent%'')
 	EXEC xp_servicecontrol ''stop'', ''SQLAgent$DBDR'';
 END TRY
 BEGIN CATCH
