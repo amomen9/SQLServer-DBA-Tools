@@ -516,6 +516,7 @@ EXEC xp_servicecontrol ''querystate'', ''SQLAgent$DBDR'';
 ALTER DATABASE msdb SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
 '
 DECLARE @AfterRestoreScript NVARCHAR(MAX) = '
+ALTER DATABASE msdb SET MULTI_USER
 BEGIN TRY
 	EXEC xp_servicecontrol ''start'', ''SQLAgent$DBDR'';
 END TRY
