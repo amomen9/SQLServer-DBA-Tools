@@ -1,4 +1,3 @@
-
 -- =============================================
 -- Author:				<a.momen>
 -- Contact & Report:	<amomen@gmail.com>
@@ -137,9 +136,9 @@ BEGIN
 	END
 
 	------------------------------------------------------------
-	-- Create directories for each database file
+	-- Prepare create directories for each database file
 	------------------------------------------------------------
-	SELECT @create_directories = '-- Create datafiles directories' + CHAR(10) + STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
+	SELECT @create_directories = '------ Create datafiles directories' + CHAR(10) + STRING_AGG(d.create_dir, CHAR(13)+CHAR(10))
 	FROM (
 		SELECT DISTINCT 'EXEC sys.xp_create_subdir N''' +
 							LEFT(mf.physical_name, LEN(mf.physical_name) - CHARINDEX('\', REVERSE(mf.physical_name))) + '''' AS create_dir
@@ -147,13 +146,6 @@ BEGIN
 		WHERE mf.database_id = DB_ID(@DatabaseName)
 		  AND mf.physical_name LIKE '%\%'
 	) d;
-	IF @create_datafile_dirs = 1
-		IF @create_directories IS NULL PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10)
-		ELSE 
-		BEGIN
-			PRINT @create_directories + CHAR(10)
-			IF @Execute = 1 EXEC(@create_directories)
-		END
 
 	------------------------------------------------------------
 	-- DIFF (latest tied to that FULL)
@@ -348,11 +340,11 @@ SELECT @MoveClauses =
 	SET RestoreCommand =
 		CASE rc.BackupType
 			WHEN 'FULL' THEN
-				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + N' WITH ' + @MoveClauses + CHAR(10) +
+				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' + @MoveClauses + CHAR(10) +
 				N'STATS = 5' + @ReplaceClause + 
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'DIFF' THEN
-				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + N' WITH ' +
+				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
 				(CASE 
 					WHEN rc.StepNumber = @LastStep AND @StopAt IS NOT NULL AND @HasLogs = 0
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
@@ -361,7 +353,7 @@ SELECT @MoveClauses =
 				N'STATS = 5' +
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END
 			WHEN 'LOG' THEN
-				N'RESTORE LOG [' + @RestoreDBName + N'] FROM ' + dc.Disks + N' WITH ' +
+				N'RESTORE LOG [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
 				(CASE 
 					WHEN rc.StepNumber = @LastStep AND @StopAt IS NOT NULL
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
@@ -407,9 +399,17 @@ SELECT @MoveClauses =
 	------------------------------------------------------------
 	-- Giving the script in the STDOUT (PRINT)
 	------------------------------------------------------------
+	-- Print create directories commands
+	IF @create_datafile_dirs = 1
+	IF @create_directories IS NULL PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10)
+	ELSE 
+	BEGIN
+		PRINT @create_directories + CHAR(10)
+		IF @Execute = 1 EXEC(@create_directories)
+	END
 
-	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
 	PRINT @BeforeRestoreScript
+	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
 	PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
 	WHILE @i <= @max
 	BEGIN
@@ -434,14 +434,22 @@ SELECT @MoveClauses =
 		SELECT 0 OverallStep, '', 2 StepNumber, 2 SortOrder
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 		-----------------------------
-		UNION ALL
+		UNION ALL		
 		SELECT 1 OverallStep, LineText, 1 StepNumber, ordinal SortOrder
 		FROM dbo.fn_SplitStringByLine(@BeforeRestoreScript)
-		UNION ALL
 		-----------------------------
-		SELECT 2 OverallStep, REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30), 0, 0
 		UNION ALL
-		SELECT 2 OverallStep, Script, Commands.StepNumber, Commands.SortOrder
+		SELECT 2 OverallStep, '', 1 StepNumber, 1 SortOrder
+		UNION ALL
+		SELECT 2 OverallStep, LineText, 2 StepNumber, ordinal SortOrder
+		FROM dbo.fn_SplitStringByLine(@create_directories)
+		UNION ALL
+		SELECT 2 OverallStep, '', 3 StepNumber, 1 SortOrder
+		-----------------------------
+		UNION ALL
+		SELECT 3 OverallStep, REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30), 0, 0
+		UNION ALL
+		SELECT 3 OverallStep, Script, Commands.StepNumber, Commands.SortOrder
 		FROM
 		(
 			SELECT
@@ -460,14 +468,14 @@ SELECT @MoveClauses =
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') = '' OR 
 			(ISNULL(@SQLCMD_Connect_Clause,'') <> '' AND TRIM(Commands.Script)<>'GO')
 		UNION ALL
-		SELECT 3 OverallStep, REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32), 0, 0
+		SELECT 4 OverallStep, REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32), 0, 0
 		UNION ALL
 		-----------------------------------------------------------------
-		SELECT	3, LineText, 1,	ordinal
+		SELECT 4, LineText, 1,	ordinal
 		FROM dbo.fn_SplitStringByLine(@AfterRestoreScript)
 		-----------------------------------------------------------------
 		UNION ALL
-		SELECT 4 OverallStep, v.Script, 1, 1
+		SELECT 5 OverallStep, v.Script, 1, 1
 		FROM (VALUES ('GO'), (''), ('')) AS v(Script)
 		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
 	) dt
@@ -478,98 +486,22 @@ END
 GO
 
 
-DECLARE @SQLCMD_Connect_Clause NVARCHAR(1000)
-SELECT @SQLCMD_Connect_Clause = dt.DRName+','+dt.SQLPort
-FROM
-(
-	SELECT 'FADWH01'       AS MainServer, 'FADWH01'       AS [SQL Name], '172.23.104.1'  AS MainIP,   'FADWHDR'       AS DRName,      '172.23.104.201' AS DRIP, '1433'      AS SQLPort
-	UNION ALL SELECT 'FAIToolsDB01',   'FAIToolsDB01',   '172.23.204.1',  'FAIToolLogDR',  '172.23.204.211', '1678'
-	UNION ALL SELECT 'FAIToolsLogDB01','FAIToolsLogDB01','172.23.204.11', 'FAIToolsDBDR',  '172.23.204.201', '1679'
-	UNION ALL SELECT 'FALGODBFC2',     'FALGOSQL0',      '172.23.148.24', 'FAlgoDBDR',     '172.23.148.211', '1565'
-	UNION ALL SELECT 'FDPDBFC02',      'FDPRSQL',        '172.23.184.4',  'FDPDBDR',       '172.23.184.201', '1433'
-	UNION ALL SELECT 'FEMOFIDFC02',    'FEMOFIDFCISQL',  '172.23.136.4',  'FeMofidDBDR',   '172.23.136.201', '1566'
-	UNION ALL SELECT 'FGLDBFC1',       'FGLSQL',         '172.23.160.24', 'FGLDBDR',       '172.23.160.201', '4524'
-	UNION ALL SELECT 'FMCPIDBFC2',     'FMCPISQL',       '172.23.160.44', 'FMCPIDBDR',     '172.23.160.211', '5690'
-	UNION ALL SELECT 'FMCSDBFC1',      'FMCSDBSQL',      '172.23.160.84', 'FMCSDBDR',      '172.23.160.231', '1917'
-	UNION ALL SELECT 'FOAKDBFC2',      'FOAKDBFCISQL',   '172.23.128.44', 'FOAKDBDR',      '172.23.128.221', '1843'
-	UNION ALL SELECT 'FOGTDBFC1',      'FOGTSQL',        '172.23.200.4',  'FOGTDBDR',      '172.23.200.201', '1677'
-	UNION ALL SELECT 'FONLINEMFC1',    'FONLINEMSQL',    '172.23.164.4',  'FOnlineMDR',    '172.23.164.201', '1811'
-	UNION ALL SELECT '' ,              '' ,              '172.23.104.1',  'FOnlineDB1DR',  '172.23.164.221', '1844'
-	UNION ALL SELECT 'FONLINESH1,FONLINESH2','FONLINESHSQL1','172.23.164.24','FOnlineSHDR','172.23.164.211','1824,1825'
-	UNION ALL SELECT 'FPELLEKANFC2',   'FPELLEKANSQL',   '172.23.144.4',  'FPellekanDR',   '172.23.144.201', '1556'
-	UNION ALL SELECT 'FPMDB2',         'FPMSQL',         '172.23.128.5',  'FPMDBDR',       '172.23.128.201', '1850'
-	UNION ALL SELECT 'FPOUYAFC1',      'FPOUYASQL',      '172.23.148.4',  'FPouyaDBDR',    '172.23.148.201', '1569'
-) dt WHERE dt.[SQL Name] = CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName'))
-DECLARE @BeforeRestoreScript NVARCHAR(MAX) = '
 
-DECLARE @AgentServiceName NVARCHAR(256)
-SELECT @AgentServiceName = IIF(@@SERVICENAME=''MSSQLSERVER'',''SQLSERVERAGENT'',''SQLAgent$''+@@SERVICENAME)
-
-BEGIN TRY
-	IF EXISTS (SELECT * FROM sys.dm_server_services WHERE status_desc = ''Running'' AND servicename LIKE ''SQL Server Agent%'')
-	EXEC xp_servicecontrol ''stop'', ''SQLAgent$DBDR'';
-END TRY
-BEGIN CATCH
-END CATCH
-
-EXEC xp_servicecontrol ''querystate'', ''SQLAgent$DBDR'';
-ALTER DATABASE msdb SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-'
-DECLARE @AfterRestoreScript NVARCHAR(MAX) = '
-ALTER DATABASE msdb SET MULTI_USER
-BEGIN TRY
-	EXEC xp_servicecontrol ''start'', ''SQLAgent$DBDR'';
-END TRY
-BEGIN CATCH
-END CATCH
-
-EXEC sp_CONFIGURE ''SHOW ADVANCED OPTIONS'',1;
-RECONFIGURE WITH OVERRIDE;
-EXEC sp_CONFIGURE ''AGENT'',1;
-RECONFIGURE WITH OVERRIDE;
-USE [msdb];
-
-DECLARE @agent_new_log_path NVARCHAR(256)
-SELECT @agent_new_log_path =
-	LEFT(dt.ErrLogFile, LEN(dt.ErrLogFile)-dt.backslash_pos+1) + ''SQLAgent.out''
-FROM 
-(
-	SELECT CONVERT(NVARCHAR(256),SERVERPROPERTY(''ErrorLogFileName'')) ErrLogFile, CHARINDEX(''\'',REVERSE(CONVERT(NVARCHAR(256),SERVERPROPERTY(''ErrorLogFileName'')))) backslash_pos
-) dt
-EXEC msdb.dbo.sp_set_sqlagent_properties 
-    @errorlog_file=@agent_new_log_path;
-UPDATE js
-SET js.command=
-''IF NOT EXISTS (SELECT * FROM sys.dm_hadr_availability_group_states WHERE primary_replica=@@SERVERNAME)
-	return
-	
-''+ REPLACE(REPLACE(js.command,''@Directory = ''''R:\'',''@Directory = ''''R:\''),''@MirrorDirectory = ''''R:\'',''@MirrorDirectory = ''''R:\'')
-FROM msdb.dbo.sysjobsteps js JOIN msdb.dbo.sysjobs j
-ON js.job_id = j.job_id
-WHERE 
-	js.subsystem = ''TSQL'' AND 
-	js.command not like ''IF NOT EXISTS (SELECT * FROM sys.dm_hadr_availability_group_states%'' AND
-	j.name LIKE ''Database%'' AND j.name NOT LIKE ''%system%''
-EXEC msdb.dbo.sp_purge_jobhistory
-DECLARE @oldest_date DATETIME2(3) = GETDATE()
-EXEC msdb.dbo.sp_delete_backuphistory @oldest_date = @oldest_date
-DBCC CHECKDB(''msdb'') WITH NO_INFOMSGS
-'
-
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'msdb',	-- sysname
-                                         @RestoreDBName = 'msdb',
-										 @Restore_DataPath = 'C:\Program Files\Microsoft SQL Server\MSSQL16.DBDR\MSSQL\DATA\',
-										 @Restore_LogPath = 'C:\Program Files\Microsoft SQL Server\MSSQL16.DBDR\MSSQL\DATA\',
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'AlgorithmicTrading',	-- sysname
+                                         @RestoreDBName = '',
+										 @Restore_DataPath = '',
+										 @Restore_LogPath = '',
 										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
-										 @RestoreUpTo_TIMESTAMP = '2026-10-28 09:52:10.553',
+										 @RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
-										 @backup_path_replace_string = 'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
-										 @BeforeRestoreScript = @BeforeRestoreScript,
-										 @AfterRestoreScript = @AfterRestoreScript,
+										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
+											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
+										 @BeforeRestoreScript = '',
+										 @AfterRestoreScript = '',
 										 @Verbose = 0,
-										 @SQLCMD_Connect_Clause = @SQLCMD_Connect_Clause
-						 
+										 @SQLCMD_Connect_Clause = ''
+--\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
