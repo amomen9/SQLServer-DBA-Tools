@@ -27,7 +27,8 @@ RETURN
         SELECT CAST('<r><x>' + REPLACE(REPLACE(@Query, CHAR(13), ''), CHAR(10), '</x><x>') + '</x></r>' AS xml)
     ) AS d(XmlData)
     CROSS APPLY d.XmlData.nodes('/r/x') AS T(N)
-    WHERE LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) <> ''
+    -- WHERE LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) <> ''
+	-- keep empties: no WHERE
 );
 GO
 
@@ -79,6 +80,8 @@ BEGIN
 	DECLARE @SQL NVARCHAR(MAX);
 	DECLARE @Script NVARCHAR(MAX) = N'';         -- plain script (already used)
 	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
+	DECLARE @tmpLine NVARCHAR(MAX);
+	DECLARE @ord INT;
 
 	------------------------------------------------------------
 	-- Parameter validation
@@ -409,78 +412,115 @@ SELECT @MoveClauses =
 
 	------------------------------------------------------------
 	-- Add TRY-CATCH statements to the restore statements
+	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------
-	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) = 'BEGIN TRY'+CHAR(10)
-	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) = 
-	'END TRY'+CHAR(10)+
-	'BEGIN CATCH'+CHAR(10)+
-	'	SET @msg = ERROR_MESSAGE()'+CHAR(10)+
-	'	RAISERROR(@msg,16,1)'+CHAR(10)+
-	'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Database will be recovered.'''+CHAR(10)+
-	'	RAISERROR(@msg,16,1) '+CHAR(10)+
-	'	RESTORE DATABASE '+QUOTENAME(@RestoreDBName)+' WITH RECOVERY'+CHAR(10)+
-	'	RETURN'+CHAR(10)+
-	'END CATCH'
+	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
+		'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
+		'BEGIN TRY' + CHAR(10);
+
+	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
+		'END TRY' + CHAR(10) +
+		'BEGIN CATCH' + CHAR(10) +
+		'	SET @msg = ERROR_MESSAGE()' + CHAR(10) +
+		'	RAISERROR(@msg,16,1)' + CHAR(10) +
+		'	IF @Recover_Database_On_Error = 1' + CHAR(10) +
+		'		SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Database will be recovered.''' + CHAR(10) +
+		'	ELSE' + CHAR(10) +
+		'		SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Restore finished for the database.''' + CHAR(10) +
+		'	RAISERROR(@msg,16,1) ' + CHAR(10) +
+		'	IF @Recover_Database_On_Error = 1' + CHAR(10) +
+		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10) +
+		'	RETURN' + CHAR(10) +
+		'END CATCH' + CHAR(10) +
+		'----------------------------------------Restore statements end--------------------------------';
+
 	------------------------------------------------------------
 	-- Giving the script in the STDOUT (PRINT)
 	------------------------------------------------------------
-	-- Print create directories commands
+	-- xp_create_subdir section
 	IF @create_datafile_dirs = 1
 		IF @create_directories IS NULL 
 		BEGIN
-			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10);
+			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.';
+			PRINT '';
 			SET @Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
 		END
 		ELSE 
 		BEGIN
-			PRINT @create_directories + CHAR(10)
+			PRINT @create_directories;
+			PRINT '';  -- one empty line after last xp_create_subdir
 			SET @Script += @create_directories + CHAR(10) + CHAR(10);
-			IF @Execute = 1 EXEC(@create_directories)
+			IF @Execute = 1 EXEC(@create_directories);
 		END
 
-	PRINT @Preparatory_Script_Before_Restore
+	-- Preparatory script section (printed/plain)
 	IF @Preparatory_Script_Before_Restore IS NOT NULL AND LEN(@Preparatory_Script_Before_Restore) > 0
-		SET @Script += @Preparatory_Script_Before_Restore + CHAR(10);
+	BEGIN
+		PRINT '';  -- empty line
+		PRINT '------------------------------------Preparatory Script Before Restore-------------------------';
+		PRINT @Preparatory_Script_Before_Restore;
+		PRINT '----------------------------------------------------------------------------------------------';
+		PRINT '';  -- empty line
 
+		SET @Script += CHAR(10) +
+			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
+			@Preparatory_Script_Before_Restore + CHAR(10) +
+			'----------------------------------------------------------------------------------------------' + CHAR(10) +
+			CHAR(10);
+	END
+
+	-- restore body (plain script) – header now comes from TRY/CATCH, do NOT print the old line
+	-- REMOVE these two lines:
+	-- PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
+	-- SET @Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
+	-- keep only step lines and commands:
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
-	PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
-	SET @Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
-
 	WHILE @i <= @max
 	BEGIN
 		SELECT @Cmd = RestoreCommand FROM #RestoreChain WHERE StepNumber = @i;
 		PRINT '-- Step ' + CAST(@i AS varchar(10));
 		PRINT @Cmd;
-
 		SET @Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
-
 		SET @i += 1;
 	END
-	PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
-	SET @Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
+	-- footer also comes from TRY/CATCH now, so DROP the old print:
+	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
+	-- SET @Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
 
-	PRINT @Complementary_Script_After_Restore
+	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
-		SET @Script += @Complementary_Script_After_Restore + CHAR(10);
+	BEGIN
+		PRINT '';  -- empty line
+		PRINT '-----------------------------------Complementary Script After Restore-----------------------';
+		PRINT @Complementary_Script_After_Restore;
+		PRINT '----------------------------------------------------------------------------------------------';
+		PRINT '';  -- empty line
 
-	PRINT '--##############################################################--'+REPLICATE(CHAR(10),2);
+		SET @Script += CHAR(10) +
+			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
+			@Complementary_Script_After_Restore + CHAR(10) +
+			'----------------------------------------------------------------------------------------------' + CHAR(10) +
+			CHAR(10);
+	END
+
+	PRINT '--##############################################################--' + REPLICATE(CHAR(10),2);
 	SET @Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
 
 	------------------------------------------------------------
 	-- Build @SQLCMD_Script to mirror SELECT dt.Script
 	------------------------------------------------------------
-	-- 0) Optional :connect and blank line
+	-- 0) :connect and one empty line
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
 		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
-		SET @SQLCMD_Script += '' + CHAR(10);
+		--SET @SQLCMD_Script += CHAR(10);  -- exactly one empty line
 	END
 
-	-- 1) @Preparatory_Script_Before_Restore (step 1 in dt)
+	-- 1) Preparatory section in SQLCMD script
 	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
 	BEGIN
-		DECLARE @tmpLine NVARCHAR(MAX);
-		DECLARE @ord INT;
+		SET @SQLCMD_Script += CHAR(10) +
+			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10);
 
 		DECLARE curBefore CURSOR LOCAL FAST_FORWARD FOR
 			SELECT LineText, ordinal
@@ -491,15 +531,19 @@ SELECT @MoveClauses =
 		FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			SET @SQLCMD_Script += @tmpLine + CHAR(10);
+			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
 			FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
 		END
 		CLOSE curBefore;
 		DEALLOCATE curBefore;
+
+		SET @SQLCMD_Script +=
+			'----------------------------------------------------------------------------------------------' + CHAR(10) +
+			CHAR(10);
 	END
 
-	-- 2) Blank line + @create_directories + blank line (step 2 in dt)
-	SET @SQLCMD_Script += '' + CHAR(10);
+	-- 2) Blank line + xp_create_subdir + blank line
+	SET @SQLCMD_Script += CHAR(10);
 
 	IF @create_directories IS NOT NULL AND @create_directories <> N''
 	BEGIN
@@ -512,21 +556,20 @@ SELECT @MoveClauses =
 		FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			SET @SQLCMD_Script += @tmpLine + CHAR(10);
+			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
 			FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
 		END
 		CLOSE curDirs;
 		DEALLOCATE curDirs;
+
+		SET @SQLCMD_Script += CHAR(10);  -- one empty line after last xp_create_subdir
 	END
 
-	SET @SQLCMD_Script += '' + CHAR(10);
-
-	-- 3) TRY header + restore commands (step 3 in dt)
+	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
-			'DECLARE @StepNo INT'+CHAR(10)+
-			'DECLARE @msg NVARCHAR(2000)'+CHAR(10)+
-			@TRY_CATCH_HEAD+
-			REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30);
+			'DECLARE @StepNo INT' + CHAR(10) +
+			'DECLARE @msg NVARCHAR(2000)' + CHAR(10) +
+			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
 	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
 		SELECT LineText, ordinal
@@ -537,21 +580,19 @@ SELECT @MoveClauses =
 	FETCH NEXT FROM curHead INTO @tmpLine, @ord;
 	WHILE @@FETCH_STATUS = 0
 	BEGIN
-		SET @SQLCMD_Script += @tmpLine + CHAR(10);
+		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
 		FETCH NEXT FROM curHead INTO @tmpLine, @ord;
 	END
 	CLOSE curHead;
 	DEALLOCATE curHead;
 
-	-- now the per‑step commands (the same logic as "Commands" in dt)
+	-- per-step commands
 	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
 	WHILE @Step <= @MaxStep
 	BEGIN
-		-- 3.a) comment line
 		SET @SQLCMD_Script += CHAR(9)+'-- Step ' + CAST(@Step AS varchar(10)) + CHAR(10);
-		-- 3.b) set @StepNo
 		SET @SQLCMD_Script += CHAR(9)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10);
-		-- 3.c) actual restore command split into lines
+
 		DECLARE @RestoreCmd NVARCHAR(MAX);
 		SELECT @RestoreCmd = RestoreCommand
 		FROM #RestoreChain
@@ -568,7 +609,7 @@ SELECT @MoveClauses =
 			FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
 			WHILE @@FETCH_STATUS = 0
 			BEGIN
-				SET @SQLCMD_Script += CHAR(9) + @tmpLine + CHAR(10);
+				SET @SQLCMD_Script += CHAR(9) + ISNULL(@tmpLine,'') + CHAR(10);
 				FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
 			END
 			CLOSE curCmd;
@@ -578,9 +619,8 @@ SELECT @MoveClauses =
 		SET @Step += 1;
 	END
 
-	-- 4) footer + TRY_CATCH_TAIL (step 4 in dt)
-	DECLARE @FooterBlock NVARCHAR(MAX) =
-		REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)+CHAR(10)+@TRY_CATCH_TAIL;
+	-- 4) footer + TRY_CATCH_TAIL (includes END CATCH + restore-footer)
+	DECLARE @FooterBlock NVARCHAR(MAX) = @TRY_CATCH_TAIL;
 
 	DECLARE curFoot CURSOR LOCAL FAST_FORWARD FOR
 		SELECT LineText, ordinal
@@ -591,15 +631,18 @@ SELECT @MoveClauses =
 	FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
 	WHILE @@FETCH_STATUS = 0
 	BEGIN
-		SET @SQLCMD_Script += @tmpLine + CHAR(10);
+		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
 		FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
 	END
 	CLOSE curFoot;
 	DEALLOCATE curFoot;
 
-	-- 5) @Complementary_Script_After_Restore (step 4 continuation in dt)
+	-- 5) Complementary section in SQLCMD script
 	IF @Complementary_Script_After_Restore IS NOT NULL AND @Complementary_Script_After_Restore <> N''
 	BEGIN
+		SET @SQLCMD_Script += CHAR(10) +
+			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10);
+
 		DECLARE curAfter CURSOR LOCAL FAST_FORWARD FOR
 			SELECT LineText, ordinal
 			FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
@@ -609,21 +652,25 @@ SELECT @MoveClauses =
 		FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
 		WHILE @@FETCH_STATUS = 0
 		BEGIN
-			SET @SQLCMD_Script += @tmpLine + CHAR(10);
+			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
 			FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
 		END
 		CLOSE curAfter;
 		DEALLOCATE curAfter;
+
+		SET @SQLCMD_Script +=
+			'----------------------------------------------------------------------------------------------' + CHAR(10) +
+			CHAR(10);
 	END
 
-	-- 6) trailing GO / blanks when SQLCMD_Connect_Clause is set (step 5 in dt)
+	-- 6) trailing GO / blanks
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
 		SET @SQLCMD_Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
 	END
 
 	------------------------------------------------------------
-	-- Giving the script as a result set (unchanged)
+	-- Result-set script (dt.Script) with consistent header/footer
 	------------------------------------------------------------
 	SELECT dt.Script FROM 
 	(
@@ -635,7 +682,16 @@ SELECT @MoveClauses =
 		-----------------------------
 		UNION ALL		
 		SELECT 1 OverallStep, LineText, 1 StepNumber, ordinal SortOrder
-		FROM dbo.fn_SplitStringByLine(@Preparatory_Script_Before_Restore)
+		FROM dbo.fn_SplitStringByLine(
+				CASE 
+					WHEN @Preparatory_Script_Before_Restore IS NULL OR @Preparatory_Script_Before_Restore = N'' THEN N''
+					ELSE CHAR(10) +
+						 '------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
+						 @Preparatory_Script_Before_Restore + CHAR(10) +
+						 '----------------------------------------------------------------------------------------------' + CHAR(10) +
+						 CHAR(10)
+				END
+			)
 		-----------------------------
 		UNION ALL
 		SELECT 2 OverallStep, '', 1 StepNumber, 1 SortOrder
@@ -650,8 +706,7 @@ SELECT @MoveClauses =
 		FROM dbo.fn_SplitStringByLine(
 				'DECLARE @StepNo INT'+CHAR(10)+
 				'DECLARE @msg NVARCHAR(2000)'+CHAR(10)+
-				@TRY_CATCH_HEAD+
-				REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
+				@TRY_CATCH_HEAD
 			) fssl
 		UNION ALL
 		SELECT 3 OverallStep, Script, Commands.StepNumber, Commands.SortOrder
@@ -680,11 +735,20 @@ SELECT @MoveClauses =
 			(ISNULL(@SQLCMD_Connect_Conn_String,'') <> '' AND TRIM(Commands.Script)<>'GO')
 		UNION ALL
 		SELECT 4 OverallStep, fssl.LineText , 0, fssl.ordinal
-		FROM dbo.fn_SplitStringByLine(REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)+CHAR(10)+@TRY_CATCH_TAIL) fssl
+		FROM dbo.fn_SplitStringByLine(@TRY_CATCH_TAIL) fssl
 		UNION ALL
 		-----------------------------------------------------------------
-		SELECT 4, LineText, 1,	ordinal
-		FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
+		SELECT 4 OverallStep, LineText, 1 StepNumber, ordinal
+		FROM dbo.fn_SplitStringByLine(
+				CASE 
+					WHEN @Complementary_Script_After_Restore IS NULL OR @Complementary_Script_After_Restore = N'' THEN N''
+					ELSE CHAR(10) +
+						 '-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
+						 @Complementary_Script_After_Restore + CHAR(10) +
+						 '----------------------------------------------------------------------------------------------' + CHAR(10) +
+						 CHAR(10)
+				END
+			)
 		-----------------------------------------------------------------
 		UNION ALL
 		SELECT 5 OverallStep, v.Script, 1, 1
@@ -697,8 +761,7 @@ SELECT @MoveClauses =
 	-- Expose both aggregated versions
 	------------------------------------------------------------
 	SELECT @Script AS FullScript_Plain;
-	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script) 
-
+	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 
 END
 GO
@@ -724,3 +787,4 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
 										 @SQLCMD_Connect_Conn_String = '.'
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
+
