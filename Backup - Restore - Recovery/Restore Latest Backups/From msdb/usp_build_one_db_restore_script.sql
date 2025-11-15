@@ -669,98 +669,12 @@ SELECT @MoveClauses =
 		SET @SQLCMD_Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
 	END
 
-	------------------------------------------------------------
-	-- Result-set script (dt.Script) with consistent header/footer
-	------------------------------------------------------------
-	SELECT dt.Script FROM 
-	(
-		SELECT 0 OverallStep, ':connect '+@SQLCMD_Connect_Conn_String Script, 1 StepNumber, 1 SortOrder
-		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
-		UNION ALL
-		SELECT 0 OverallStep, '', 2 StepNumber, 2 SortOrder
-		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
-		-----------------------------
-		UNION ALL		
-		SELECT 1 OverallStep, LineText, 1 StepNumber, ordinal SortOrder
-		FROM dbo.fn_SplitStringByLine(
-				CASE 
-					WHEN @Preparatory_Script_Before_Restore IS NULL OR @Preparatory_Script_Before_Restore = N'' THEN N''
-					ELSE CHAR(10) +
-						 '------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
-						 @Preparatory_Script_Before_Restore + CHAR(10) +
-						 '----------------------------------------------------------------------------------------------' + CHAR(10) +
-						 CHAR(10)
-				END
-			)
-		-----------------------------
-		UNION ALL
-		SELECT 2 OverallStep, '', 1 StepNumber, 1 SortOrder
-		UNION ALL
-		SELECT 2 OverallStep, LineText, 2 StepNumber, ordinal SortOrder
-		FROM dbo.fn_SplitStringByLine(@create_directories)
-		UNION ALL
-		SELECT 2 OverallStep, '', 3 StepNumber, 1 SortOrder
-		-----------------------------
-		UNION ALL
-		SELECT 3 OverallStep, fssl.LineText, 0, fssl.ordinal
-		FROM dbo.fn_SplitStringByLine(
-				'DECLARE @StepNo INT'+CHAR(10)+
-				'DECLARE @msg NVARCHAR(2000)'+CHAR(10)+
-				@TRY_CATCH_HEAD
-			) fssl
-		UNION ALL
-		SELECT 3 OverallStep, Script, Commands.StepNumber, Commands.SortOrder
-		FROM
-		(
-			SELECT
-				CHAR(9)+'-- Step ' + CAST(StepNumber AS varchar(10)) Script,
-				StepNumber,
-				-1 AS SortOrder
-			FROM #RestoreChain
-			UNION ALL
-			SELECT
-				CHAR(9)+'SET @StepNo = '+CAST(StepNumber AS varchar(10)) AS Script,
-				StepNumber,
-				0 AS SortOrder
-			FROM #RestoreChain
-			UNION ALL
-			SELECT
-				CHAR(9)+fssl.LineText,
-				StepNumber,
-				fssl.ordinal AS SortOrder
-			FROM #RestoreChain rc
-			CROSS APPLY dbo.fn_SplitStringByLine(rc.RestoreCommand) fssl
-		) AS Commands
-		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') = '' OR 
-			(ISNULL(@SQLCMD_Connect_Conn_String,'') <> '' AND TRIM(Commands.Script)<>'GO')
-		UNION ALL
-		SELECT 4 OverallStep, fssl.LineText , 0, fssl.ordinal
-		FROM dbo.fn_SplitStringByLine(@TRY_CATCH_TAIL) fssl
-		UNION ALL
-		-----------------------------------------------------------------
-		SELECT 4 OverallStep, LineText, 1 StepNumber, ordinal
-		FROM dbo.fn_SplitStringByLine(
-				CASE 
-					WHEN @Complementary_Script_After_Restore IS NULL OR @Complementary_Script_After_Restore = N'' THEN N''
-					ELSE CHAR(10) +
-						 '-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
-						 @Complementary_Script_After_Restore + CHAR(10) +
-						 '----------------------------------------------------------------------------------------------' + CHAR(10) +
-						 CHAR(10)
-				END
-			)
-		-----------------------------------------------------------------
-		UNION ALL
-		SELECT 5 OverallStep, v.Script, 1, 1
-		FROM (VALUES ('GO'), (''), ('')) AS v(Script)
-		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
-	) dt
-	ORDER BY dt.OverallStep, StepNumber, SortOrder;
+
 
 	------------------------------------------------------------
 	-- Expose both aggregated versions
 	------------------------------------------------------------
-	SELECT @Script AS FullScript_Plain;
+	--SELECT @Script AS FullScript_Plain;
 	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 
 END
@@ -779,12 +693,10 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
 										 @Recover_Database_On_Error = 1,
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
-										 @Preparatory_Script_Before_Restore = '--
-										 --',
-										 @Complementary_Script_After_Restore = '/*
-										 */',
+										 @Preparatory_Script_Before_Restore = '',
+										 @Complementary_Script_After_Restore = '',
 										 @Verbose = 0,
-										 @SQLCMD_Connect_Conn_String = '.'
+										 @SQLCMD_Connect_Conn_String = ''
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
 
