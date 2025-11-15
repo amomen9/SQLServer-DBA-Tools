@@ -9,7 +9,6 @@
 
 SET NOCOUNT ON;
 
-
 USE msdb;
 GO
 
@@ -37,32 +36,24 @@ GO
 -- SELECT * FROM dbo.fn_SplitStringByLine(@MyScript);
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName			sysname,		-- Source database
-		@RestoreDBName			sysname = NULL,		-- Destination database
-		@create_datafile_dirs	BIT = 1,		-- Create original parent directories of the database files in target
+		@DatabaseName			sysname,
+		@RestoreDBName			sysname = NULL,
+		@create_datafile_dirs	BIT = 1,
 		@Restore_DataPath		NVARCHAR(1000) = NULL,
 		@Restore_LogPath		NVARCHAR(1000) = NULL,
-		@StopAt		DATETIME		= NULL,		-- Point-in-time inside last DIFF/LOG
-		@WithReplace			BIT	= 0,		-- Include REPLACE on RESTORE DATABASE
-		@IncludeLogs			BIT	= 1,		-- Include log backups	
-		@IncludeDiffs			BIT = 1,		-- Include differential backups
-		@Recovery				BIT = 0,		-- Specify whether to eventually recover the database or not 
-		@RestoreUpTo_TIMESTAMP 
-					DATETIME2(3)	= NULL,		-- Backup files started after this TIMESTAMP will be excluded 
-		@backup_path_replace_string				
-					NVARCHAR(4000)	= NULL,		-- Write t-sql formula to be executed on the backup files full path stored in the
-												-- parameter "Devices". 
-												-- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY('MachineName')))
-
-		@BeforeRestoreScript NVARCHAR(MAX) = NULL,
-												-- Script to execute before restore script
-		@AfterRestoreScript NVARCHAR(MAX) = NULL,
-												-- Script to execute after restore script												
-		@Execute				BIT	= 0,		-- 1 = execute the produced script
-		@Verbose				BIT = 1,		-- If executing and @Verbose = 1 the produced script will also be printed.
-		@SQLCMD_Connect_Clause NVARCHAR(MAX) = NULL	
-												-- Connection string to be written in front of :connect if you want to
-												-- execute the query on the target machine using SQLCMD Mode
+		@StopAt					DATETIME = NULL,
+		@WithReplace			BIT	= 0,
+		@IncludeLogs			BIT	= 1,
+		@IncludeDiffs			BIT = 1,
+		@Recovery				BIT = 0,
+		@RestoreUpTo_TIMESTAMP	DATETIME2(3) = NULL,
+		@backup_path_replace_string NVARCHAR(4000) = NULL,
+		@Recover_Database_On_Error BIT = 0,
+		@Preparatory_Script_Before_Restore	NVARCHAR(MAX) = NULL,
+		@Complementary_Script_After_Restore		NVARCHAR(MAX) = NULL,
+		@Execute				BIT	= 0,
+		@Verbose				BIT = 1,
+		@SQLCMD_Connect_Conn_String NVARCHAR(MAX) = NULL
 AS
 BEGIN
 	------------------------------------------------------------
@@ -83,10 +74,12 @@ BEGIN
 	------------------------------------------------------------
 	-- Parameter definition
 	------------------------------------------------------------
-	DECLARE @MoveClauses NVARCHAR(MAX)
-    DECLARE @create_directories NVARCHAR(MAX)
-	DECLARE @SQL NVARCHAR(MAX)
-	
+	DECLARE @MoveClauses NVARCHAR(MAX);
+    DECLARE @create_directories NVARCHAR(MAX);
+	DECLARE @SQL NVARCHAR(MAX);
+	DECLARE @Script NVARCHAR(MAX) = N'';         -- plain script (already used)
+	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
+
 	------------------------------------------------------------
 	-- Parameter validation
 	------------------------------------------------------------
@@ -95,13 +88,16 @@ BEGIN
 		PRINT 'Note: Target DB does not currently exist (restore will create it).';
 	
 	IF @StopAt = '' SET @StopAt = NULL
-	IF @RestoreUpTo_TIMESTAMP = '' SET @RestoreUpTo_TIMESTAMP = NULL
+	IF @RestoreUpTo_TIMESTAMP = '' OR @RestoreUpTo_TIMESTAMP IS NULL SET @RestoreUpTo_TIMESTAMP = GETDATE()+1
 	IF ISNULL(@RestoreDBName,'') = '' SET @RestoreDBName = @DatabaseName
 
 	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
 	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
+
+	-- Also start header in @Script
+	SET @Script += '----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10);
 
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -383,6 +379,16 @@ SELECT @MoveClauses =
 		PRINT '-- Log backups: ' + CAST(@LogCount AS varchar(12));
 		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
 												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
+
+		-- Mirror the verbose info into @Script as well
+		SET @Script += '-- ```RESTORE CHAIN BUILDER```' + CHAR(10)
+					+  '-- Full: ' + @FullInfo + CHAR(10)
+					+  '-- Diff: ' + CASE WHEN @HasDiff = 1 THEN @DiffInfo ELSE '(none);' END + CHAR(10)
+					+  '-- Log backups: ' + CAST(@LogCount AS varchar(12)) + CHAR(10)
+					+  '-- Log chain LSN continuity: '
+					+  CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
+							WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END
+					+  CHAR(10);
 	END
 	ELSE IF @LogCount > 0 AND @LogsChainValid = 0
 		PRINT '-- Log chain LSN continuity: BROKEN!!!';
@@ -391,52 +397,245 @@ SELECT @MoveClauses =
 	BEGIN
 		PRINT 'WARNING: Log chain appears broken (gap detected).';
 		PRINT '------------------------------------------------------------------';
+		SET @Script += 'WARNING: Log chain appears broken (gap detected).' + CHAR(10)
+					+  '------------------------------------------------------------------' + CHAR(10);
 	END
 
 	IF @StopAt IS NOT NULL
+	BEGIN
 		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
+		SET @Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
+	END
 
+	------------------------------------------------------------
+	-- Add TRY-CATCH statements to the restore statements
+	------------------------------------------------------------
+	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) = 'BEGIN TRY'+CHAR(10)
+	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) = 
+	'END TRY'+CHAR(10)+
+	'BEGIN CATCH'+CHAR(10)+
+	'	SET @msg = ERROR_MESSAGE()'+CHAR(10)+
+	'	RAISERROR(@msg,16,1)'+CHAR(10)+
+	'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Database will be recovered.'''+CHAR(10)+
+	'	RAISERROR(@msg,16,1) '+CHAR(10)+
+	'	RESTORE DATABASE '+QUOTENAME(@RestoreDBName)+' WITH RECOVERY'+CHAR(10)+
+	'	RETURN'+CHAR(10)+
+	'END CATCH'
 	------------------------------------------------------------
 	-- Giving the script in the STDOUT (PRINT)
 	------------------------------------------------------------
 	-- Print create directories commands
 	IF @create_datafile_dirs = 1
-	IF @create_directories IS NULL PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10)
-	ELSE 
-	BEGIN
-		PRINT @create_directories + CHAR(10)
-		IF @Execute = 1 EXEC(@create_directories)
-	END
+		IF @create_directories IS NULL 
+		BEGIN
+			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10);
+			SET @Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
+		END
+		ELSE 
+		BEGIN
+			PRINT @create_directories + CHAR(10)
+			SET @Script += @create_directories + CHAR(10) + CHAR(10);
+			IF @Execute = 1 EXEC(@create_directories)
+		END
 
-	PRINT @BeforeRestoreScript
+	PRINT @Preparatory_Script_Before_Restore
+	IF @Preparatory_Script_Before_Restore IS NOT NULL AND LEN(@Preparatory_Script_Before_Restore) > 0
+		SET @Script += @Preparatory_Script_Before_Restore + CHAR(10);
+
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
 	PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
+	SET @Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
+
 	WHILE @i <= @max
 	BEGIN
 		SELECT @Cmd = RestoreCommand FROM #RestoreChain WHERE StepNumber = @i;
 		PRINT '-- Step ' + CAST(@i AS varchar(10));
 		PRINT @Cmd;
+
+		SET @Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
+
 		SET @i += 1;
 	END
 	PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
-	PRINT @AfterRestoreScript
+	SET @Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
+
+	PRINT @Complementary_Script_After_Restore
+	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
+		SET @Script += @Complementary_Script_After_Restore + CHAR(10);
+
 	PRINT '--##############################################################--'+REPLICATE(CHAR(10),2);
+	SET @Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
 
 	------------------------------------------------------------
-	-- Giving the script as a result set
+	-- Build @SQLCMD_Script to mirror SELECT dt.Script
 	------------------------------------------------------------
-	
+	-- 0) Optional :connect and blank line
+	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
+	BEGIN
+		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
+		SET @SQLCMD_Script += '' + CHAR(10);
+	END
+
+	-- 1) @Preparatory_Script_Before_Restore (step 1 in dt)
+	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
+	BEGIN
+		DECLARE @tmpLine NVARCHAR(MAX);
+		DECLARE @ord INT;
+
+		DECLARE curBefore CURSOR LOCAL FAST_FORWARD FOR
+			SELECT LineText, ordinal
+			FROM dbo.fn_SplitStringByLine(@Preparatory_Script_Before_Restore)
+			ORDER BY ordinal;
+
+		OPEN curBefore;
+		FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQLCMD_Script += @tmpLine + CHAR(10);
+			FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
+		END
+		CLOSE curBefore;
+		DEALLOCATE curBefore;
+	END
+
+	-- 2) Blank line + @create_directories + blank line (step 2 in dt)
+	SET @SQLCMD_Script += '' + CHAR(10);
+
+	IF @create_directories IS NOT NULL AND @create_directories <> N''
+	BEGIN
+		DECLARE curDirs CURSOR LOCAL FAST_FORWARD FOR
+			SELECT LineText, ordinal
+			FROM dbo.fn_SplitStringByLine(@create_directories)
+			ORDER BY ordinal;
+
+		OPEN curDirs;
+		FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQLCMD_Script += @tmpLine + CHAR(10);
+			FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
+		END
+		CLOSE curDirs;
+		DEALLOCATE curDirs;
+	END
+
+	SET @SQLCMD_Script += '' + CHAR(10);
+
+	-- 3) TRY header + restore commands (step 3 in dt)
+	DECLARE @HeaderBlock NVARCHAR(MAX) =
+			'DECLARE @StepNo INT'+CHAR(10)+
+			'DECLARE @msg NVARCHAR(2000)'+CHAR(10)+
+			@TRY_CATCH_HEAD+
+			REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30);
+
+	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
+		SELECT LineText, ordinal
+		FROM dbo.fn_SplitStringByLine(@HeaderBlock)
+		ORDER BY ordinal;
+
+	OPEN curHead;
+	FETCH NEXT FROM curHead INTO @tmpLine, @ord;
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		SET @SQLCMD_Script += @tmpLine + CHAR(10);
+		FETCH NEXT FROM curHead INTO @tmpLine, @ord;
+	END
+	CLOSE curHead;
+	DEALLOCATE curHead;
+
+	-- now the per‑step commands (the same logic as "Commands" in dt)
+	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
+	WHILE @Step <= @MaxStep
+	BEGIN
+		-- 3.a) comment line
+		SET @SQLCMD_Script += CHAR(9)+'-- Step ' + CAST(@Step AS varchar(10)) + CHAR(10);
+		-- 3.b) set @StepNo
+		SET @SQLCMD_Script += CHAR(9)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10);
+		-- 3.c) actual restore command split into lines
+		DECLARE @RestoreCmd NVARCHAR(MAX);
+		SELECT @RestoreCmd = RestoreCommand
+		FROM #RestoreChain
+		WHERE StepNumber = @Step;
+
+		IF @RestoreCmd IS NOT NULL
+		BEGIN
+			DECLARE curCmd CURSOR LOCAL FAST_FORWARD FOR
+				SELECT LineText, ordinal
+				FROM dbo.fn_SplitStringByLine(@RestoreCmd)
+				ORDER BY ordinal;
+
+			OPEN curCmd;
+			FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
+			WHILE @@FETCH_STATUS = 0
+			BEGIN
+				SET @SQLCMD_Script += CHAR(9) + @tmpLine + CHAR(10);
+				FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
+			END
+			CLOSE curCmd;
+			DEALLOCATE curCmd;
+		END
+
+		SET @Step += 1;
+	END
+
+	-- 4) footer + TRY_CATCH_TAIL (step 4 in dt)
+	DECLARE @FooterBlock NVARCHAR(MAX) =
+		REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)+CHAR(10)+@TRY_CATCH_TAIL;
+
+	DECLARE curFoot CURSOR LOCAL FAST_FORWARD FOR
+		SELECT LineText, ordinal
+		FROM dbo.fn_SplitStringByLine(@FooterBlock)
+		ORDER BY ordinal;
+
+	OPEN curFoot;
+	FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		SET @SQLCMD_Script += @tmpLine + CHAR(10);
+		FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
+	END
+	CLOSE curFoot;
+	DEALLOCATE curFoot;
+
+	-- 5) @Complementary_Script_After_Restore (step 4 continuation in dt)
+	IF @Complementary_Script_After_Restore IS NOT NULL AND @Complementary_Script_After_Restore <> N''
+	BEGIN
+		DECLARE curAfter CURSOR LOCAL FAST_FORWARD FOR
+			SELECT LineText, ordinal
+			FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
+			ORDER BY ordinal;
+
+		OPEN curAfter;
+		FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQLCMD_Script += @tmpLine + CHAR(10);
+			FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
+		END
+		CLOSE curAfter;
+		DEALLOCATE curAfter;
+	END
+
+	-- 6) trailing GO / blanks when SQLCMD_Connect_Clause is set (step 5 in dt)
+	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
+	BEGIN
+		SET @SQLCMD_Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
+	END
+
+	------------------------------------------------------------
+	-- Giving the script as a result set (unchanged)
+	------------------------------------------------------------
 	SELECT dt.Script FROM 
 	(
-		SELECT 0 OverallStep, ':connect '+@SQLCMD_Connect_Clause Script, 1 StepNumber, 1 SortOrder
-		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+		SELECT 0 OverallStep, ':connect '+@SQLCMD_Connect_Conn_String Script, 1 StepNumber, 1 SortOrder
+		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 		UNION ALL
 		SELECT 0 OverallStep, '', 2 StepNumber, 2 SortOrder
-		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 		-----------------------------
 		UNION ALL		
 		SELECT 1 OverallStep, LineText, 1 StepNumber, ordinal SortOrder
-		FROM dbo.fn_SplitStringByLine(@BeforeRestoreScript)
+		FROM dbo.fn_SplitStringByLine(@Preparatory_Script_Before_Restore)
 		-----------------------------
 		UNION ALL
 		SELECT 2 OverallStep, '', 1 StepNumber, 1 SortOrder
@@ -447,47 +646,64 @@ SELECT @MoveClauses =
 		SELECT 2 OverallStep, '', 3 StepNumber, 1 SortOrder
 		-----------------------------
 		UNION ALL
-		SELECT 3 OverallStep, REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30), 0, 0
+		SELECT 3 OverallStep, fssl.LineText, 0, fssl.ordinal
+		FROM dbo.fn_SplitStringByLine(
+				'DECLARE @StepNo INT'+CHAR(10)+
+				'DECLARE @msg NVARCHAR(2000)'+CHAR(10)+
+				@TRY_CATCH_HEAD+
+				REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
+			) fssl
 		UNION ALL
 		SELECT 3 OverallStep, Script, Commands.StepNumber, Commands.SortOrder
 		FROM
 		(
 			SELECT
-				'-- Step ' + CAST(StepNumber AS varchar(10)) AS Script,
+				CHAR(9)+'-- Step ' + CAST(StepNumber AS varchar(10)) Script,
+				StepNumber,
+				-1 AS SortOrder
+			FROM #RestoreChain
+			UNION ALL
+			SELECT
+				CHAR(9)+'SET @StepNo = '+CAST(StepNumber AS varchar(10)) AS Script,
 				StepNumber,
 				0 AS SortOrder
 			FROM #RestoreChain
 			UNION ALL
 			SELECT
-				fssl.LineText,
+				CHAR(9)+fssl.LineText,
 				StepNumber,
 				fssl.ordinal AS SortOrder
 			FROM #RestoreChain rc
 			CROSS APPLY dbo.fn_SplitStringByLine(rc.RestoreCommand) fssl
 		) AS Commands
-		WHERE ISNULL(@SQLCMD_Connect_Clause,'') = '' OR 
-			(ISNULL(@SQLCMD_Connect_Clause,'') <> '' AND TRIM(Commands.Script)<>'GO')
+		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') = '' OR 
+			(ISNULL(@SQLCMD_Connect_Conn_String,'') <> '' AND TRIM(Commands.Script)<>'GO')
 		UNION ALL
-		SELECT 4 OverallStep, REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32), 0, 0
+		SELECT 4 OverallStep, fssl.LineText , 0, fssl.ordinal
+		FROM dbo.fn_SplitStringByLine(REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)+CHAR(10)+@TRY_CATCH_TAIL) fssl
 		UNION ALL
 		-----------------------------------------------------------------
 		SELECT 4, LineText, 1,	ordinal
-		FROM dbo.fn_SplitStringByLine(@AfterRestoreScript)
+		FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
 		-----------------------------------------------------------------
 		UNION ALL
 		SELECT 5 OverallStep, v.Script, 1, 1
 		FROM (VALUES ('GO'), (''), ('')) AS v(Script)
-		WHERE ISNULL(@SQLCMD_Connect_Clause,'') <> ''
+		WHERE ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	) dt
+	ORDER BY dt.OverallStep, StepNumber, SortOrder;
 
-	ORDER BY dt.OverallStep, StepNumber, SortOrder
+	------------------------------------------------------------
+	-- Expose both aggregated versions
+	------------------------------------------------------------
+	SELECT @Script AS FullScript_Plain;
+	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script) 
+
 
 END
 GO
 
-
-
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'AlgorithmicTrading',	-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
                                          @RestoreDBName = '',
 										 @Restore_DataPath = '',
 										 @Restore_LogPath = '',
@@ -495,13 +711,16 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'AlgorithmicTrading',	-
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
-										 @RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
+										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
+										 @Recover_Database_On_Error = 1,
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
-										 @BeforeRestoreScript = '',
-										 @AfterRestoreScript = '',
+										 @Preparatory_Script_Before_Restore = '--
+										 --',
+										 @Complementary_Script_After_Restore = '/*
+										 */',
 										 @Verbose = 0,
-										 @SQLCMD_Connect_Clause = ''
+										 @SQLCMD_Connect_Conn_String = '.'
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
