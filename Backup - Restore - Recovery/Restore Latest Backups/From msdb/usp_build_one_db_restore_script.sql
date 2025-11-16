@@ -423,13 +423,13 @@ SELECT @MoveClauses =
 		'BEGIN CATCH' + CHAR(10) +
 		'	SET @msg = ERROR_MESSAGE()' + CHAR(10) +
 		'	RAISERROR(@msg,16,1)' + CHAR(10) +
-		'	IF @Recover_Database_On_Error = 1' + CHAR(10) +
-		'		SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Database will be recovered.''' + CHAR(10) +
-		'	ELSE' + CHAR(10) +
-		'		SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Restore finished for the database.''' + CHAR(10) +
+		IIF(@Recover_Database_On_Error = 1,
+		'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Database will be recovered.''' + CHAR(10),		
+		'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Restore finished for the database.''' + CHAR(10)) +
 		'	RAISERROR(@msg,16,1) ' + CHAR(10) +
-		'	IF @Recover_Database_On_Error = 1' + CHAR(10) +
-		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10) +
+		IIF(@Recover_Database_On_Error = 1,
+		'	RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
+		'') +
 		'	RETURN' + CHAR(10) +
 		'END CATCH' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
