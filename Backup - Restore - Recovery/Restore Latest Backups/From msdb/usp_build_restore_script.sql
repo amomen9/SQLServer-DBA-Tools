@@ -130,7 +130,7 @@ EXEC dbo.usp_build_restore_script
     @backup_path_replace_string         = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
     @Recover_Database_On_Error          = 1,
     @Preparatory_Script_Before_Restore  = '',
-    @Complementary_Script_After_Restore = '',
+    @Complementary_Script_After_Restore = 'ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
     @Execute                            = 0,
     @Verbose                            = 0,
     @SQLCMD_Connect_Conn_String         = '';
