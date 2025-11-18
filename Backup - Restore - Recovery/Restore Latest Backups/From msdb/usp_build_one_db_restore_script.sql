@@ -770,12 +770,12 @@ SELECT @MoveClauses =
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',		-- sysname
                                          @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
-										 @Restore_DataPath = '',				-- Uses original database path if not specified
-										 @Restore_LogPath = '',					-- Uses original database path if not specified
-										 @StopAt = '',				-- datetime
-                                         @WithReplace = 1,				-- bit
+										 @Restore_DataPath = '',			-- Uses original database path if not specified
+										 @Restore_LogPath = '',				-- Uses original database path if not specified
+										 @StopAt = '',						-- datetime
+                                         @WithReplace = 1,					-- bit
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
