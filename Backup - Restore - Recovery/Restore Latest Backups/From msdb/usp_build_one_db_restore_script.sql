@@ -424,11 +424,12 @@ SELECT @MoveClauses =
 		'	SET @msg = ERROR_MESSAGE()' + CHAR(10) +
 		'	RAISERROR(@msg,16,1)' + CHAR(10) +
 		IIF(@Recover_Database_On_Error = 1,
-		'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Database will be recovered.''' + CHAR(10),		
+		'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''.''+IIF(@StepNo>1,'' Database will be recovered.'','''')' + CHAR(10),		
 		'	SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Restore finished for the database.''' + CHAR(10)) +
 		'	RAISERROR(@msg,16,1) ' + CHAR(10) +
 		IIF(@Recover_Database_On_Error = 1,
-		'	RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
+		'IF @StepNo > 1' + CHAR(10) +
+		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
 		'') +
 		'	RETURN' + CHAR(10) +
 		'END CATCH' + CHAR(10) +
@@ -784,7 +785,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @Preparatory_Script_Before_Restore = '',
-										 @Complementary_Script_After_Restore = 'ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
+										 @Complementary_Script_After_Restore = 'ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
 										 @Verbose = 0,
 										 @SQLCMD_Connect_Conn_String = ''
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
