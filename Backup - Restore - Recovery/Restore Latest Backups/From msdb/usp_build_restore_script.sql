@@ -1,23 +1,40 @@
-
 -- =============================================
 -- Author:				<a.momen>
 -- Contact & Report:	<amomen@gmail.com>
 -- Create date:			
 -- Latest Update Date:	
--- Description:			
+-- Description:			Iterates over all user databases and calls usp_build_one_db_restore_script
+--                      for each, building restore scripts in bulk.
 -- License:				<Please refer to the license file> 
 -- =============================================
 
 SET NOCOUNT ON;
 
-
 USE msdb;
 GO
 
-
 CREATE OR ALTER PROC dbo.usp_build_restore_script
-        @StopAt       datetime = NULL,    -- Point-in-time inside last DIFF/LOG
-        @WithReplace  bit       = 0       -- Include REPLACE on RESTORE DATABASE
+        -- Original parameters
+        @StopAt                             DATETIME        = NULL,    -- Point-in-time inside last DIFF/LOG
+        @WithReplace                        BIT             = 0,       -- Include REPLACE on RESTORE DATABASE
+        
+        -- Additional parameters (defaults match usp_build_one_db_restore_script)
+        @RestoreDBName                      SYSNAME         = NULL,    -- Destination database name (NULL = same as source)
+        @create_datafile_dirs               BIT             = 1,       -- Create original parent directories of the database files in target
+        @Restore_DataPath                   NVARCHAR(1000)  = NULL,    -- Custom restore path for data files
+        @Restore_LogPath                    NVARCHAR(1000)  = NULL,    -- Custom restore path for log files
+        @IncludeLogs                        BIT             = 1,       -- Include log backups
+        @IncludeDiffs                       BIT             = 1,       -- Include differential backups
+        @Recovery                           BIT             = 0,       -- Specify whether to eventually recover the database or not
+        @RestoreUpTo_TIMESTAMP              DATETIME2(3)    = NULL,    -- Backup files started after this TIMESTAMP will be excluded
+        @backup_path_replace_string         NVARCHAR(4000)  = NULL,    -- T-SQL formula to be executed on the backup files full path
+                                                                        -- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))
+        @Recover_Database_On_Error          BIT             = 0,       -- If 1, recover the database on error; if 0, leave in restoring state
+        @Preparatory_Script_Before_Restore  NVARCHAR(MAX)   = NULL,    -- Script to execute before restore script
+        @Complementary_Script_After_Restore NVARCHAR(MAX)   = NULL,    -- Script to execute after restore script
+        @Execute                            BIT             = 0,       -- 1 = execute the produced script
+        @Verbose                            BIT             = 1,       -- If executing and @Verbose = 1 the produced script will also be printed
+        @SQLCMD_Connect_Conn_String         NVARCHAR(MAX)   = NULL     -- Connection string to be written in front of :connect (SQLCMD Mode)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -54,16 +71,32 @@ BEGIN
         DECLARE @ExecStart datetime2(3) = SYSDATETIME();
         BEGIN TRY
             EXEC dbo.usp_build_one_db_restore_script
-                    @DatabaseName = @DatabaseName,
-                    @StopAt       = @StopAt,
-                    @WithReplace  = @WithReplace;
+                    @DatabaseName                       = @DatabaseName,
+                    @RestoreDBName                      = @RestoreDBName,
+                    @create_datafile_dirs               = @create_datafile_dirs,
+                    @Restore_DataPath                   = @Restore_DataPath,
+                    @Restore_LogPath                    = @Restore_LogPath,
+                    @StopAt                             = @StopAt,
+                    @WithReplace                        = @WithReplace,
+                    @IncludeLogs                        = @IncludeLogs,
+                    @IncludeDiffs                       = @IncludeDiffs,
+                    @Recovery                           = @Recovery,
+                    @RestoreUpTo_TIMESTAMP              = @RestoreUpTo_TIMESTAMP,
+                    @backup_path_replace_string         = @backup_path_replace_string,
+                    @Recover_Database_On_Error          = @Recover_Database_On_Error,
+                    @Preparatory_Script_Before_Restore  = @Preparatory_Script_Before_Restore,
+                    @Complementary_Script_After_Restore = @Complementary_Script_After_Restore,
+                    @Execute                            = @Execute,
+                    @Verbose                            = @Verbose,
+                    @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String;
 
+            INSERT INTO #Results(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
+            VALUES (@DatabaseName, 'SUCCESS', NULL, @ExecStart, SYSDATETIME());
 
         END TRY
         BEGIN CATCH
             INSERT INTO #Results(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
-            VALUES (@DatabaseName, 'FAILED',
-                    ERROR_MESSAGE(), @ExecStart, SYSDATETIME());
+            VALUES (@DatabaseName, 'FAILED', ERROR_MESSAGE(), @ExecStart, SYSDATETIME());
 
             -- Optionally continue; to abort on first failure, uncomment:
             -- CLOSE dbs; DEALLOCATE dbs;
@@ -76,9 +109,29 @@ BEGIN
     CLOSE dbs;
     DEALLOCATE dbs;
 
+    -- Display results summary
+    SELECT * FROM #Results ORDER BY RowId;
 
 END;
 GO
 
-EXEC dbo.usp_build_restore_script @StopAt = NULL,  -- datetime
-                                  @WithReplace = 0 -- bit
+-- Sample execution (values from usp_build_one_db_restore_script sample)
+EXEC dbo.usp_build_restore_script 
+    @StopAt                             = NULL,
+    @WithReplace                        = 1,
+    @RestoreDBName                      = '',
+    @create_datafile_dirs               = 1,
+    @Restore_DataPath                   = '',
+    @Restore_LogPath                    = '',
+    @IncludeLogs                        = 1,
+    @IncludeDiffs                       = 1,
+    @Recovery                           = 1,
+    @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
+    @backup_path_replace_string         = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
+    @Recover_Database_On_Error          = 1,
+    @Preparatory_Script_Before_Restore  = '',
+    @Complementary_Script_After_Restore = '',
+    @Execute                            = 0,
+    @Verbose                            = 0,
+    @SQLCMD_Connect_Conn_String         = '';
+GO
