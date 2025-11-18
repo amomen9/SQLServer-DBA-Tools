@@ -771,7 +771,7 @@ END
 GO
 
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
-                                         @RestoreDBName = '@DatabaseName_2',	-- Use to restore DatabaseName_2
+                                         @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
 										 @Restore_DataPath = '',				-- Uses original database path if not specified
 										 @Restore_LogPath = '',					-- Uses original database path if not specified
 										 @StopAt = '',				-- datetime
@@ -784,7 +784,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @Preparatory_Script_Before_Restore = '',
-										 @Complementary_Script_After_Restore = '',
+										 @Complementary_Script_After_Restore = 'ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
 										 @Verbose = 0,
 										 @SQLCMD_Connect_Conn_String = ''
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
