@@ -37,24 +37,24 @@ GO
 -- SELECT * FROM dbo.fn_SplitStringByLine(@MyScript);
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName			sysname,
-		@RestoreDBName			sysname = NULL,
-		@create_datafile_dirs	BIT = 1,
-		@Restore_DataPath		NVARCHAR(1000) = NULL,
-		@Restore_LogPath		NVARCHAR(1000) = NULL,
-		@StopAt					DATETIME = NULL,
-		@WithReplace			BIT	= 0,
-		@IncludeLogs			BIT	= 1,
-		@IncludeDiffs			BIT = 1,
-		@Recovery				BIT = 0,
-		@RestoreUpTo_TIMESTAMP	DATETIME2(3) = NULL,
-		@backup_path_replace_string NVARCHAR(4000) = NULL,
-		@Recover_Database_On_Error BIT = 0,
+		@DatabaseName						sysname,
+		@RestoreDBName						sysname = NULL,
+		@create_datafile_dirs				BIT = 1,
+		@Restore_DataPath					NVARCHAR(1000) = NULL,
+		@Restore_LogPath					NVARCHAR(1000) = NULL,
+		@StopAt								DATETIME = NULL,
+		@WithReplace						BIT	= 0,
+		@IncludeLogs						BIT	= 1,
+		@IncludeDiffs						BIT = 1,
+		@Recovery							BIT = 0,
+		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,
+		@backup_path_replace_string			NVARCHAR(4000) = NULL,
+		@Recover_Database_On_Error			BIT = 0,
 		@Preparatory_Script_Before_Restore	NVARCHAR(MAX) = NULL,
-		@Complementary_Script_After_Restore		NVARCHAR(MAX) = NULL,
-		@Execute				BIT	= 0,
-		@Verbose				BIT = 1,
-		@SQLCMD_Connect_Conn_String NVARCHAR(MAX) = NULL
+		@Complementary_Script_After_Restore	NVARCHAR(MAX) = NULL,
+		@Execute							BIT	= 0,
+		@Verbose							BIT = 1,
+		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL
 AS
 BEGIN
 	------------------------------------------------------------
@@ -670,6 +670,47 @@ SELECT @MoveClauses =
 	END
 
 
+
+	------------------------------------------------------------
+	-- Substituting variables inside variables that have been dynamically defined with other variables:
+	------------------------------------------------------------
+
+SELECT @Script = REPLACE(@Script,'@SQLCMD_Connect_Conn_String', ''''+@SQLCMD_Connect_Conn_String+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@SQLCMD_Connect_Conn_String', ''''+@SQLCMD_Connect_Conn_String+'''')
+SELECT @Script = REPLACE(@Script,'@Verbose', @Verbose)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Verbose', @Verbose)
+SELECT @Script = REPLACE(@Script,'@Execute', @Execute)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Execute', @Execute)
+SELECT @Script = REPLACE(@Script,'@Complementary_Script_After_Restore', ''''+@Complementary_Script_After_Restore+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Complementary_Script_After_Restore', ''''+@Complementary_Script_After_Restore+'''')
+SELECT @Script = REPLACE(@Script,'@Preparatory_Script_Before_Restore', ''''+@Preparatory_Script_Before_Restore+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Preparatory_Script_Before_Restore', ''''+@Preparatory_Script_Before_Restore+'''')
+SELECT @Script = REPLACE(@Script,'@Recover_Database_On_Error', @Recover_Database_On_Error)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Recover_Database_On_Error', @Recover_Database_On_Error)
+SELECT @Script = REPLACE(@Script,'@backup_path_replace_string', ''''+@backup_path_replace_string+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@backup_path_replace_string', ''''+@backup_path_replace_string+'''')
+SELECT @Script = REPLACE(@Script,'@RestoreUpTo_TIMESTAMP', ''''+CONVERT(NVARCHAR(256),@RestoreUpTo_TIMESTAMP)+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@RestoreUpTo_TIMESTAMP', ''''+CONVERT(NVARCHAR(256),@RestoreUpTo_TIMESTAMP)+'''')
+SELECT @Script = REPLACE(@Script,'@Recovery', @Recovery)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Recovery', @Recovery)
+SELECT @Script = REPLACE(@Script,'@IncludeDiffs', @IncludeDiffs)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@IncludeDiffs', @IncludeDiffs)
+SELECT @Script = REPLACE(@Script,'@IncludeLogs', @IncludeLogs)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@IncludeLogs', @IncludeLogs)
+SELECT @Script = REPLACE(@Script,'@WithReplace', @WithReplace)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@WithReplace', @WithReplace)
+SELECT @Script = REPLACE(@Script,'@StopAt', ''''+@StopAt+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@StopAt', ''''+@StopAt+'''')
+SELECT @Script = REPLACE(@Script,'@Restore_LogPath', ''''+@Restore_LogPath+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Restore_LogPath', ''''+@Restore_LogPath+'''')
+SELECT @Script = REPLACE(@Script,'@Restore_DataPath', ''''+@Restore_DataPath+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Restore_DataPath', ''''+@Restore_DataPath+'''')
+SELECT @Script = REPLACE(@Script,'@create_datafile_dirs', @create_datafile_dirS)
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@create_datafile_dirs', @create_datafile_dirs)
+SELECT @Script = REPLACE(@Script,'@RestoreDBName', ''''+@RestoreDBName+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@RestoreDBName', ''''+@RestoreDBName+'''')
+SELECT @Script = REPLACE(@Script,'@DatabaseName', ''''+@DatabaseName+'''')
+	, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@DatabaseName', ''''+@DatabaseName+'''')
 
 	------------------------------------------------------------
 	-- Expose both aggregated versions
