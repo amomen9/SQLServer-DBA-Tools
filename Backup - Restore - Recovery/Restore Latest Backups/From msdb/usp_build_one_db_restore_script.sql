@@ -40,8 +40,8 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@DatabaseName						sysname,
 		@RestoreDBName						sysname = NULL,
 		@create_datafile_dirs				BIT = 1,
-		@Restore_DataPath					NVARCHAR(1000) = NULL,
-		@Restore_LogPath					NVARCHAR(1000) = NULL,
+		@Restore_DataPath					NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
+		@Restore_LogPath					NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
 		@StopAt								DATETIME = NULL,
 		@WithReplace						BIT	= 0,
 		@IncludeLogs						BIT	= 1,
@@ -728,13 +728,13 @@ SELECT @MoveClauses =
 	
 	IF @RestoreDBName IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@RestoreDBName', '''' + @RestoreDBName + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', '''' + @RestoreDBName + '''');
+		SELECT @Script = REPLACE(@Script, '@RestoreDBName', @RestoreDBName)
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', @RestoreDBName);
 	END
 	
 	-- @DatabaseName is never NULL, always replace
-	SELECT @Script = REPLACE(@Script, '@DatabaseName', '''' + @DatabaseName + '''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', '''' + @DatabaseName + '''');
+	SELECT @Script = REPLACE(@Script, '@DatabaseName', @DatabaseName)
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', @DatabaseName);
 	
 	-- Bit parameters: cast to varchar (always replace, bits cannot be NULL)
 	SELECT @Script = REPLACE(@Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)))
@@ -771,9 +771,9 @@ END
 GO
 
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
-                                         @RestoreDBName = '@DatabaseName',
-										 @Restore_DataPath = '',
-										 @Restore_LogPath = '',
+                                         @RestoreDBName = '@DatabaseName_2',	-- Use to restore DatabaseName_2
+										 @Restore_DataPath = '',				-- Uses original database path if not specified
+										 @Restore_LogPath = '',					-- Uses original database path if not specified
 										 @StopAt = '',				-- datetime
                                          @WithReplace = 1,				-- bit
 										 @IncludeLogs = 1,
