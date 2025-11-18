@@ -675,42 +675,91 @@ SELECT @MoveClauses =
 	-- Substituting variables inside variables that have been dynamically defined with other variables:
 	------------------------------------------------------------
 
-	SELECT @Script = REPLACE(@Script,'@SQLCMD_Connect_Conn_String', ''''+@SQLCMD_Connect_Conn_String+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@SQLCMD_Connect_Conn_String', ''''+@SQLCMD_Connect_Conn_String+'''')
-	SELECT @Script = REPLACE(@Script,'@Verbose', @Verbose)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Verbose', @Verbose)
-	SELECT @Script = REPLACE(@Script,'@Execute', @Execute)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Execute', @Execute)
-	SELECT @Script = REPLACE(@Script,'@Complementary_Script_After_Restore', ''''+@Complementary_Script_After_Restore+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Complementary_Script_After_Restore', ''''+@Complementary_Script_After_Restore+'''')
-	SELECT @Script = REPLACE(@Script,'@Preparatory_Script_Before_Restore', ''''+@Preparatory_Script_Before_Restore+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Preparatory_Script_Before_Restore', ''''+@Preparatory_Script_Before_Restore+'''')
-	SELECT @Script = REPLACE(@Script,'@Recover_Database_On_Error', @Recover_Database_On_Error)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Recover_Database_On_Error', @Recover_Database_On_Error)
-	SELECT @Script = REPLACE(@Script,'@backup_path_replace_string', ''''+@backup_path_replace_string+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@backup_path_replace_string', ''''+@backup_path_replace_string+'''')
-	SELECT @Script = REPLACE(@Script,'@RestoreUpTo_TIMESTAMP', ''''+CONVERT(NVARCHAR(256),@RestoreUpTo_TIMESTAMP,121)+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@RestoreUpTo_TIMESTAMP', ''''+CONVERT(NVARCHAR(256),@RestoreUpTo_TIMESTAMP,121)+'''')
-	SELECT @Script = REPLACE(@Script,'@Recovery', @Recovery)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Recovery', @Recovery)
-	SELECT @Script = REPLACE(@Script,'@IncludeDiffs', @IncludeDiffs)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@IncludeDiffs', @IncludeDiffs)
-	SELECT @Script = REPLACE(@Script,'@IncludeLogs', @IncludeLogs)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@IncludeLogs', @IncludeLogs)
-	SELECT @Script = REPLACE(@Script,'@WithReplace', @WithReplace)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@WithReplace', @WithReplace)
-	SELECT @Script = REPLACE(@Script,'@StopAt', ''''+CONVERT(NVARCHAR(256),@StopAt,121)+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@StopAt', ''''+CONVERT(NVARCHAR(256),@StopAt,121)+'''')
-	SELECT @Script = REPLACE(@Script,'@Restore_LogPath', ''''+@Restore_LogPath+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Restore_LogPath', ''''+@Restore_LogPath+'''')
-	SELECT @Script = REPLACE(@Script,'@Restore_DataPath', ''''+@Restore_DataPath+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@Restore_DataPath', ''''+@Restore_DataPath+'''')
-	SELECT @Script = REPLACE(@Script,'@create_datafile_dirs', @create_datafile_dirS)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@create_datafile_dirs', @create_datafile_dirs)
-	SELECT @Script = REPLACE(@Script,'@RestoreDBName', ''''+@RestoreDBName+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@RestoreDBName', ''''+@RestoreDBName+'''')
-	SELECT @Script = REPLACE(@Script,'@DatabaseName', ''''+@DatabaseName+'''')
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script,'@DatabaseName', ''''+@DatabaseName+'''')
+	-- Replace in order from longest to shortest variable names to avoid partial matches
+	-- Only replace if the variable is not NULL
+	
+	IF @SQLCMD_Connect_Conn_String IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''');
+	END
+	
+	IF @Complementary_Script_After_Restore IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''');
+	END
+	
+	IF @Preparatory_Script_Before_Restore IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''');
+	END
+	
+	IF @backup_path_replace_string IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@backup_path_replace_string', '''' + REPLACE(@backup_path_replace_string, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@backup_path_replace_string', '''' + REPLACE(@backup_path_replace_string, '''', '''''') + '''');
+	END
+	
+	IF @RestoreUpTo_TIMESTAMP IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''');
+	END
+	
+	IF @StopAt IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''');
+	END
+	
+	IF @Restore_LogPath IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''');
+	END
+	
+	IF @Restore_DataPath IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''');
+	END
+	
+	IF @RestoreDBName IS NOT NULL
+	BEGIN
+		SELECT @Script = REPLACE(@Script, '@RestoreDBName', '''' + @RestoreDBName + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', '''' + @RestoreDBName + '''');
+	END
+	
+	-- @DatabaseName is never NULL, always replace
+	SELECT @Script = REPLACE(@Script, '@DatabaseName', '''' + @DatabaseName + '''')
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', '''' + @DatabaseName + '''');
+	
+	-- Bit parameters: cast to varchar (always replace, bits cannot be NULL)
+	SELECT @Script = REPLACE(@Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)));
+	
+	SELECT @Script = REPLACE(@Script, '@Execute', CAST(@Execute AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Execute', CAST(@Execute AS VARCHAR(1)));
 
 	------------------------------------------------------------
 	-- Expose both aggregated versions
@@ -722,7 +771,7 @@ END
 GO
 
 EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',	-- sysname
-                                         @RestoreDBName = '',
+                                         @RestoreDBName = '@DatabaseName',
 										 @Restore_DataPath = '',
 										 @Restore_LogPath = '',
 										 @StopAt = '',				-- datetime
