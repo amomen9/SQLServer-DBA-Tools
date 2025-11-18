@@ -431,7 +431,6 @@ SELECT @MoveClauses =
 		'IF @StepNo > 1' + CHAR(10) +
 		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
 		'') +
-		'	RETURN' + CHAR(10) +
 		'END CATCH' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
