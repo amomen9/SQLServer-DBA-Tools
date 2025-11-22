@@ -345,7 +345,7 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
+				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
 				'SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 
@@ -360,7 +360,7 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
+				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
 				'SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 			
@@ -375,7 +375,7 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating overall logs restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
+				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
 				'SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 		END
