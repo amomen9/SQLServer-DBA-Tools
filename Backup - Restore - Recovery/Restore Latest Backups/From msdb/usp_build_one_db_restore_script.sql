@@ -346,7 +346,7 @@ SELECT @MoveClauses =
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
 				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
-				'SET @msg = ''--- FULL Backup restore finished. Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 
 			WHEN 'DIFF' THEN
@@ -361,7 +361,7 @@ SELECT @MoveClauses =
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
 				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
-				'SET @msg = ''--- DIFF Backup restore finished. Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 			
 			WHEN 'LOG' THEN
@@ -376,7 +376,7 @@ SELECT @MoveClauses =
 				--- Calculating overall logs restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
 				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
-				'SET @msg = ''--- Log restore finished. Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 		END
 	FROM #RestoreChain rc
