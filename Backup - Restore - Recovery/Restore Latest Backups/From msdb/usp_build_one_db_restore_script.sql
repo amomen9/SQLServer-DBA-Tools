@@ -345,8 +345,8 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
-				'SET @msg = ''FULL Backup restore finished. Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
+				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
+				'SET @msg = ''--- FULL Backup restore finished. Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 
 			WHEN 'DIFF' THEN
@@ -360,8 +360,8 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
-				'SET @msg = ''DIFF Backup restore finished. Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
+				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
+				'SET @msg = ''--- DIFF Backup restore finished. Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 			
 			WHEN 'LOG' THEN
@@ -375,8 +375,8 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating overall logs restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
-				'SET @msg = ''Log restore finished. Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
+				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(MINUTE,@TimeStamp,GETDATE())%60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(HOUR,@TimeStamp,GETDATE())),2);' + CHAR(10) +
+				'SET @msg = ''--- Log restore finished. Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
 		END
 	FROM #RestoreChain rc
@@ -588,9 +588,9 @@ SELECT @MoveClauses =
 			'DECLARE @StepNo INT' + CHAR(10) +
 			'DECLARE @msg NVARCHAR(2000)' + CHAR(10) +
 			'DECLARE @TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
-			'DECLARE @seconds CHAR(2)' + CHAR(10) +
-			'DECLARE @minutes CHAR(2)' + CHAR(10) +
-			'DECLARE @hours CHAR(3)' + CHAR(10) +
+			'DECLARE @seconds VARCHAR(2)' + CHAR(10) +
+			'DECLARE @minutes VARCHAR(2)' + CHAR(10) +
+			'DECLARE @hours VARCHAR(3)' + CHAR(10) +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@TimeStamp,121)' + CHAR(10) +
 			'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
@@ -794,7 +794,7 @@ SELECT @MoveClauses =
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',		-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
                                          @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
 										 @Restore_DataPath = '',			-- Uses original database path if not specified
 										 @Restore_LogPath = '',				-- Uses original database path if not specified
@@ -808,7 +808,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'Archive99',		-- sysnam
 										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @Preparatory_Script_Before_Restore = '',
-										 @Complementary_Script_After_Restore = 'ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
+										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
 										 @Verbose = 0,
 										 @SQLCMD_Connect_Conn_String = ''
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
