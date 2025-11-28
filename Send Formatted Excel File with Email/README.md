@@ -1,6 +1,6 @@
 # Send an Email with a Generated Conditionally Formatted Spreadsheet File Attached
 
-Sample photo:
+Sample Excel report's screen clip:
 
 ![Dynamically and Conditionally Formatted Spreadsheet](./image/dynamically_and_conditionally_formatted_spreadsheet.png)
 
