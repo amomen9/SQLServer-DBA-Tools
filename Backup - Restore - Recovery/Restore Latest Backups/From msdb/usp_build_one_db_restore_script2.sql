@@ -232,7 +232,7 @@ BEGIN
 		  AND b.differential_base_lsn = f.checkpoint_lsn
 		  AND mf.mirror = 0
 		  AND b.backup_finish_date > f.backup_finish_date
-		  AND @IncludeDiffs = 1
+		  AND '+CONVERT(VARCHAR(1),@IncludeDiffs)+' = 1
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 				 b.first_lsn, b.last_lsn, b.differential_base_lsn
@@ -258,7 +258,7 @@ BEGIN
 			, b.first_lsn
 			, b.last_lsn
 			, b.database_backup_lsn
-			, Devices = STRING_AGG(mf.physical_device_name, N'','')
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
 
 		FROM msdb.dbo.backupset b
 		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
@@ -267,8 +267,8 @@ BEGIN
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''L''
 		  AND mf.mirror = 0
-		  AND b.backup_finish_date > @BaseFinish
-		  AND @IncludeLogs = 1
+		  AND b.backup_finish_date > '''+CONVERT(VARCHAR(100),@BaseFinish,121)+'''
+		  AND '+CONVERT(VARCHAR(1),@IncludeLogs)+' = 1
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
 				 b.first_lsn, b.last_lsn, b.database_backup_lsn
@@ -276,6 +276,7 @@ BEGIN
 	'
 	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
 	EXEC(@SQL)
+	PRINT @SQL
 	------------------------------------------------------------
 	-- Validate log chain (basic gaps)
 	------------------------------------------------------------
