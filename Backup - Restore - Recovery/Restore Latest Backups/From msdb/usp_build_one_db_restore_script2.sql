@@ -33,7 +33,7 @@ RETURN
 );
 GO
 
-CREATE OR ALTER FUNCTION dbo.ufn_BASE_NAME(@Path NVARCHAR(2000))
+CREATE OR ALTER FUNCTION dbo.udf_BASE_NAME(@Path NVARCHAR(2000))
 RETURNS NVARCHAR(2000)
 WITH SCHEMABINDING
 AS
@@ -47,7 +47,7 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER FUNCTION dbo.ufn_PARENT_DIR(@Path NVARCHAR(2000))
+CREATE OR ALTER FUNCTION dbo.udf_PARENT_DIR(@Path NVARCHAR(2000))
 RETURNS NVARCHAR(2000)
 WITH SCHEMABINDING
 AS
@@ -153,7 +153,7 @@ BEGIN
 	-- FULL backup (latest non copy_only)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Full;
-
+	CREATE TABLE #Full ( [backup_set_id] int, [database_name] nvarchar(128), [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [checkpoint_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
 	SET @SQL =
 	'
 		SELECT TOP (1)
@@ -166,21 +166,24 @@ BEGIN
 			, b.checkpoint_lsn
 			, b.database_backup_lsn
 			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
-		--INTO #Full
+
 		FROM msdb.dbo.backupset b
 		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_file_exists(mf.physical_device_name) fe','JOIN #Backup_Files bf ON dbo.ufn_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+'
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+'
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''D''
 		  AND b.is_copy_only = 0
 		  AND mf.mirror = 0
-		  '+IIF(@new_backups_parent_dir='','AND fe.file_exists= 1 ','')+'
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
 				 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
 		ORDER BY b.backup_finish_date DESC;
 	'
+
+	INSERT INTO #Full ([backup_set_id], [database_name], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [checkpoint_lsn], [database_backup_lsn], [Devices])
 	EXEC(@SQL)
+	
+
 	IF NOT EXISTS (SELECT 1 FROM #Full)
 	BEGIN
 		RAISERROR('No FULL backup found for %s.',16,1,@DatabaseName);
@@ -315,19 +318,6 @@ BEGIN
 	SELECT 'LOG', backup_set_id, backup_start_date, backup_finish_date, first_lsn, last_lsn, Devices, NULL
 	FROM #LogsValid
 	ORDER BY first_lsn;
-
-	------------------------------------------------------------
-	-- Update restore chain backup paths using 
-	-- @new_backups_parent_dir
-	------------------------------------------------------------
-	IF ISNULL(@new_backups_parent_dir,'') <> ''
-	BEGIN
-		SET @SQL =
-		'
-			UPDATE #RestoreChain SET Devices = ' + @new_backups_parent_dir + '
-		'
-		EXEC(@SQL)
-	END
 
 	------------------------------------------------------------
 	-- Precompute DISK clauses (avoid aggregates in UPDATE)
@@ -857,7 +847,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
-										 @new_backups_parent_dir = '',
+										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @check_backup_file_existance = 1,
 										 @Preparatory_Script_Before_Restore = '',
