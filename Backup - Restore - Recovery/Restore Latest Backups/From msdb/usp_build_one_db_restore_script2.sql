@@ -125,6 +125,7 @@ BEGIN
 	IF @RestoreUpTo_TIMESTAMP = '' OR @RestoreUpTo_TIMESTAMP IS NULL SET @RestoreUpTo_TIMESTAMP = GETDATE()+1
 	IF ISNULL(@RestoreDBName,'') = '' SET @RestoreDBName = @DatabaseName
 	SET @check_backup_file_existance = ISNULL(@check_backup_file_existance,0)
+	SET @new_backups_parent_dir = ISNULL(@new_backups_parent_dir, '')
 
 	------------------------------------------------------------
 	-- Header
@@ -169,7 +170,9 @@ BEGIN
 
 		FROM msdb.dbo.backupset b
 		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+'
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
+		'
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''D''
 		  AND b.is_copy_only = 0
@@ -206,29 +209,37 @@ BEGIN
 	-- DIFF (latest tied to that FULL)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Diff') IS NOT NULL DROP TABLE #Diff;
-	SELECT TOP (1)
-		  b.backup_set_id
-		, b.backup_start_date
-		, b.backup_finish_date
-		, b.first_lsn
-		, b.last_lsn
-		, b.differential_base_lsn
-		, Devices = STRING_AGG(mf.physical_device_name, N',')
-	INTO #Diff
-	FROM msdb.dbo.backupset b
-	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-	CROSS JOIN #Full f
-	WHERE b.database_name = @DatabaseName
-	  AND b.[type] = 'I'
-	  AND b.differential_base_lsn = f.checkpoint_lsn
-	  AND mf.mirror = 0
-	  AND b.backup_finish_date > f.backup_finish_date
-	  AND @IncludeDiffs = 1
-	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
-	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-			 b.first_lsn, b.last_lsn, b.differential_base_lsn
-	ORDER BY b.backup_finish_date DESC;
 
+	CREATE TABLE #Diff ( [backup_set_id] int, [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [differential_base_lsn] decimal(25,0), [Devices] nvarchar(4000) )
+	SET @SQL =
+	'
+		SELECT TOP (1)
+			  b.backup_set_id
+			, b.backup_start_date
+			, b.backup_finish_date
+			, b.first_lsn
+			, b.last_lsn
+			, b.differential_base_lsn
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
+
+		FROM msdb.dbo.backupset b
+		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+		CROSS JOIN #Full f
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		'
+		WHERE b.database_name = '''+@DatabaseName+'''
+		  AND b.[type] = ''I''
+		  AND b.differential_base_lsn = f.checkpoint_lsn
+		  AND mf.mirror = 0
+		  AND b.backup_finish_date > f.backup_finish_date
+		  AND @IncludeDiffs = 1
+		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
+				 b.first_lsn, b.last_lsn, b.differential_base_lsn
+		ORDER BY b.backup_finish_date DESC;
+	'
+	INSERT INTO #Diff ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [differential_base_lsn], [Devices])
+	EXEC(@SQL)
 	------------------------------------------------------------
 	-- LOG backups after base (Diff if exists else Full)
 	------------------------------------------------------------
@@ -237,27 +248,34 @@ BEGIN
 	SELECT @BaseFinish  = COALESCE((SELECT backup_finish_date FROM #Diff),(SELECT backup_finish_date FROM #Full));
 
 	IF OBJECT_ID('tempdb..#Logs') IS NOT NULL DROP TABLE #Logs;
-	SELECT
-		  b.backup_set_id
-		, b.backup_start_date
-		, b.backup_finish_date
-		, b.first_lsn
-		, b.last_lsn
-		, b.database_backup_lsn
-		, Devices = STRING_AGG(mf.physical_device_name, N',')
-	INTO #Logs
-	FROM msdb.dbo.backupset b
-	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-	WHERE b.database_name = @DatabaseName
-	  AND b.[type] = 'L'
-	  AND mf.mirror = 0
-	  AND b.backup_finish_date > @BaseFinish
-	  AND @IncludeLogs = 1
-	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
-	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-			 b.first_lsn, b.last_lsn, b.database_backup_lsn
-	ORDER BY b.first_lsn;
+	CREATE TABLE #Logs ( [backup_set_id] int, [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
+	SET @SQL =
+	'
+		SELECT
+			  b.backup_set_id
+			, b.backup_start_date
+			, b.backup_finish_date
+			, b.first_lsn
+			, b.last_lsn
+			, b.database_backup_lsn
+			, Devices = STRING_AGG(mf.physical_device_name, N'','')
 
+		FROM msdb.dbo.backupset b
+		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		'
+		WHERE b.database_name = '''+@DatabaseName+'''
+		  AND b.[type] = ''L''
+		  AND mf.mirror = 0
+		  AND b.backup_finish_date > @BaseFinish
+		  AND @IncludeLogs = 1
+		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
+				 b.first_lsn, b.last_lsn, b.database_backup_lsn
+		ORDER BY b.first_lsn;
+	'
+	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
+	EXEC(@SQL)
 	------------------------------------------------------------
 	-- Validate log chain (basic gaps)
 	------------------------------------------------------------
@@ -836,7 +854,7 @@ SELECT @MoveClauses =
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysname
                                          @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
 										 @Restore_DataPath = '',			-- Uses original database path if not specified
 										 @Restore_LogPath = '',				-- Uses original database path if not specified
@@ -847,7 +865,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
-										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\',
+										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup\',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @check_backup_file_existance = 1,
 										 @Preparatory_Script_Before_Restore = '',
