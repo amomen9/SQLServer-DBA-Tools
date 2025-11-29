@@ -33,6 +33,34 @@ RETURN
 );
 GO
 
+CREATE OR ALTER FUNCTION dbo.ufn_BASE_NAME(@Path NVARCHAR(2000))
+RETURNS NVARCHAR(2000)
+WITH SCHEMABINDING
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Path LIKE '%\%' OR @Path LIKE '%/%' THEN
+            RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1)
+        ELSE 
+            @Path
+    END;
+END
+GO
+
+CREATE OR ALTER FUNCTION dbo.ufn_PARENT_DIR(@Path NVARCHAR(2000))
+RETURNS NVARCHAR(2000)
+WITH SCHEMABINDING
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Path LIKE '%\%' THEN
+            LEFT(@Path, LEN(@Path) - CHARINDEX('\', REVERSE(@Path)))
+        ELSE 
+            ''
+    END;
+END
+GO
+
 -- Example Usage:
 -- DECLARE @MyScript nvarchar(max) = N'SELECT * FROM sys.databases;'+CHAR(13)+CHAR(10)+N'SELECT * FROM sys.objects;';
 -- SELECT * FROM dbo.fn_SplitStringByLine(@MyScript);
@@ -109,44 +137,50 @@ BEGIN
 	------------------------------------------------------------
 	-- Get backup dump file list
 	------------------------------------------------------------
+	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Backup_Files;
 	CREATE TABLE #Backup_Files 
 	(
 		[full_filesystem_path] nvarchar(256),
 		[file_or_directory_name] nvarchar(256),
 		CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name, full_filesystem_path)
 	)
-
-	INSERT INTO #Backup_Files ([full_filesystem_path], [file_or_directory_name])
-	SELECT full_filesystem_path, file_or_directory_name 
-	FROM sys.dm_os_enumerate_filesystem(@new_backups_parent_dir,'*') 
-	WHERE is_directory = 0
+	IF @new_backups_parent_dir <> ''
+		INSERT INTO #Backup_Files ([full_filesystem_path], [file_or_directory_name])
+		SELECT full_filesystem_path, file_or_directory_name 
+		FROM sys.dm_os_enumerate_filesystem(@new_backups_parent_dir,'*') 
+		WHERE is_directory = 0
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Full;
-	SELECT TOP (1)
-		  b.backup_set_id
-		, b.database_name
-		, b.backup_start_date
-		, b.backup_finish_date
-		, b.first_lsn
-		, b.last_lsn
-		, b.checkpoint_lsn
-		, b.database_backup_lsn
-		, Devices = STRING_AGG(mf.physical_device_name, N',')
-	INTO #Full
-	FROM msdb.dbo.backupset b
-	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-	CROSS APPLY sys.dm_os_enumerate_filesystem()
-	WHERE b.database_name = @DatabaseName
-	  AND b.[type] = 'D'
-	  AND b.is_copy_only = 0
-	  AND mf.mirror = 0
-	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
-	GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
-			 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
-	ORDER BY b.backup_finish_date DESC;
 
+	SET @SQL =
+	'
+		SELECT TOP (1)
+			  b.backup_set_id
+			, b.database_name
+			, b.backup_start_date
+			, b.backup_finish_date
+			, b.first_lsn
+			, b.last_lsn
+			, b.checkpoint_lsn
+			, b.database_backup_lsn
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
+		--INTO #Full
+		FROM msdb.dbo.backupset b
+		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_file_exists(mf.physical_device_name) fe','JOIN #Backup_Files bf ON dbo.ufn_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+'
+		WHERE b.database_name = '''+@DatabaseName+'''
+		  AND b.[type] = ''D''
+		  AND b.is_copy_only = 0
+		  AND mf.mirror = 0
+		  '+IIF(@new_backups_parent_dir='','AND fe.file_exists= 1 ','')+'
+		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
+				 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
+		ORDER BY b.backup_finish_date DESC;
+	'
+	EXEC(@SQL)
 	IF NOT EXISTS (SELECT 1 FROM #Full)
 	BEGIN
 		RAISERROR('No FULL backup found for %s.',16,1,@DatabaseName);
