@@ -27,7 +27,7 @@ CREATE OR ALTER PROC dbo.usp_build_restore_script
         @IncludeDiffs                       BIT             = 1,       -- Include differential backups
         @Recovery                           BIT             = 0,       -- Specify whether to eventually recover the database or not
         @RestoreUpTo_TIMESTAMP              DATETIME2(3)    = NULL,    -- Backup files started after this TIMESTAMP will be excluded
-        @backup_path_replace_string         NVARCHAR(4000)  = NULL,    -- T-SQL formula to be executed on the backup files full path
+        @new_backups_parent_dir         NVARCHAR(4000)  = NULL,    -- T-SQL formula to be executed on the backup files full path
                                                                         -- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))
         @Recover_Database_On_Error          BIT             = 0,       -- If 1, recover the database on error; if 0, leave in restoring state
         @Preparatory_Script_Before_Restore  NVARCHAR(MAX)   = NULL,    -- Script to execute before restore script
@@ -82,7 +82,7 @@ BEGIN
                     @IncludeDiffs                       = @IncludeDiffs,
                     @Recovery                           = @Recovery,
                     @RestoreUpTo_TIMESTAMP              = @RestoreUpTo_TIMESTAMP,
-                    @backup_path_replace_string         = @backup_path_replace_string,
+                    @new_backups_parent_dir         = @new_backups_parent_dir,
                     @Recover_Database_On_Error          = @Recover_Database_On_Error,
                     @Preparatory_Script_Before_Restore  = @Preparatory_Script_Before_Restore,
                     @Complementary_Script_After_Restore = @Complementary_Script_After_Restore,
@@ -127,10 +127,10 @@ EXEC dbo.usp_build_restore_script
     @IncludeDiffs                       = 1,
     @Recovery                           = 1,
     @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
-    @backup_path_replace_string         = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
+    @new_backups_parent_dir         	= '\\fdbdrbkpdsk\DBDR\',
     @Recover_Database_On_Error          = 1,
     @Preparatory_Script_Before_Restore  = '',
-    @Complementary_Script_After_Restore = 'ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
+    @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
     @Execute                            = 0,
     @Verbose                            = 0,
     @SQLCMD_Connect_Conn_String         = '';
