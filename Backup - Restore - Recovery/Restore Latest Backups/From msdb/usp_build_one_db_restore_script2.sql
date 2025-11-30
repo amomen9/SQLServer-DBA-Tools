@@ -407,9 +407,11 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
-				'SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
-				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
+				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE();' + CHAR(10) +
+				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
+				'		SELECT		   ''FULL'',   1,   @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 
 			WHEN 'DIFF' THEN
 				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
@@ -422,9 +424,11 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
-				'SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
-				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
+				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE();' + CHAR(10) +
+				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
+				'		SELECT		   ''DIFF'',   2,   @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 			
 			WHEN 'LOG' THEN
 				N'RESTORE LOG [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
@@ -437,9 +441,11 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating overall logs restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
-				'SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
-				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
+				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'';' + CHAR(10) +
+				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
+				'		SELECT		   ''LOG'', @StepNo, @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 		END
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
@@ -490,13 +496,32 @@ SELECT @MoveClauses =
 		SET @Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
 	END
 
+
 	------------------------------------------------------------
 	-- Add TRY-CATCH statements to the restore statements
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------
 	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
-		'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
 		'BEGIN TRY' + CHAR(10);
+	
+	-- 3) TRY header + restore commands
+	DECLARE @HeaderBlock NVARCHAR(MAX) =
+			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
+			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NOT NULL DROP TABLE #BackupTimes;' + CHAR(10) +
+			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2))' + CHAR(10) +
+			'DECLARE @StepNo INT' + CHAR(10) +
+			'DECLARE @msg NVARCHAR(2000)' + CHAR(10) +
+			'DECLARE @Initial_TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
+			'DECLARE @Reused_TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
+			'DECLARE @Overall_seconds VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Overall_minutes VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Overall_hours VARCHAR(3)' + CHAR(10) +
+			'DECLARE @Reused_seconds VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Reused_minutes VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Reused_hours VARCHAR(3)' + CHAR(10) +
+			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121)' + CHAR(10) +
+			'RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
+			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
 	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
 		'END TRY' + CHAR(10) +
@@ -512,6 +537,13 @@ SELECT @MoveClauses =
 		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
 		'') +
 		'END CATCH' + CHAR(10) +
+		'SET @Overall_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())%60),2); SET @Overall_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/60),2); SET @Overall_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+		'SET @msg=''Restore Summary:''+CHAR(10)+''DB Name: ''+''['+@RestoreDBName+']'''+
+					'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
+					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
+					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
+					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+
+		'	RAISERROR(@msg,16,1) ' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
@@ -645,17 +677,6 @@ SELECT @MoveClauses =
 		SET @SQLCMD_Script += CHAR(10);  -- one empty line after last xp_create_subdir
 	END
 
-	-- 3) TRY header + restore commands
-	DECLARE @HeaderBlock NVARCHAR(MAX) =
-			'DECLARE @StepNo INT' + CHAR(10) +
-			'DECLARE @msg NVARCHAR(2000)' + CHAR(10) +
-			'DECLARE @TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
-			'DECLARE @seconds VARCHAR(2)' + CHAR(10) +
-			'DECLARE @minutes VARCHAR(2)' + CHAR(10) +
-			'DECLARE @hours VARCHAR(3)' + CHAR(10) +
-			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@TimeStamp,121)' + CHAR(10) +
-			'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
 	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
 		SELECT LineText, ordinal
