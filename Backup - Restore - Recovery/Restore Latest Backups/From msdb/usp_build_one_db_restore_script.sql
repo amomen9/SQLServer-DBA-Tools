@@ -33,6 +33,34 @@ RETURN
 );
 GO
 
+CREATE OR ALTER FUNCTION dbo.udf_BASE_NAME(@Path NVARCHAR(2000))
+RETURNS NVARCHAR(2000)
+WITH SCHEMABINDING
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Path LIKE '%\%' OR @Path LIKE '%/%' THEN
+            RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1)
+        ELSE 
+            @Path
+    END;
+END
+GO
+
+CREATE OR ALTER FUNCTION dbo.udf_PARENT_DIR(@Path NVARCHAR(2000))
+RETURNS NVARCHAR(2000)
+WITH SCHEMABINDING
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Path LIKE '%\%' THEN
+            LEFT(@Path, LEN(@Path) - CHARINDEX('\', REVERSE(@Path)))
+        ELSE 
+            ''
+    END;
+END
+GO
+
 -- Example Usage:
 -- DECLARE @MyScript nvarchar(max) = N'SELECT * FROM sys.databases;'+CHAR(13)+CHAR(10)+N'SELECT * FROM sys.objects;';
 -- SELECT * FROM dbo.fn_SplitStringByLine(@MyScript);
@@ -49,7 +77,9 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@IncludeDiffs						BIT = 1,
 		@Recovery							BIT = 0,
 		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,
-		@backup_path_replace_string			NVARCHAR(4000) = NULL,
+		@new_backups_parent_dir			NVARCHAR(4000) = NULL,
+		@check_backup_file_existance		BIT = 0,				-- Check if the backup file exists on disk at @new_backups_parent_dir or
+																	-- the original file backup path if @new_backups_parent_dir is empty or null
 		@Recover_Database_On_Error			BIT = 0,
 		@Preparatory_Script_Before_Restore	NVARCHAR(MAX) = NULL,
 		@Complementary_Script_After_Restore	NVARCHAR(MAX) = NULL,
@@ -94,6 +124,8 @@ BEGIN
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' OR @RestoreUpTo_TIMESTAMP IS NULL SET @RestoreUpTo_TIMESTAMP = GETDATE()+1
 	IF ISNULL(@RestoreDBName,'') = '' SET @RestoreDBName = @DatabaseName
+	SET @check_backup_file_existance = ISNULL(@check_backup_file_existance,0)
+	SET @new_backups_parent_dir = ISNULL(@new_backups_parent_dir, '')
 
 	------------------------------------------------------------
 	-- Header
@@ -104,30 +136,57 @@ BEGIN
 	SET @Script += '----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10);
 
 	------------------------------------------------------------
+	-- Get backup dump file list
+	------------------------------------------------------------
+	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Backup_Files;
+	CREATE TABLE #Backup_Files 
+	(
+		[full_filesystem_path] nvarchar(256),
+		[file_or_directory_name] nvarchar(256) NOT NULL,
+		CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name)
+	)
+	IF @new_backups_parent_dir <> ''
+		INSERT INTO #Backup_Files ([full_filesystem_path], [file_or_directory_name])
+		SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
+		FROM sys.dm_os_enumerate_filesystem(@new_backups_parent_dir,'*') 
+		WHERE is_directory = 0
+		GROUP BY file_or_directory_name
+	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Full;
-	SELECT TOP (1)
-		  b.backup_set_id
-		, b.database_name
-		, b.backup_start_date
-		, b.backup_finish_date
-		, b.first_lsn
-		, b.last_lsn
-		, b.checkpoint_lsn
-		, b.database_backup_lsn
-		, Devices = STRING_AGG(mf.physical_device_name, N',')
-	INTO #Full
-	FROM msdb.dbo.backupset b
-	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-	WHERE b.database_name = @DatabaseName
-	  AND b.[type] = 'D'
-	  AND b.is_copy_only = 0
-	  AND mf.mirror = 0
-	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
-	GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
-			 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
-	ORDER BY b.backup_finish_date DESC;
+	CREATE TABLE #Full ( [backup_set_id] int, [database_name] nvarchar(128), [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [checkpoint_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
+	SET @SQL =
+	'
+		SELECT TOP (1)
+			  b.backup_set_id
+			, b.database_name
+			, b.backup_start_date
+			, b.backup_finish_date
+			, b.first_lsn
+			, b.last_lsn
+			, b.checkpoint_lsn
+			, b.database_backup_lsn
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
+
+		FROM msdb.dbo.backupset b
+		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
+		'
+		WHERE b.database_name = '''+@DatabaseName+'''
+		  AND b.[type] = ''D''
+		  AND b.is_copy_only = 0
+		  AND mf.mirror = 0
+		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
+				 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
+		ORDER BY b.backup_finish_date DESC;
+	'
+
+	INSERT INTO #Full ([backup_set_id], [database_name], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [checkpoint_lsn], [database_backup_lsn], [Devices])
+	EXEC(@SQL)
+	
 
 	IF NOT EXISTS (SELECT 1 FROM #Full)
 	BEGIN
@@ -151,29 +210,37 @@ BEGIN
 	-- DIFF (latest tied to that FULL)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Diff') IS NOT NULL DROP TABLE #Diff;
-	SELECT TOP (1)
-		  b.backup_set_id
-		, b.backup_start_date
-		, b.backup_finish_date
-		, b.first_lsn
-		, b.last_lsn
-		, b.differential_base_lsn
-		, Devices = STRING_AGG(mf.physical_device_name, N',')
-	INTO #Diff
-	FROM msdb.dbo.backupset b
-	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-	CROSS JOIN #Full f
-	WHERE b.database_name = @DatabaseName
-	  AND b.[type] = 'I'
-	  AND b.differential_base_lsn = f.checkpoint_lsn
-	  AND mf.mirror = 0
-	  AND b.backup_finish_date > f.backup_finish_date
-	  AND @IncludeDiffs = 1
-	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
-	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-			 b.first_lsn, b.last_lsn, b.differential_base_lsn
-	ORDER BY b.backup_finish_date DESC;
 
+	CREATE TABLE #Diff ( [backup_set_id] int, [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [differential_base_lsn] decimal(25,0), [Devices] nvarchar(4000) )
+	SET @SQL =
+	'
+		SELECT TOP (1)
+			  b.backup_set_id
+			, b.backup_start_date
+			, b.backup_finish_date
+			, b.first_lsn
+			, b.last_lsn
+			, b.differential_base_lsn
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
+
+		FROM msdb.dbo.backupset b
+		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+		CROSS JOIN #Full f
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		'
+		WHERE b.database_name = '''+@DatabaseName+'''
+		  AND b.[type] = ''I''
+		  AND b.differential_base_lsn = f.checkpoint_lsn
+		  AND mf.mirror = 0
+		  AND b.backup_finish_date > f.backup_finish_date
+		  AND '+CONVERT(VARCHAR(1),@IncludeDiffs)+' = 1
+		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
+				 b.first_lsn, b.last_lsn, b.differential_base_lsn
+		ORDER BY b.backup_finish_date DESC;
+	'
+	INSERT INTO #Diff ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [differential_base_lsn], [Devices])
+	EXEC(@SQL)
 	------------------------------------------------------------
 	-- LOG backups after base (Diff if exists else Full)
 	------------------------------------------------------------
@@ -182,26 +249,34 @@ BEGIN
 	SELECT @BaseFinish  = COALESCE((SELECT backup_finish_date FROM #Diff),(SELECT backup_finish_date FROM #Full));
 
 	IF OBJECT_ID('tempdb..#Logs') IS NOT NULL DROP TABLE #Logs;
-	SELECT
-		  b.backup_set_id
-		, b.backup_start_date
-		, b.backup_finish_date
-		, b.first_lsn
-		, b.last_lsn
-		, b.database_backup_lsn
-		, Devices = STRING_AGG(mf.physical_device_name, N',')
-	INTO #Logs
-	FROM msdb.dbo.backupset b
-	JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-	WHERE b.database_name = @DatabaseName
-	  AND b.[type] = 'L'
-	  AND mf.mirror = 0
-	  AND b.backup_finish_date > @BaseFinish
-	  AND @IncludeLogs = 1
-	  AND b.backup_start_date < COALESCE(@RestoreUpTo_TIMESTAMP, b.backup_start_date)
-	GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-			 b.first_lsn, b.last_lsn, b.database_backup_lsn
-	ORDER BY b.first_lsn;
+	CREATE TABLE #Logs ( [backup_set_id] int, [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
+	SET @SQL =
+	'
+		SELECT
+			  b.backup_set_id
+			, b.backup_start_date
+			, b.backup_finish_date
+			, b.first_lsn
+			, b.last_lsn
+			, b.database_backup_lsn
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
+
+		FROM msdb.dbo.backupset b
+		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		'
+		WHERE b.database_name = '''+@DatabaseName+'''
+		  AND b.[type] = ''L''
+		  AND mf.mirror = 0
+		  AND b.backup_finish_date > '''+CONVERT(VARCHAR(100),@BaseFinish,121)+'''
+		  AND '+CONVERT(VARCHAR(1),@IncludeLogs)+' = 1
+		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
+				 b.first_lsn, b.last_lsn, b.database_backup_lsn
+		ORDER BY b.first_lsn;
+	'
+	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
+	EXEC(@SQL)
 
 	------------------------------------------------------------
 	-- Validate log chain (basic gaps)
@@ -263,19 +338,6 @@ BEGIN
 	SELECT 'LOG', backup_set_id, backup_start_date, backup_finish_date, first_lsn, last_lsn, Devices, NULL
 	FROM #LogsValid
 	ORDER BY first_lsn;
-
-	------------------------------------------------------------
-	-- Update restore chain backup paths using 
-	-- @backup_path_replace_string
-	------------------------------------------------------------
-	IF ISNULL(@backup_path_replace_string,'') <> ''
-	BEGIN
-		SET @SQL =
-		'
-			UPDATE #RestoreChain SET Devices = ' + @backup_path_replace_string + '
-		'
-		EXEC(@SQL)
-	END
 
 	------------------------------------------------------------
 	-- Precompute DISK clauses (avoid aggregates in UPDATE)
@@ -345,9 +407,11 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
-				'SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
-				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
+				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE();' + CHAR(10) +
+				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
+				'		SELECT		   ''FULL'',   1,   @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 
 			WHEN 'DIFF' THEN
 				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
@@ -360,9 +424,11 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
-				'SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @hours+'':''+@minutes+'':''+@seconds+'']''; SET @TimeStamp = GETDATE();' + CHAR(10) +
-				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
+				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE();' + CHAR(10) +
+				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
+				'		SELECT		   ''DIFF'',   2,   @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 			
 			WHEN 'LOG' THEN
 				N'RESTORE LOG [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
@@ -375,9 +441,11 @@ SELECT @MoveClauses =
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10) +
 				--- Calculating overall logs restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())%60),2); SET @minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/60),2); SET @hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
-				'SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @hours+'':''+@minutes+'':''+@seconds+'']'';' + CHAR(10) +
-				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10)
+				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+				'SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'';' + CHAR(10) +
+				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
+				'		SELECT		   ''LOG'', @StepNo, @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 		END
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
@@ -428,13 +496,32 @@ SELECT @MoveClauses =
 		SET @Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
 	END
 
+
 	------------------------------------------------------------
 	-- Add TRY-CATCH statements to the restore statements
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------
 	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
-		'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
 		'BEGIN TRY' + CHAR(10);
+	
+	-- 3) TRY header + restore commands
+	DECLARE @HeaderBlock NVARCHAR(MAX) =
+			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
+			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NOT NULL DROP TABLE #BackupTimes;' + CHAR(10) +
+			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2))' + CHAR(10) +
+			'DECLARE @StepNo INT' + CHAR(10) +
+			'DECLARE @msg NVARCHAR(2000)' + CHAR(10) +
+			'DECLARE @Initial_TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
+			'DECLARE @Reused_TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
+			'DECLARE @Overall_seconds VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Overall_minutes VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Overall_hours VARCHAR(3)' + CHAR(10) +
+			'DECLARE @Reused_seconds VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Reused_minutes VARCHAR(2)' + CHAR(10) +
+			'DECLARE @Reused_hours VARCHAR(3)' + CHAR(10) +
+			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121)' + CHAR(10) +
+			'RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
+			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
 	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
 		'END TRY' + CHAR(10) +
@@ -450,6 +537,13 @@ SELECT @MoveClauses =
 		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
 		'') +
 		'END CATCH' + CHAR(10) +
+		'SET @Overall_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())%60),2); SET @Overall_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/60),2); SET @Overall_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
+		'SET @msg=''Restore Summary:''+CHAR(10)+''DB Name: ''+''['+@RestoreDBName+']'''+
+					'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
+					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
+					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
+					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+ CHAR(10) +
+		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
@@ -583,17 +677,6 @@ SELECT @MoveClauses =
 		SET @SQLCMD_Script += CHAR(10);  -- one empty line after last xp_create_subdir
 	END
 
-	-- 3) TRY header + restore commands
-	DECLARE @HeaderBlock NVARCHAR(MAX) =
-			'DECLARE @StepNo INT' + CHAR(10) +
-			'DECLARE @msg NVARCHAR(2000)' + CHAR(10) +
-			'DECLARE @TimeStamp DATETIME2(3) = GETDATE()' + CHAR(10) +
-			'DECLARE @seconds VARCHAR(2)' + CHAR(10) +
-			'DECLARE @minutes VARCHAR(2)' + CHAR(10) +
-			'DECLARE @hours VARCHAR(3)' + CHAR(10) +
-			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@TimeStamp,121)' + CHAR(10) +
-			'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
 	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
 		SELECT LineText, ordinal
@@ -720,10 +803,10 @@ SELECT @MoveClauses =
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''');
 	END
 	
-	IF @backup_path_replace_string IS NOT NULL
+	IF @new_backups_parent_dir IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@backup_path_replace_string', '''' + REPLACE(@backup_path_replace_string, '''', '''''') + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@backup_path_replace_string', '''' + REPLACE(@backup_path_replace_string, '''', '''''') + '''');
+		SELECT @Script = REPLACE(@Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''');
 	END
 	
 	IF @RestoreUpTo_TIMESTAMP IS NOT NULL
@@ -794,7 +877,7 @@ SELECT @MoveClauses =
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
+EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysname
                                          @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
 										 @Restore_DataPath = '',			-- Uses original database path if not specified
 										 @Restore_LogPath = '',				-- Uses original database path if not specified
@@ -805,8 +888,9 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
-										 @backup_path_replace_string = 'REPLACE(Devices,''R:\'',''\\fdbdrbkpdsk\DBDR\FAlgoDB\Tape'')',
+										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup\',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
+										 @check_backup_file_existance = 1,
 										 @Preparatory_Script_Before_Restore = '',
 										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
 										 @Verbose = 0,
