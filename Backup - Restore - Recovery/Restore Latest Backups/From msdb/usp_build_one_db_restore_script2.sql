@@ -277,7 +277,7 @@ BEGIN
 	'
 	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
 	EXEC(@SQL)
-	PRINT @SQL
+
 	------------------------------------------------------------
 	-- Validate log chain (basic gaps)
 	------------------------------------------------------------
@@ -542,8 +542,8 @@ SELECT @MoveClauses =
 					'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
 					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
-					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+
-		'	RAISERROR(@msg,16,1) ' + CHAR(10) +
+					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+ CHAR(10) +
+		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
