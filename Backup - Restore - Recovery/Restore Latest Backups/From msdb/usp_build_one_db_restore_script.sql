@@ -142,8 +142,7 @@ BEGIN
 	CREATE TABLE #Backup_Files 
 	(
 		[full_filesystem_path] nvarchar(256),
-		[file_or_directory_name] nvarchar(256) NOT NULL,
-		CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name)
+		[file_or_directory_name] nvarchar(256) NOT NULL
 	)
 	IF @new_backups_parent_dir <> ''
 		INSERT INTO #Backup_Files ([full_filesystem_path], [file_or_directory_name])
@@ -151,6 +150,8 @@ BEGIN
 		FROM sys.dm_os_enumerate_filesystem(@new_backups_parent_dir,'*') 
 		WHERE is_directory = 0
 		GROUP BY file_or_directory_name
+
+	ALTER TABLE #Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
 	------------------------------------------------------------
