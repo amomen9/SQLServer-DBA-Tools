@@ -88,11 +88,14 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL
 AS
 BEGIN
+	SET NOCOUNT ON
 	------------------------------------------------------------
 	-- Author tag
 	------------------------------------------------------------
 	IF @Verbose = 1
-		PRINT '
+	BEGIN
+		RAISERROR(
+		'
 		-- =============================================
 		-- Author:				<a.momen>
 		-- Contact & Report:	<amomen@gmail.com>
@@ -102,7 +105,8 @@ BEGIN
 		-- License:				<Please refer to the license file> 
 		-- =============================================
 	
-		'
+		',0,1) WITH NOWAIT;
+	END
 	------------------------------------------------------------
 	-- Parameter definition
 	------------------------------------------------------------
@@ -113,13 +117,17 @@ BEGIN
 	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
+	DECLARE @msg NVARCHAR(MAX);
 
 	------------------------------------------------------------
 	-- Parameter validation
 	------------------------------------------------------------
 
 	IF DB_ID(@DatabaseName) IS NULL AND @Verbose = 1
-		PRINT 'Note: Target DB does not currently exist (restore will create it).';
+	BEGIN
+		SET @msg = REPLACE('Note: Target DB does not currently exist (restore will create it).', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+	END
 	
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' OR @RestoreUpTo_TIMESTAMP IS NULL SET @RestoreUpTo_TIMESTAMP = GETDATE()+1
@@ -130,7 +138,8 @@ BEGIN
 	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
-	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
+	SET @msg = REPLACE('----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------', '%', '%%');
+	RAISERROR(@msg,0,1) WITH NOWAIT;
 
 	-- Also start header in @Script
 	SET @Script += '----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10);
@@ -356,14 +365,6 @@ BEGIN
 	------------------------------------------------------------
 	-- Precompute MOVE clauses (avoid aggregates in UPDATE)
 	------------------------------------------------------------
-	--SELECT @MoveClauses =
-	--	STUFF((
-	--		SELECT ',' + /*CHAR(10)*/ + ' MOVE N''' + mf.name + ''' TO N''' + mf.physical_name + ''''
-	--		FROM sys.master_files AS mf
-	--		WHERE mf.database_id = DB_ID(@DatabaseName)
-	--		ORDER BY mf.type, mf.file_id
-	--		FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
-	--	,1,2,'') + ',' + CHAR(10);
 SELECT @MoveClauses =
     STUFF((
         SELECT CHAR(10) + CHAR(9) + 'MOVE N''' + mf.name + ''' TO N''' +
@@ -463,38 +464,55 @@ SELECT @MoveClauses =
 
 	IF @Verbose = 1
 	BEGIN
-		PRINT '-- ```RESTORE CHAIN BUILDER```';
-		PRINT '-- Full: ' + @FullInfo;
-		IF @HasDiff = 1 PRINT '-- Diff: ' + @DiffInfo ELSE PRINT '-- Diff: (none)';
-		PRINT '-- Log backups: ' + CAST(@LogCount AS varchar(12));
-		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
-												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
+		SET @msg = REPLACE('-- ```RESTORE CHAIN BUILDER```', '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('-- Full: ' + @FullInfo, '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		IF @HasDiff = 1 
+		BEGIN
+			SET @msg = REPLACE('-- Diff: ' + @DiffInfo, '%', '%%');
+			SET @Script += @msg + CHAR(10)
+			RAISERROR(@msg,0,1) WITH NOWAIT;
+		END
+		ELSE
+		BEGIN
+			SET @msg = REPLACE('-- Diff: (none)', '%', '%%');
+			SET @Script += @msg + CHAR(10)
+			RAISERROR(@msg,0,1) WITH NOWAIT;
+		END
+		SET @msg = REPLACE('-- Log backups: ' + CAST(@LogCount AS varchar(12)), '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
+												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN!!!' END, '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
 
-		-- Mirror the verbose info into @Script as well
-		SET @Script += '-- ```RESTORE CHAIN BUILDER```' + CHAR(10)
-					+  '-- Full: ' + @FullInfo + CHAR(10)
-					+  '-- Diff: ' + CASE WHEN @HasDiff = 1 THEN @DiffInfo ELSE '(none);' END + CHAR(10)
-					+  '-- Log backups: ' + CAST(@LogCount AS varchar(12)) + CHAR(10)
-					+  '-- Log chain LSN continuity: '
-					+  CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
-							WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END
-					+  CHAR(10);
+
 	END
 	ELSE IF @LogCount > 0 AND @LogsChainValid = 0
-		PRINT '-- Log chain LSN continuity: BROKEN!!!';
+	BEGIN
+		SET @msg = REPLACE('-- Log chain LSN continuity: BROKEN!!!', '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+	END
 
 	IF @LogsChainValid = 0
 	BEGIN
-		PRINT 'WARNING: Log chain appears broken (gap detected).';
-		PRINT '------------------------------------------------------------------';
-		SET @Script += 'WARNING: Log chain appears broken (gap detected).' + CHAR(10)
-					+  '------------------------------------------------------------------' + CHAR(10);
+		SET @msg = REPLACE('WARNING: Log chain appears broken (gap detected).', '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('------------------------------------------------------------------', '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
 	END
 
 	IF @StopAt IS NOT NULL
 	BEGIN
-		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
-		SET @Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
+		SET @msg = REPLACE('STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121), '%', '%%');
+		SET @Script += @msg + CHAR(10)
+		RAISERROR(@msg,0,1) WITH NOWAIT;
 	END
 
 
@@ -554,14 +572,18 @@ SELECT @MoveClauses =
 	IF @create_datafile_dirs = 1
 		IF @create_directories IS NULL 
 		BEGIN
-			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.';
-			PRINT '';
+			SET @msg = REPLACE('--** Database does not exist on the instance, thus create directories statements were skipped.', '%', '%%');
+			RAISERROR(@msg,0,1) WITH NOWAIT;
+			SET @msg = REPLACE('', '%', '%%');
+			RAISERROR(@msg,0,1) WITH NOWAIT;
 			SET @Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
 		END
 		ELSE 
 		BEGIN
-			PRINT @create_directories;
-			PRINT '';  -- one empty line after last xp_create_subdir
+			SET @msg = REPLACE(@create_directories, '%', '%%');
+			RAISERROR(@msg,0,1) WITH NOWAIT;
+			SET @msg = REPLACE('', '%', '%%');
+			RAISERROR(@msg,0,1) WITH NOWAIT;
 			SET @Script += @create_directories + CHAR(10) + CHAR(10);
 			IF @Execute = 1 EXEC(@create_directories);
 		END
@@ -569,11 +591,16 @@ SELECT @MoveClauses =
 	-- Preparatory script section (printed/plain)
 	IF @Preparatory_Script_Before_Restore IS NOT NULL AND LEN(@Preparatory_Script_Before_Restore) > 0
 	BEGIN
-		PRINT '';  -- empty line
-		PRINT '------------------------------------Preparatory Script Before Restore-------------------------';
-		PRINT @Preparatory_Script_Before_Restore;
-		PRINT '----------------------------------------------------------------------------------------------';
-		PRINT '';  -- empty line
+		SET @msg = REPLACE('', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('------------------------------------Preparatory Script Before Restore-------------------------', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE(@Preparatory_Script_Before_Restore, '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('----------------------------------------------------------------------------------------------', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
 
 		SET @Script += CHAR(10) +
 			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
@@ -583,31 +610,31 @@ SELECT @MoveClauses =
 	END
 
 	-- restore body (plain script) – header now comes from TRY/CATCH, do NOT print the old line
-	-- REMOVE these two lines:
-	-- PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
-	-- SET @Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
-	-- keep only step lines and commands:
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
 	WHILE @i <= @max
 	BEGIN
 		SELECT @Cmd = RestoreCommand FROM #RestoreChain WHERE StepNumber = @i;
-		PRINT '-- Step ' + CAST(@i AS varchar(10));
-		PRINT @Cmd;
+		SET @msg = REPLACE('-- Step ' + CAST(@i AS varchar(10)), '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE(@Cmd, '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
 		SET @Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
 		SET @i += 1;
 	END
-	-- footer also comes from TRY/CATCH now, so DROP the old print:
-	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
-	-- SET @Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
 
 	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
 	BEGIN
-		PRINT '';  -- empty line
-		PRINT '-----------------------------------Complementary Script After Restore-----------------------';
-		PRINT @Complementary_Script_After_Restore;
-		PRINT '----------------------------------------------------------------------------------------------';
-		PRINT '';  -- empty line
+		SET @msg = REPLACE('', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('-----------------------------------Complementary Script After Restore-----------------------', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE(@Complementary_Script_After_Restore, '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('----------------------------------------------------------------------------------------------', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+		SET @msg = REPLACE('', '%', '%%');
+		RAISERROR(@msg,0,1) WITH NOWAIT;
 
 		SET @Script += CHAR(10) +
 			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
@@ -616,7 +643,8 @@ SELECT @MoveClauses =
 			CHAR(10);
 	END
 
-	PRINT '--##############################################################--' + REPLICATE(CHAR(10),2);
+	SET @msg = REPLACE('--##############################################################--' + REPLICATE(CHAR(10),2), '%', '%%');
+	RAISERROR(@msg,0,1) WITH NOWAIT;
 	SET @Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
 
 	------------------------------------------------------------
@@ -626,7 +654,6 @@ SELECT @MoveClauses =
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
 		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
-		--SET @SQLCMD_Script += CHAR(10);  -- exactly one empty line
 	END
 
 	-- 1) Preparatory section in SQLCMD script
@@ -872,7 +899,6 @@ SELECT @MoveClauses =
 	------------------------------------------------------------
 	-- Expose both aggregated versions
 	------------------------------------------------------------
-	--SELECT @Script AS FullScript_Plain;
 	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 
 END
@@ -890,12 +916,9 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
 										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup\',
-											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @check_backup_file_existance = 1,
 										 @Preparatory_Script_Before_Restore = '',
 										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
 										 @Verbose = 0,
 										 @SQLCMD_Connect_Conn_String = ''
---\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
-
