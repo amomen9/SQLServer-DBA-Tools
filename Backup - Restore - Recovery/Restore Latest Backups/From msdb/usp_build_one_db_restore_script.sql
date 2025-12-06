@@ -114,7 +114,6 @@ BEGIN
     DECLARE @create_directories NVARCHAR(MAX);
 	DECLARE @SQL NVARCHAR(MAX);
 	DECLARE @Script NVARCHAR(MAX) = N'';         -- plain script (already used)
-	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
 	DECLARE @msg NVARCHAR(MAX);
@@ -671,85 +670,67 @@ SELECT @MoveClauses =
 	IF @SQLCMD_Connect_Conn_String IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''');
 	END
 	
 	IF @Complementary_Script_After_Restore IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''');
 	END
 	
 	IF @Preparatory_Script_Before_Restore IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''');
 	END
 	
 	IF @new_backups_parent_dir IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''');
 	END
 	
 	IF @RestoreUpTo_TIMESTAMP IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''');
 	END
 	
 	IF @StopAt IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''');
 	END
 	
 	IF @Restore_LogPath IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''');
 	END
 	
 	IF @Restore_DataPath IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''')
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''');
 	END
 	
 	IF @RestoreDBName IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@RestoreDBName', @RestoreDBName)
-			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', @RestoreDBName);
 	END
 	
 	-- @DatabaseName is never NULL, always replace
 	SELECT @Script = REPLACE(@Script, '@DatabaseName', @DatabaseName)
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', @DatabaseName);
 	
 	-- Bit parameters: cast to varchar (always replace, bits cannot be NULL)
 	SELECT @Script = REPLACE(@Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@Execute', CAST(@Execute AS VARCHAR(1)))
-		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Execute', CAST(@Execute AS VARCHAR(1)));
 
 	------------------------------------------------------------
 	-- Expose both aggregated versions
