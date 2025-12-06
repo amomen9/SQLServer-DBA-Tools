@@ -566,8 +566,16 @@ SELECT @MoveClauses =
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
-	-- Giving the script in the STDOUT (PRINT)
+	-- Giving the script in the STDOUT (PRINT), and also building @Script
 	------------------------------------------------------------
+	-- 0) :connect and one empty line
+	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
+	BEGIN
+		SET @Script += CHAR(10) + ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
+	END
+
+
+
 	-- xp_create_subdir section
 	IF @create_datafile_dirs = 1
 		IF @create_directories IS NULL 
@@ -646,164 +654,11 @@ SELECT @MoveClauses =
 	SET @msg = REPLACE('--##############################################################--' + REPLICATE(CHAR(10),2), '%', '%%');
 	RAISERROR(@msg,0,1) WITH NOWAIT;
 	SET @Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
-
-	------------------------------------------------------------
-	-- Build @SQLCMD_Script to mirror SELECT dt.Script
-	------------------------------------------------------------
-	-- 0) :connect and one empty line
-	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
-	BEGIN
-		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
-	END
-
-	-- 1) Preparatory section in SQLCMD script
-	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
-	BEGIN
-		SET @SQLCMD_Script += CHAR(10) +
-			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10);
-
-		DECLARE curBefore CURSOR LOCAL FAST_FORWARD FOR
-			SELECT LineText, ordinal
-			FROM dbo.fn_SplitStringByLine(@Preparatory_Script_Before_Restore)
-			ORDER BY ordinal;
-
-		OPEN curBefore;
-		FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
-		WHILE @@FETCH_STATUS = 0
-		BEGIN
-			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-			FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
-		END
-		CLOSE curBefore;
-		DEALLOCATE curBefore;
-
-		SET @SQLCMD_Script +=
-			'----------------------------------------------------------------------------------------------' + CHAR(10) +
-			CHAR(10);
-	END
-
-	-- 2) Blank line + xp_create_subdir + blank line
-	SET @SQLCMD_Script += CHAR(10);
-
-	IF @create_directories IS NOT NULL AND @create_directories <> N''
-	BEGIN
-		DECLARE curDirs CURSOR LOCAL FAST_FORWARD FOR
-			SELECT LineText, ordinal
-			FROM dbo.fn_SplitStringByLine(@create_directories)
-			ORDER BY ordinal;
-
-		OPEN curDirs;
-		FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
-		WHILE @@FETCH_STATUS = 0
-		BEGIN
-			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-			FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
-		END
-		CLOSE curDirs;
-		DEALLOCATE curDirs;
-
-		SET @SQLCMD_Script += CHAR(10);  -- one empty line after last xp_create_subdir
-	END
-
-
-	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
-		SELECT LineText, ordinal
-		FROM dbo.fn_SplitStringByLine(@HeaderBlock)
-		ORDER BY ordinal;
-
-	OPEN curHead;
-	FETCH NEXT FROM curHead INTO @tmpLine, @ord;
-	WHILE @@FETCH_STATUS = 0
-	BEGIN
-		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-		FETCH NEXT FROM curHead INTO @tmpLine, @ord;
-	END
-	CLOSE curHead;
-	DEALLOCATE curHead;
-
-	-- per-step commands
-	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
-	WHILE @Step <= @MaxStep
-	BEGIN
-		SET @SQLCMD_Script += CHAR(9)+'-- Step ' + CAST(@Step AS varchar(10)) + CHAR(10);
-		SET @SQLCMD_Script += CHAR(9)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10);
-
-		DECLARE @RestoreCmd NVARCHAR(MAX);
-		SELECT @RestoreCmd = RestoreCommand
-		FROM #RestoreChain
-		WHERE StepNumber = @Step;
-
-		IF @RestoreCmd IS NOT NULL
-		BEGIN
-			DECLARE curCmd CURSOR LOCAL FAST_FORWARD FOR
-				SELECT LineText, ordinal
-				FROM dbo.fn_SplitStringByLine(@RestoreCmd)
-				ORDER BY ordinal;
-
-			OPEN curCmd;
-			FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
-			WHILE @@FETCH_STATUS = 0
-			BEGIN
-				SET @SQLCMD_Script += CHAR(9) + ISNULL(@tmpLine,'') + CHAR(10);
-				FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
-			END
-			CLOSE curCmd;
-			DEALLOCATE curCmd;
-		END
-
-		SET @Step += 1;
-	END
-
-	-- 4) footer + TRY_CATCH_TAIL (includes END CATCH + restore-footer)
-	DECLARE @FooterBlock NVARCHAR(MAX) = @TRY_CATCH_TAIL;
-
-	DECLARE curFoot CURSOR LOCAL FAST_FORWARD FOR
-		SELECT LineText, ordinal
-		FROM dbo.fn_SplitStringByLine(@FooterBlock)
-		ORDER BY ordinal;
-
-	OPEN curFoot;
-	FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
-	WHILE @@FETCH_STATUS = 0
-	BEGIN
-		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-		FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
-	END
-	CLOSE curFoot;
-	DEALLOCATE curFoot;
-
-	-- 5) Complementary section in SQLCMD script
-	IF @Complementary_Script_After_Restore IS NOT NULL AND @Complementary_Script_After_Restore <> N''
-	BEGIN
-		SET @SQLCMD_Script += CHAR(10) +
-			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10);
-
-		DECLARE curAfter CURSOR LOCAL FAST_FORWARD FOR
-			SELECT LineText, ordinal
-			FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
-			ORDER BY ordinal;
-
-		OPEN curAfter;
-		FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
-		WHILE @@FETCH_STATUS = 0
-		BEGIN
-			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-			FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
-		END
-		CLOSE curAfter;
-		DEALLOCATE curAfter;
-
-		SET @SQLCMD_Script +=
-			'----------------------------------------------------------------------------------------------' + CHAR(10) +
-			CHAR(10);
-	END
-
 	-- 6) trailing GO / blanks
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
-		SET @SQLCMD_Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
+		SET @Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
 	END
-
 
 
 	------------------------------------------------------------
@@ -899,7 +754,7 @@ SELECT @MoveClauses =
 	------------------------------------------------------------
 	-- Expose both aggregated versions
 	------------------------------------------------------------
-	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@Script);
 
 END
 GO
@@ -913,12 +768,12 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
-										 @Recovery = 1,
+										 @Recovery = 0,
 										 @Recover_Database_On_Error = 1,
 										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup\',
 										 @check_backup_file_existance = 1,
-										 @Preparatory_Script_Before_Restore = '',
+										 @Preparatory_Script_Before_Restore = '--Sample Prep',
 										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
-										 @Verbose = 0,
-										 @SQLCMD_Connect_Conn_String = ''
+										 @Verbose = 1,
+										 @SQLCMD_Connect_Conn_String = 'A1'
 GO
