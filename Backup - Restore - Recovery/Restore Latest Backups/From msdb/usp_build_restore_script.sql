@@ -27,7 +27,7 @@ CREATE OR ALTER PROC dbo.usp_build_restore_script
         @IncludeDiffs                       BIT             = 1,       -- Include differential backups
         @Recovery                           BIT             = 0,       -- Specify whether to eventually recover the database or not
         @RestoreUpTo_TIMESTAMP              DATETIME2(3)    = NULL,    -- Backup files started after this TIMESTAMP will be excluded
-        @new_backups_parent_dir         NVARCHAR(4000)  = NULL,        -- T-SQL formula to be executed on the backup files full path
+        @new_backups_parent_dir             NVARCHAR(4000)  = NULL,    -- T-SQL formula to be executed on the backup files full path
                                                                        -- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))
 		@check_backup_file_existance		BIT = 0,				   -- Check if the backup file exists on disk at @new_backups_parent_dir or
 																	   -- the original file backup path if @new_backups_parent_dir is empty or null
@@ -72,6 +72,25 @@ BEGIN
     BEGIN
         DECLARE @ExecStart datetime2(3) = SYSDATETIME();
         BEGIN TRY
+PRINT CONVERT(NVARCHAR(4000),@DatabaseName) + ' '
+PRINT CONVERT(NVARCHAR(4000),@RestoreDBName) + ' '
+PRINT CONVERT(NVARCHAR(4000),@create_datafile_dirs) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Restore_DataPath) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Restore_LogPath) + ' '
+PRINT CONVERT(NVARCHAR(4000),@StopAt) + ' '
+PRINT CONVERT(NVARCHAR(4000),@WithReplace) + ' '
+PRINT CONVERT(NVARCHAR(4000),@IncludeLogs) + ' '
+PRINT CONVERT(NVARCHAR(4000),@IncludeDiffs) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Recovery) + ' '
+PRINT CONVERT(NVARCHAR(4000),@RestoreUpTo_TIMESTAMP) + ' '
+PRINT CONVERT(NVARCHAR(4000),@new_backups_parent_dir) + ' '
+PRINT CONVERT(NVARCHAR(4000),@check_backup_file_existance) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Recover_Database_On_Error) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Preparatory_Script_Before_Restore) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Complementary_Script_After_Restore) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Execute) + ' '
+PRINT CONVERT(NVARCHAR(4000),@Verbose) + ' '
+PRINT CONVERT(NVARCHAR(4000),@SQLCMD_Connect_Conn_String) + ' '            
             EXEC dbo.usp_build_one_db_restore_script
                     @DatabaseName                       = @DatabaseName,
                     @RestoreDBName                      = @RestoreDBName,
@@ -91,7 +110,7 @@ BEGIN
                     @Complementary_Script_After_Restore = @Complementary_Script_After_Restore,
                     @Execute                            = @Execute,
                     @Verbose                            = @Verbose,
-                    @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String;
+                    @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String
 
             INSERT INTO #Results(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
             VALUES (@DatabaseName, 'SUCCESS', NULL, @ExecStart, SYSDATETIME());
@@ -131,7 +150,7 @@ EXEC dbo.usp_build_restore_script
     @Recovery                           = 1,
     @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
     @new_backups_parent_dir         	= '', --'\\fdbdrbkpdsk\DBDR\',
-	@check_backup_file_existance = 0,
+	@check_backup_file_existance        = 0,
     @Recover_Database_On_Error          = 1,
     @Preparatory_Script_Before_Restore  = '',
     @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
@@ -139,3 +158,28 @@ EXEC dbo.usp_build_restore_script
     @Verbose                            = 0,
     @SQLCMD_Connect_Conn_String         = '';
 GO
+
+
+
+
+EXEC dbo.usp_build_one_db_restore_script
+    @DatabaseName = 'Archive99',
+    
+    @StopAt                             = NULL,
+    @WithReplace                        = 1,
+    @RestoreDBName                      = '',
+    @create_datafile_dirs               = 1,
+    @Restore_DataPath                   = '',
+    @Restore_LogPath                    = '',
+    @IncludeLogs                        = 1,
+    @IncludeDiffs                       = 1,
+    @Recovery                           = 1,
+    @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
+    @new_backups_parent_dir         	= '', --'\\fdbdrbkpdsk\DBDR\',
+	@check_backup_file_existance        = 0,
+    @Recover_Database_On_Error          = 1,
+    @Preparatory_Script_Before_Restore  = '',
+    @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
+    @Execute                            = 0,
+    @Verbose                            = 0,
+    @SQLCMD_Connect_Conn_String         = '';
