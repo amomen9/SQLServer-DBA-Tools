@@ -22,29 +22,28 @@ AS
 RETURN
 (
     SELECT
-        LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) AS LineText,
+        LTRIM(RTRIM(
+            REPLACE(REPLACE(REPLACE(
+                T.N.value('.', 'nvarchar(max)'),
+                '&lt;', '<'),
+                '&gt;', '>'),
+                '&amp;', '&')
+        )) AS LineText,
         ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS ordinal
     FROM (
-        SELECT CAST('<r><x>' + REPLACE(REPLACE(@Query, CHAR(13), ''), CHAR(10), '</x><x>') + '</x></r>' AS xml)
+        SELECT CAST('<r><x>' + 
+            REPLACE(
+                REPLACE(
+                    REPLACE(
+                        REPLACE(REPLACE(@Query, CHAR(13), ''), 
+                        '&', '&amp;'),
+                        '<', '&lt;'),
+                    '>', '&gt;'),
+                CHAR(10), '</x><x>') 
+            + '</x></r>' AS xml)
     ) AS d(XmlData)
     CROSS APPLY d.XmlData.nodes('/r/x') AS T(N)
-    -- WHERE LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) <> ''
-	-- keep empties: no WHERE
 );
-GO
-
-CREATE OR ALTER FUNCTION dbo.udf_BASE_NAME(@Path NVARCHAR(2000))
-RETURNS NVARCHAR(2000)
-WITH SCHEMABINDING
-AS
-BEGIN
-    RETURN CASE 
-        WHEN @Path LIKE '%\%' OR @Path LIKE '%/%' THEN
-            RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1)
-        ELSE 
-            @Path
-    END;
-END
 GO
 
 CREATE OR ALTER FUNCTION dbo.udf_PARENT_DIR(@Path NVARCHAR(2000))
@@ -90,24 +89,6 @@ AS
 BEGIN
 	SET NOCOUNT ON
 	------------------------------------------------------------
-	-- Author tag
-	------------------------------------------------------------
-	IF @Verbose = 1
-	BEGIN
-		RAISERROR(
-		'
-		-- =============================================
-		-- Author:				<a.momen>
-		-- Contact & Report:	<amomen@gmail.com>
-		-- Create date:			
-		-- Latest Update Date:	
-		-- Description:			
-		-- License:				<Please refer to the license file> 
-		-- =============================================
-	
-		',0,1) WITH NOWAIT;
-	END
-	------------------------------------------------------------
 	-- Parameter definition
 	------------------------------------------------------------
 	DECLARE @MoveClauses NVARCHAR(MAX);
@@ -117,6 +98,24 @@ BEGIN
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
 	DECLARE @msg NVARCHAR(MAX);
+
+	------------------------------------------------------------
+	-- Author tag
+	------------------------------------------------------------
+	IF @Verbose = 1
+	BEGIN
+		SET @msg =
+		'-- =======================================================' + CHAR(10) +
+		'-- Author:				<a.momen>' + CHAR(10) +
+		'-- Contact & Report:	<amomen@gmail.com>' + CHAR(10) +
+		'-- Create date:' + CHAR(10) +			
+		'-- Latest Update Date:' + CHAR(10) +	
+		'-- Description:' + CHAR(10) +			
+		'-- License:				<Please refer to the license file>' + CHAR(10) + 
+		'-- =======================================================' + REPLICATE(CHAR(10),2)	
+		SET @Script = @msg
+		RAISERROR(@msg,0,1) WITH NOWAIT;
+	END
 
 	------------------------------------------------------------
 	-- Parameter validation
