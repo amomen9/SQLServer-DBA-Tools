@@ -518,12 +518,12 @@ SELECT @MoveClauses =
 	-- Add TRY-CATCH statements to the restore statements
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------
-	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
-		'BEGIN TRY' + CHAR(10);
+		
 	
 	-- 3) TRY header + restore commands
-	DECLARE @HeaderBlock NVARCHAR(MAX) =
+	DECLARE @HeaderBlock NVARCHAR(MAX) = 
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
+			'BEGIN TRY' + CHAR(10) +
 			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NOT NULL DROP TABLE #BackupTimes;' + CHAR(10) +
 			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2))' + CHAR(10) +
 			'DECLARE @StepNo INT' + CHAR(10) +
@@ -537,10 +537,9 @@ SELECT @MoveClauses =
 			'DECLARE @Reused_minutes VARCHAR(2)' + CHAR(10) +
 			'DECLARE @Reused_hours VARCHAR(3)' + CHAR(10) +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121)' + CHAR(10) +
-			'RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
-			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
+			'RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) 
 
-	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
+	DECLARE @FooterBlock NVARCHAR(MAX) =
 		'END TRY' + CHAR(10) +
 		'BEGIN CATCH' + CHAR(10) +
 		'	SET @msg = ERROR_MESSAGE()' + CHAR(10) +
@@ -553,7 +552,7 @@ SELECT @MoveClauses =
 		'IF @StepNo > 1' + CHAR(10) +
 		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
 		'') +
-		'END CATCH' + CHAR(10) +
+		'END CATCH' + replicate(CHAR(10),2) +
 		'SET @Overall_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())%60),2); SET @Overall_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/60),2); SET @Overall_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
 		'SET @msg=''Restore Summary:''+CHAR(10)+''DB Name: ''+''['+@RestoreDBName+']'''+
 					'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
@@ -561,7 +560,7 @@ SELECT @MoveClauses =
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+ CHAR(10) +
 		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-		'----------------------------------------Restore statements end--------------------------------';
+		'----------------------------------------Restore statements end--------------------------------' + CHAR(10);
 
 	------------------------------------------------------------
 	-- Giving the script in the STDOUT (PRINT), and also building @Script
@@ -614,6 +613,7 @@ SELECT @MoveClauses =
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
 			CHAR(10);
 	END
+	SET @Script += @HeaderBlock;
 
 	-- restore body (plain script) – header now comes from TRY/CATCH, do NOT print the old line
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
@@ -627,6 +627,7 @@ SELECT @MoveClauses =
 		SET @Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
 		SET @i += 1;
 	END
+	SET @Script += @FooterBlock + CHAR(10);
 
 	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
