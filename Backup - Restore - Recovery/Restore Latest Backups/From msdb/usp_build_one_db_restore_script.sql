@@ -755,5 +755,5 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 										 @Preparatory_Script_Before_Restore = '--Sample Prep',
 										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
 										 @Verbose = 1,
-										 @SQLCMD_Connect_Conn_String = 'A1'
+										 @SQLCMD_Connect_Conn_String = ''
 GO
