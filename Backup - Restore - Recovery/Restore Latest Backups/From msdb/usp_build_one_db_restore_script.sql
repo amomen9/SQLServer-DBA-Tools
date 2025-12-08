@@ -230,7 +230,7 @@ BEGIN
 			  AND b.[type] = ''D''
 			  AND b.is_copy_only = 0
 			  AND mf.mirror = 0
-			  AND dbo.udf_BASE_NAME(mf.physical_device_name) <> ''nul''
+			  AND mf.physical_device_name <> ''nul''
 			  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		) b	
 		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(parent_dir,base_name) fe','')+
@@ -292,7 +292,7 @@ BEGIN
 		  AND b.[type] = ''I''
 		  AND b.differential_base_lsn = f.checkpoint_lsn
 		  AND mf.mirror = 0
-		  AND dbo.udf_BASE_NAME(mf.physical_device_name) <> ''nul''
+		  AND mf.physical_device_name <> ''nul''
 		  AND b.backup_finish_date > f.backup_finish_date
 		  AND '+CONVERT(VARCHAR(1),@IncludeDiffs)+' = 1
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
@@ -331,7 +331,7 @@ BEGIN
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''L''
 		  AND mf.mirror = 0
-		  AND dbo.udf_BASE_NAME(mf.physical_device_name) <> ''nul''
+		  AND mf.physical_device_name <> ''nul''
 		  AND b.backup_finish_date > '''+CONVERT(VARCHAR(100),@BaseFinish,121)+'''
 		  AND '+CONVERT(VARCHAR(1),@IncludeLogs)+' = 1
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
