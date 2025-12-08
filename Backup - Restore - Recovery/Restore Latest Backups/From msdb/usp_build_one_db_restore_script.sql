@@ -102,6 +102,31 @@ GO
 -- DECLARE @MyScript nvarchar(max) = N'SELECT * FROM sys.databases;'+CHAR(13)+CHAR(10)+N'SELECT * FROM sys.objects;';
 -- SELECT * FROM dbo.fn_SplitStringByLine(@MyScript);
 
+CREATE OR ALTER FUNCTION dbo.user_dm_os_file_exists
+(
+    @parent_dir NVARCHAR(2000),
+    @base_name  NVARCHAR(2000)
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        fe.full_filesystem_path,
+        fe.is_directory,
+        fe.file_or_directory_name
+    FROM sys.dm_os_enumerate_filesystem(@parent_dir, @base_name) fe
+    WHERE @parent_dir <> ''    
+    UNION ALL
+    SELECT 
+        NULL AS full_filesystem_path,
+        NULL AS is_directory,
+        NULL AS file_or_directory_name
+    WHERE @parent_dir = ''
+);
+GO
+
+
 CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@DatabaseName						sysname,
 		@RestoreDBName						sysname = NULL,
@@ -185,7 +210,7 @@ BEGIN
 	IF @new_backups_parent_dir <> ''
 		INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
 		SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
-		FROM sys.dm_os_enumerate_filesystem(@new_backups_parent_dir,'*') 
+		FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
 		WHERE is_directory = 0
 		GROUP BY file_or_directory_name
 
@@ -233,15 +258,13 @@ BEGIN
 			  AND mf.physical_device_name <> ''nul''
 			  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		) b	
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(parent_dir,base_name) fe','')+
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY dbo.user_dm_os_file_exists(parent_dir,base_name) fe','')+
 		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
 		'
 		GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
 					b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn, b.physical_device_name
 		ORDER BY b.backup_finish_date DESC;
 	'
-	PRINT @SQL
-	SELECT * FROM #Backup_Files	--**
 	INSERT INTO #Full ([backup_set_id], [database_name], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [checkpoint_lsn], [database_backup_lsn], [Devices])
 	EXEC(@SQL)
 	SELECT * FROM #Full	--**
@@ -279,29 +302,45 @@ BEGIN
 			, b.first_lsn
 			, b.last_lsn
 			, b.differential_base_lsn
-			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.full_filesystem_path') + ', N'','')
-			, dbo.udf_BASE_NAME(mf.physical_device_name) base_name
-			, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir
-	
-		FROM msdb.dbo.backupset b
-		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-		CROSS JOIN #Full f
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','b.physical_device_name','b.full_filesystem_path') + ', N'','')
+		FROM
+		(	
+			SELECT
+				  b.backup_set_id
+				, b.backup_start_date
+				, b.backup_finish_date
+				, b.first_lsn
+				, b.last_lsn
+				, b.differential_base_lsn
+				, mf.physical_device_name
+				'+IIF(@new_backups_parent_dir='','',', bf.full_filesystem_path') +'				
+				, dbo.udf_BASE_NAME(mf.physical_device_name) base_name
+				, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir		
+			FROM msdb.dbo.backupset b
+			JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+			CROSS JOIN #Full f
+			'+IIF(@new_backups_parent_dir='','','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+			'
+			WHERE b.database_name = '''+@DatabaseName+'''
+			  AND b.[type] = ''I''
+			  AND b.differential_base_lsn = f.checkpoint_lsn
+			  AND mf.mirror = 0
+			  AND mf.physical_device_name <> ''nul''
+			  AND b.backup_finish_date > f.backup_finish_date
+			  AND '+CONVERT(VARCHAR(1),@IncludeDiffs)+' = 1
+			  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		) b
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY dbo.user_dm_os_file_exists(parent_dir,base_name) fe','')+
+		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
 		'
-		WHERE b.database_name = '''+@DatabaseName+'''
-		  AND b.[type] = ''I''
-		  AND b.differential_base_lsn = f.checkpoint_lsn
-		  AND mf.mirror = 0
-		  AND mf.physical_device_name <> ''nul''
-		  AND b.backup_finish_date > f.backup_finish_date
-		  AND '+CONVERT(VARCHAR(1),@IncludeDiffs)+' = 1
-		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-				 b.first_lsn, b.last_lsn, b.differential_base_lsn, mf.physical_device_name
+				 b.first_lsn, b.last_lsn, b.differential_base_lsn, b.physical_device_name
 		ORDER BY b.backup_finish_date DESC;
 	'
+	PRINT @SQL --axd
 	INSERT INTO #Diff ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [differential_base_lsn], [Devices])
 	EXEC(@SQL)
+	SELECT * FROM #Diff	--axd
 	------------------------------------------------------------
 	-- LOG backups after base (Diff if exists else Full)
 	------------------------------------------------------------
@@ -326,7 +365,7 @@ BEGIN
 		
 		FROM msdb.dbo.backupset b
 		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY dbo.user_dm_os_file_exists(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
 		'
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''L''
