@@ -72,15 +72,32 @@ RETURNS NVARCHAR(2000)
 WITH SCHEMABINDING
 AS
 BEGIN
-    RETURN CASE 
-        WHEN @Path LIKE '%\%' THEN
-            LEFT(@Path, LEN(@Path) - CHARINDEX('\', REVERSE(@Path)))
-        ELSE 
-            ''
-    END;
+    DECLARE @Result NVARCHAR(2000);
+    
+    -- Check if it's a URL (contains ://) → return empty string
+    IF @Path LIKE '%://%'
+    BEGIN
+        SET @Result = '';
+    END
+    -- Windows path (contains backslash, prioritize backslash separator)
+    ELSE IF @Path LIKE '%\%'
+    BEGIN
+        SET @Result = LEFT(@Path, LEN(@Path) - CHARINDEX('\', REVERSE(@Path)));
+    END
+    -- Linux path (contains forward slash, no backslash)
+    ELSE IF @Path LIKE '%/%'
+    BEGIN
+        SET @Result = LEFT(@Path, LEN(@Path) - CHARINDEX('/', REVERSE(@Path)));
+    END
+    -- No separators found (simple filename or empty) → return empty string
+    ELSE
+    BEGIN
+        SET @Result = '';
+    END
+    
+    RETURN @Result;
 END
 GO
-
 -- Example Usage:
 -- DECLARE @MyScript nvarchar(max) = N'SELECT * FROM sys.databases;'+CHAR(13)+CHAR(10)+N'SELECT * FROM sys.objects;';
 -- SELECT * FROM dbo.fn_SplitStringByLine(@MyScript);
