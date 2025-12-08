@@ -557,7 +557,8 @@ SELECT @MoveClauses =
 				'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
 				'		SELECT		   ''LOG'', ' + CONVERT(VARCHAR(4),rc.StepNumber) + ', @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
-		END
+		END +
+		CASE WHEN rc.StepNumber = @LastStep THEN CHAR(10) + N'--------------------------------------------------' + CHAR(10) ELSE N'' END
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
 
