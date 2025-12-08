@@ -22,28 +22,29 @@ AS
 RETURN
 (
     SELECT
-        LTRIM(RTRIM(
-            REPLACE(REPLACE(REPLACE(
-                T.N.value('.', 'nvarchar(max)'),
-                '&lt;', '<'),
-                '&gt;', '>'),
-                '&amp;', '&')
-        )) AS LineText,
+        LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) AS LineText,
         ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS ordinal
     FROM (
-        SELECT CAST('<r><x>' + 
-            REPLACE(
-                REPLACE(
-                    REPLACE(
-                        REPLACE(REPLACE(@Query, CHAR(13), ''), 
-                        '&', '&amp;'),
-                        '<', '&lt;'),
-                    '>', '&gt;'),
-                CHAR(10), '</x><x>') 
-            + '</x></r>' AS xml)
+        SELECT CAST('<r><x>' + REPLACE(REPLACE(@Query, CHAR(13), ''), CHAR(10), '</x><x>') + '</x></r>' AS xml)
     ) AS d(XmlData)
     CROSS APPLY d.XmlData.nodes('/r/x') AS T(N)
+    -- WHERE LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) <> ''
+	-- keep empties: no WHERE
 );
+GO
+
+CREATE OR ALTER FUNCTION dbo.udf_BASE_NAME(@Path NVARCHAR(2000))
+RETURNS NVARCHAR(2000)
+WITH SCHEMABINDING
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Path LIKE '%\%' OR @Path LIKE '%/%' THEN
+            RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1)
+        ELSE 
+            @Path
+    END;
+END
 GO
 
 CREATE OR ALTER FUNCTION dbo.udf_PARENT_DIR(@Path NVARCHAR(2000))
@@ -89,43 +90,37 @@ AS
 BEGIN
 	SET NOCOUNT ON
 	------------------------------------------------------------
+	-- Author tag
+	------------------------------------------------------------
+	IF @Verbose = 1
+		PRINT '
+		-- =============================================
+		-- Author:				<a.momen>
+		-- Contact & Report:	<amomen@gmail.com>
+		-- Create date:			
+		-- Latest Update Date:	
+		-- Description:			
+		-- License:				<Please refer to the license file> 
+		-- =============================================
+	
+		'
+	------------------------------------------------------------
 	-- Parameter definition
 	------------------------------------------------------------
 	DECLARE @MoveClauses NVARCHAR(MAX);
     DECLARE @create_directories NVARCHAR(MAX);
 	DECLARE @SQL NVARCHAR(MAX);
 	DECLARE @Script NVARCHAR(MAX) = N'';         -- plain script (already used)
+	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
-	DECLARE @msg NVARCHAR(MAX);
-
-	------------------------------------------------------------
-	-- Author tag
-	------------------------------------------------------------
-	IF @Verbose = 1
-	BEGIN
-		SET @msg =
-		'-- =======================================================' + CHAR(10) +
-		'-- Author:				<a.momen>' + CHAR(10) +
-		'-- Contact & Report:	<amomen@gmail.com>' + CHAR(10) +
-		'-- Create date:' + CHAR(10) +			
-		'-- Latest Update Date:' + CHAR(10) +	
-		'-- Description:' + CHAR(10) +			
-		'-- License:				<Please refer to the license file>' + CHAR(10) + 
-		'-- =======================================================' + REPLICATE(CHAR(10),2)	
-		SET @Script = @msg
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-	END
 
 	------------------------------------------------------------
 	-- Parameter validation
 	------------------------------------------------------------
 
 	IF DB_ID(@DatabaseName) IS NULL AND @Verbose = 1
-	BEGIN
-		SET @msg = REPLACE('Note: Target DB does not currently exist (restore will create it).', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-	END
+		PRINT 'Note: Target DB does not currently exist (restore will create it).';
 	
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' OR @RestoreUpTo_TIMESTAMP IS NULL SET @RestoreUpTo_TIMESTAMP = GETDATE()+1
@@ -136,8 +131,7 @@ BEGIN
 	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
-	SET @msg = REPLACE('----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------', '%', '%%');
-	RAISERROR(@msg,0,1) WITH NOWAIT;
+	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 
 	-- Also start header in @Script
 	SET @Script += '----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10);
@@ -148,11 +142,11 @@ BEGIN
 	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Backup_Files;
 	CREATE TABLE #Backup_Files 
 	(
-		[full_filesystem_path] nvarchar(256),
-		[file_or_directory_name] nvarchar(256) NOT NULL
+		full_filesystem_path nvarchar(256),
+		file_or_directory_name nvarchar(256) NOT NULL
 	)
 	IF @new_backups_parent_dir <> ''
-		INSERT INTO #Backup_Files ([full_filesystem_path], [file_or_directory_name])
+		INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
 		SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
 		FROM sys.dm_os_enumerate_filesystem(@new_backups_parent_dir,'*') 
 		WHERE is_directory = 0
@@ -175,26 +169,45 @@ BEGIN
 			, b.last_lsn
 			, b.checkpoint_lsn
 			, b.database_backup_lsn
-			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
-
-		FROM msdb.dbo.backupset b
-		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','b.physical_device_name','b.full_filesystem_path') + ', N'','')
+		FROM
+		(
+			SELECT
+				  b.backup_set_id
+				, b.database_name
+				, b.backup_start_date
+				, b.backup_finish_date
+				, b.first_lsn
+				, b.last_lsn
+				, b.checkpoint_lsn
+				, b.database_backup_lsn
+				, mf.physical_device_name
+				'+IIF(@new_backups_parent_dir='','',', bf.full_filesystem_path') +'				
+				, dbo.udf_BASE_NAME(mf.physical_device_name) base_name
+				, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir		
+			FROM msdb.dbo.backupset b
+			JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
+			'+IIF(@new_backups_parent_dir='','','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+			'
+			WHERE b.database_name = '''+@DatabaseName+'''
+			  AND b.[type] = ''D''
+			  AND b.is_copy_only = 0
+			  AND mf.mirror = 0
+			  AND mf.physical_device_name <> ''nul''
+			  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
+		) b	
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(parent_dir,base_name) fe','')+
 		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
 		'
-		WHERE b.database_name = '''+@DatabaseName+'''
-		  AND b.[type] = ''D''
-		  AND b.is_copy_only = 0
-		  AND mf.mirror = 0
-		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
-				 b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
+					b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn, b.physical_device_name
 		ORDER BY b.backup_finish_date DESC;
 	'
-
+	PRINT @SQL
+	SELECT * FROM #Backup_Files	--**
 	INSERT INTO #Full ([backup_set_id], [database_name], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [checkpoint_lsn], [database_backup_lsn], [Devices])
 	EXEC(@SQL)
-	
+	SELECT * FROM #Full	--**
 
 	IF NOT EXISTS (SELECT 1 FROM #Full)
 	BEGIN
@@ -229,22 +242,25 @@ BEGIN
 			, b.first_lsn
 			, b.last_lsn
 			, b.differential_base_lsn
-			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
-
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.full_filesystem_path') + ', N'','')
+			, dbo.udf_BASE_NAME(mf.physical_device_name) base_name
+			, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir
+	
 		FROM msdb.dbo.backupset b
 		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
 		CROSS JOIN #Full f
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
 		'
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''I''
 		  AND b.differential_base_lsn = f.checkpoint_lsn
 		  AND mf.mirror = 0
+		  AND mf.physical_device_name <> ''nul''
 		  AND b.backup_finish_date > f.backup_finish_date
 		  AND '+CONVERT(VARCHAR(1),@IncludeDiffs)+' = 1
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-				 b.first_lsn, b.last_lsn, b.differential_base_lsn
+				 b.first_lsn, b.last_lsn, b.differential_base_lsn, mf.physical_device_name
 		ORDER BY b.backup_finish_date DESC;
 	'
 	INSERT INTO #Diff ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [differential_base_lsn], [Devices])
@@ -267,20 +283,23 @@ BEGIN
 			, b.first_lsn
 			, b.last_lsn
 			, b.database_backup_lsn
-			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.[full_filesystem_path]') + ', N'','')
-
+			, Devices = STRING_AGG('+IIF(@new_backups_parent_dir='','mf.physical_device_name','bf.full_filesystem_path') + ', N'','')
+			, dbo.udf_BASE_NAME(mf.physical_device_name) base_name
+			, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir
+		
 		FROM msdb.dbo.backupset b
 		JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.[file_or_directory_name]')+
+		'+IIF(@new_backups_parent_dir='','CROSS APPLY sys.dm_os_enumerate_filesystem(dbo.udf_PARENT_DIR(mf.physical_device_name),dbo.udf_BASE_NAME(mf.physical_device_name)) fe','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
 		'
 		WHERE b.database_name = '''+@DatabaseName+'''
 		  AND b.[type] = ''L''
 		  AND mf.mirror = 0
+		  AND mf.physical_device_name <> ''nul''
 		  AND b.backup_finish_date > '''+CONVERT(VARCHAR(100),@BaseFinish,121)+'''
 		  AND '+CONVERT(VARCHAR(1),@IncludeLogs)+' = 1
 		  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-				 b.first_lsn, b.last_lsn, b.database_backup_lsn
+				 b.first_lsn, b.last_lsn, b.database_backup_lsn, mf.physical_device_name
 		ORDER BY b.first_lsn;
 	'
 	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
@@ -363,6 +382,14 @@ BEGIN
 	------------------------------------------------------------
 	-- Precompute MOVE clauses (avoid aggregates in UPDATE)
 	------------------------------------------------------------
+	--SELECT @MoveClauses =
+	--	STUFF((
+	--		SELECT ',' + /*CHAR(10)*/ + ' MOVE N''' + mf.name + ''' TO N''' + mf.physical_name + ''''
+	--		FROM sys.master_files AS mf
+	--		WHERE mf.database_id = DB_ID(@DatabaseName)
+	--		ORDER BY mf.type, mf.file_id
+	--		FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
+	--	,1,2,'') + ',' + CHAR(10);
 SELECT @MoveClauses =
     STUFF((
         SELECT CHAR(10) + CHAR(9) + 'MOVE N''' + mf.name + ''' TO N''' +
@@ -462,55 +489,38 @@ SELECT @MoveClauses =
 
 	IF @Verbose = 1
 	BEGIN
-		SET @msg = REPLACE('-- ```RESTORE CHAIN BUILDER```', '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('-- Full: ' + @FullInfo, '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		IF @HasDiff = 1 
-		BEGIN
-			SET @msg = REPLACE('-- Diff: ' + @DiffInfo, '%', '%%');
-			SET @Script += @msg + CHAR(10)
-			RAISERROR(@msg,0,1) WITH NOWAIT;
-		END
-		ELSE
-		BEGIN
-			SET @msg = REPLACE('-- Diff: (none)', '%', '%%');
-			SET @Script += @msg + CHAR(10)
-			RAISERROR(@msg,0,1) WITH NOWAIT;
-		END
-		SET @msg = REPLACE('-- Log backups: ' + CAST(@LogCount AS varchar(12)), '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
-												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN!!!' END, '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
+		PRINT '-- ```RESTORE CHAIN BUILDER```';
+		PRINT '-- Full: ' + @FullInfo;
+		IF @HasDiff = 1 PRINT '-- Diff: ' + @DiffInfo ELSE PRINT '-- Diff: (none)';
+		PRINT '-- Log backups: ' + CAST(@LogCount AS varchar(12));
+		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
+												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
 
-
+		-- Mirror the verbose info into @Script as well
+		SET @Script += '-- ```RESTORE CHAIN BUILDER```' + CHAR(10)
+					+  '-- Full: ' + @FullInfo + CHAR(10)
+					+  '-- Diff: ' + CASE WHEN @HasDiff = 1 THEN @DiffInfo ELSE '(none);' END + CHAR(10)
+					+  '-- Log backups: ' + CAST(@LogCount AS varchar(12)) + CHAR(10)
+					+  '-- Log chain LSN continuity: '
+					+  CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
+							WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END
+					+  CHAR(10);
 	END
 	ELSE IF @LogCount > 0 AND @LogsChainValid = 0
-	BEGIN
-		SET @msg = REPLACE('-- Log chain LSN continuity: BROKEN!!!', '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-	END
+		PRINT '-- Log chain LSN continuity: BROKEN!!!';
 
 	IF @LogsChainValid = 0
 	BEGIN
-		SET @msg = REPLACE('WARNING: Log chain appears broken (gap detected).', '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('------------------------------------------------------------------', '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
+		PRINT 'WARNING: Log chain appears broken (gap detected).';
+		PRINT '------------------------------------------------------------------';
+		SET @Script += 'WARNING: Log chain appears broken (gap detected).' + CHAR(10)
+					+  '------------------------------------------------------------------' + CHAR(10);
 	END
 
 	IF @StopAt IS NOT NULL
 	BEGIN
-		SET @msg = REPLACE('STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121), '%', '%%');
-		SET @Script += @msg + CHAR(10)
-		RAISERROR(@msg,0,1) WITH NOWAIT;
+		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
+		SET @Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
 	END
 
 
@@ -518,12 +528,12 @@ SELECT @MoveClauses =
 	-- Add TRY-CATCH statements to the restore statements
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------
-		
+	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
+		'BEGIN TRY' + CHAR(10);
 	
 	-- 3) TRY header + restore commands
-	DECLARE @HeaderBlock NVARCHAR(MAX) = 
+	DECLARE @HeaderBlock NVARCHAR(MAX) =
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
-			'BEGIN TRY' + CHAR(10) +
 			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NOT NULL DROP TABLE #BackupTimes;' + CHAR(10) +
 			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2))' + CHAR(10) +
 			'DECLARE @StepNo INT' + CHAR(10) +
@@ -537,9 +547,10 @@ SELECT @MoveClauses =
 			'DECLARE @Reused_minutes VARCHAR(2)' + CHAR(10) +
 			'DECLARE @Reused_hours VARCHAR(3)' + CHAR(10) +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121)' + CHAR(10) +
-			'RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) 
+			'RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
+			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
-	DECLARE @FooterBlock NVARCHAR(MAX) =
+	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
 		'END TRY' + CHAR(10) +
 		'BEGIN CATCH' + CHAR(10) +
 		'	SET @msg = ERROR_MESSAGE()' + CHAR(10) +
@@ -552,7 +563,7 @@ SELECT @MoveClauses =
 		'IF @StepNo > 1' + CHAR(10) +
 		'		RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
 		'') +
-		'END CATCH' + replicate(CHAR(10),2) +
+		'END CATCH' + CHAR(10) +
 		'SET @Overall_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())%60),2); SET @Overall_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/60),2); SET @Overall_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/3600),2);' + CHAR(10) +
 		'SET @msg=''Restore Summary:''+CHAR(10)+''DB Name: ''+''['+@RestoreDBName+']'''+
 					'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
@@ -560,35 +571,23 @@ SELECT @MoveClauses =
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+ CHAR(10) +
 		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-		'----------------------------------------Restore statements end--------------------------------' + CHAR(10);
+		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
-	-- Giving the script in the STDOUT (PRINT), and also building @Script
+	-- Giving the script in the STDOUT (PRINT)
 	------------------------------------------------------------
-	-- 0) :connect and one empty line
-	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
-	BEGIN
-		SET @Script += CHAR(10) + ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
-	END
-
-
-
 	-- xp_create_subdir section
 	IF @create_datafile_dirs = 1
 		IF @create_directories IS NULL 
 		BEGIN
-			SET @msg = REPLACE('--** Database does not exist on the instance, thus create directories statements were skipped.', '%', '%%');
-			RAISERROR(@msg,0,1) WITH NOWAIT;
-			SET @msg = REPLACE('', '%', '%%');
-			RAISERROR(@msg,0,1) WITH NOWAIT;
+			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.';
+			PRINT '';
 			SET @Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
 		END
 		ELSE 
 		BEGIN
-			SET @msg = REPLACE(@create_directories, '%', '%%');
-			RAISERROR(@msg,0,1) WITH NOWAIT;
-			SET @msg = REPLACE('', '%', '%%');
-			RAISERROR(@msg,0,1) WITH NOWAIT;
+			PRINT @create_directories;
+			PRINT '';  -- one empty line after last xp_create_subdir
 			SET @Script += @create_directories + CHAR(10) + CHAR(10);
 			IF @Execute = 1 EXEC(@create_directories);
 		END
@@ -596,16 +595,11 @@ SELECT @MoveClauses =
 	-- Preparatory script section (printed/plain)
 	IF @Preparatory_Script_Before_Restore IS NOT NULL AND LEN(@Preparatory_Script_Before_Restore) > 0
 	BEGIN
-		SET @msg = REPLACE('', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('------------------------------------Preparatory Script Before Restore-------------------------', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE(@Preparatory_Script_Before_Restore, '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('----------------------------------------------------------------------------------------------', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
+		PRINT '';  -- empty line
+		PRINT '------------------------------------Preparatory Script Before Restore-------------------------';
+		PRINT @Preparatory_Script_Before_Restore;
+		PRINT '----------------------------------------------------------------------------------------------';
+		PRINT '';  -- empty line
 
 		SET @Script += CHAR(10) +
 			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
@@ -613,35 +607,33 @@ SELECT @MoveClauses =
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
 			CHAR(10);
 	END
-	SET @Script += @HeaderBlock;
 
 	-- restore body (plain script) – header now comes from TRY/CATCH, do NOT print the old line
+	-- REMOVE these two lines:
+	-- PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
+	-- SET @Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
+	-- keep only step lines and commands:
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
 	WHILE @i <= @max
 	BEGIN
 		SELECT @Cmd = RestoreCommand FROM #RestoreChain WHERE StepNumber = @i;
-		SET @msg = REPLACE('-- Step ' + CAST(@i AS varchar(10)), '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE(@Cmd, '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
+		PRINT '-- Step ' + CAST(@i AS varchar(10));
+		PRINT @Cmd;
 		SET @Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
 		SET @i += 1;
 	END
-	SET @Script += @FooterBlock + CHAR(10);
+	-- footer also comes from TRY/CATCH now, so DROP the old print:
+	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
+	-- SET @Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
 
 	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
 	BEGIN
-		SET @msg = REPLACE('', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('-----------------------------------Complementary Script After Restore-----------------------', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE(@Complementary_Script_After_Restore, '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('----------------------------------------------------------------------------------------------', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
-		SET @msg = REPLACE('', '%', '%%');
-		RAISERROR(@msg,0,1) WITH NOWAIT;
+		PRINT '';  -- empty line
+		PRINT '-----------------------------------Complementary Script After Restore-----------------------';
+		PRINT @Complementary_Script_After_Restore;
+		PRINT '----------------------------------------------------------------------------------------------';
+		PRINT '';  -- empty line
 
 		SET @Script += CHAR(10) +
 			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
@@ -650,14 +642,167 @@ SELECT @MoveClauses =
 			CHAR(10);
 	END
 
-	SET @msg = REPLACE('--##############################################################--' + REPLICATE(CHAR(10),2), '%', '%%');
-	RAISERROR(@msg,0,1) WITH NOWAIT;
+	PRINT '--##############################################################--' + REPLICATE(CHAR(10),2);
 	SET @Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
+
+	------------------------------------------------------------
+	-- Build @SQLCMD_Script to mirror SELECT dt.Script
+	------------------------------------------------------------
+	-- 0) :connect and one empty line
+	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
+	BEGIN
+		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
+		--SET @SQLCMD_Script += CHAR(10);  -- exactly one empty line
+	END
+
+	-- 1) Preparatory section in SQLCMD script
+	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
+	BEGIN
+		SET @SQLCMD_Script += CHAR(10) +
+			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10);
+
+		DECLARE curBefore CURSOR LOCAL FAST_FORWARD FOR
+			SELECT LineText, ordinal
+			FROM dbo.fn_SplitStringByLine(@Preparatory_Script_Before_Restore)
+			ORDER BY ordinal;
+
+		OPEN curBefore;
+		FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
+			FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
+		END
+		CLOSE curBefore;
+		DEALLOCATE curBefore;
+
+		SET @SQLCMD_Script +=
+			'----------------------------------------------------------------------------------------------' + CHAR(10) +
+			CHAR(10);
+	END
+
+	-- 2) Blank line + xp_create_subdir + blank line
+	SET @SQLCMD_Script += CHAR(10);
+
+	IF @create_directories IS NOT NULL AND @create_directories <> N''
+	BEGIN
+		DECLARE curDirs CURSOR LOCAL FAST_FORWARD FOR
+			SELECT LineText, ordinal
+			FROM dbo.fn_SplitStringByLine(@create_directories)
+			ORDER BY ordinal;
+
+		OPEN curDirs;
+		FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
+			FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
+		END
+		CLOSE curDirs;
+		DEALLOCATE curDirs;
+
+		SET @SQLCMD_Script += CHAR(10);  -- one empty line after last xp_create_subdir
+	END
+
+
+	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
+		SELECT LineText, ordinal
+		FROM dbo.fn_SplitStringByLine(@HeaderBlock)
+		ORDER BY ordinal;
+
+	OPEN curHead;
+	FETCH NEXT FROM curHead INTO @tmpLine, @ord;
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
+		FETCH NEXT FROM curHead INTO @tmpLine, @ord;
+	END
+	CLOSE curHead;
+	DEALLOCATE curHead;
+
+	-- per-step commands
+	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
+	WHILE @Step <= @MaxStep
+	BEGIN
+		SET @SQLCMD_Script += CHAR(9)+'-- Step ' + CAST(@Step AS varchar(10)) + CHAR(10);
+		SET @SQLCMD_Script += CHAR(9)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10);
+
+		DECLARE @RestoreCmd NVARCHAR(MAX);
+		SELECT @RestoreCmd = RestoreCommand
+		FROM #RestoreChain
+		WHERE StepNumber = @Step;
+
+		IF @RestoreCmd IS NOT NULL
+		BEGIN
+			DECLARE curCmd CURSOR LOCAL FAST_FORWARD FOR
+				SELECT LineText, ordinal
+				FROM dbo.fn_SplitStringByLine(@RestoreCmd)
+				ORDER BY ordinal;
+
+			OPEN curCmd;
+			FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
+			WHILE @@FETCH_STATUS = 0
+			BEGIN
+				SET @SQLCMD_Script += CHAR(9) + ISNULL(@tmpLine,'') + CHAR(10);
+				FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
+			END
+			CLOSE curCmd;
+			DEALLOCATE curCmd;
+		END
+
+		SET @Step += 1;
+	END
+
+	-- 4) footer + TRY_CATCH_TAIL (includes END CATCH + restore-footer)
+	DECLARE @FooterBlock NVARCHAR(MAX) = @TRY_CATCH_TAIL;
+
+	DECLARE curFoot CURSOR LOCAL FAST_FORWARD FOR
+		SELECT LineText, ordinal
+		FROM dbo.fn_SplitStringByLine(@FooterBlock)
+		ORDER BY ordinal;
+
+	OPEN curFoot;
+	FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
+	WHILE @@FETCH_STATUS = 0
+	BEGIN
+		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
+		FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
+	END
+	CLOSE curFoot;
+	DEALLOCATE curFoot;
+
+	-- 5) Complementary section in SQLCMD script
+	IF @Complementary_Script_After_Restore IS NOT NULL AND @Complementary_Script_After_Restore <> N''
+	BEGIN
+		SET @SQLCMD_Script += CHAR(10) +
+			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10);
+
+		DECLARE curAfter CURSOR LOCAL FAST_FORWARD FOR
+			SELECT LineText, ordinal
+			FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
+			ORDER BY ordinal;
+
+		OPEN curAfter;
+		FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
+			FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
+		END
+		CLOSE curAfter;
+		DEALLOCATE curAfter;
+
+		SET @SQLCMD_Script +=
+			'----------------------------------------------------------------------------------------------' + CHAR(10) +
+			CHAR(10);
+	END
+
 	-- 6) trailing GO / blanks
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
-		SET @Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
+		SET @SQLCMD_Script += 'GO' + CHAR(10) + CHAR(10) + CHAR(10);
 	END
+
 
 
 	------------------------------------------------------------
@@ -670,72 +815,91 @@ SELECT @MoveClauses =
 	IF @SQLCMD_Connect_Conn_String IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''');
 	END
 	
 	IF @Complementary_Script_After_Restore IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''');
 	END
 	
 	IF @Preparatory_Script_Before_Restore IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''');
 	END
 	
 	IF @new_backups_parent_dir IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''');
 	END
 	
 	IF @RestoreUpTo_TIMESTAMP IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''');
 	END
 	
 	IF @StopAt IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''');
 	END
 	
 	IF @Restore_LogPath IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''');
 	END
 	
 	IF @Restore_DataPath IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''')
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''');
 	END
 	
 	IF @RestoreDBName IS NOT NULL
 	BEGIN
 		SELECT @Script = REPLACE(@Script, '@RestoreDBName', @RestoreDBName)
+			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', @RestoreDBName);
 	END
 	
 	-- @DatabaseName is never NULL, always replace
 	SELECT @Script = REPLACE(@Script, '@DatabaseName', @DatabaseName)
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', @DatabaseName);
 	
 	-- Bit parameters: cast to varchar (always replace, bits cannot be NULL)
 	SELECT @Script = REPLACE(@Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)));
 	
 	SELECT @Script = REPLACE(@Script, '@Execute', CAST(@Execute AS VARCHAR(1)))
+		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Execute', CAST(@Execute AS VARCHAR(1)));
 
 	------------------------------------------------------------
 	-- Expose both aggregated versions
 	------------------------------------------------------------
-	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@Script);
+	--SELECT @Script AS FullScript_Plain;
+	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 
 END
 GO
@@ -749,12 +913,15 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 										 @IncludeLogs = 1,
 										 @IncludeDiffs = 1,
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
-										 @Recovery = 0,
+										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
-										 @new_backups_parent_dir = 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup\',
+										 @new_backups_parent_dir = '',--'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\',
+											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @check_backup_file_existance = 1,
-										 @Preparatory_Script_Before_Restore = '--Sample Prep',
+										 @Preparatory_Script_Before_Restore = '',
 										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
-										 @Verbose = 1,
+										 @Verbose = 0,
 										 @SQLCMD_Connect_Conn_String = ''
+--\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
+
