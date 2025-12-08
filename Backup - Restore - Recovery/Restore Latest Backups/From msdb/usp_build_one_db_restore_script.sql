@@ -29,7 +29,7 @@ RETURN
     ) AS d(XmlData)
     CROSS APPLY d.XmlData.nodes('/r/x') AS T(N)
     -- WHERE LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) <> ''
-	-- keep empties: no WHERE
+	-- keep empties: Keep the "WHERE" clause commented out
 );
 GO
 
@@ -38,12 +38,32 @@ RETURNS NVARCHAR(2000)
 WITH SCHEMABINDING
 AS
 BEGIN
-    RETURN CASE 
-        WHEN @Path LIKE '%\%' OR @Path LIKE '%/%' THEN
-            RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1)
-        ELSE 
-            @Path
-    END;
+    DECLARE @Result NVARCHAR(2000);
+    
+    -- Check if it's a URL (contains ://)
+    IF @Path LIKE '%://%'
+    BEGIN
+        SET @Result = @Path;  -- Return whole URL
+    END
+    -- Windows path (contains backslash, prioritize backslash separator)
+    ELSE IF @Path LIKE '%\%'
+    BEGIN
+        SET @Result = RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1);
+    END
+    -- Linux path (contains forward slash, no backslash)
+    -- Note: escaped backslashes (\\) in Linux paths are rare in SQL Server context,
+    -- but if present they're literal chars, not separators
+    ELSE IF @Path LIKE '%/%'
+    BEGIN
+        SET @Result = RIGHT(@Path, CHARINDEX('/', REVERSE(@Path)) - 1);
+    END
+    -- No separators found (simple filename or empty)
+    ELSE
+    BEGIN
+        SET @Result = @Path;
+    END
+    
+    RETURN @Result;
 END
 GO
 
