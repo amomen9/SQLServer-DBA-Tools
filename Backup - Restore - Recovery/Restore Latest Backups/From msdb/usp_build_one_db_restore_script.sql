@@ -671,6 +671,7 @@ BEGIN
 					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+ CHAR(10) +
+		'SET @msg += CHAR(10) + ''DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB''' + CHAR(10) +
 		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
