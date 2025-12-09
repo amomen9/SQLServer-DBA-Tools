@@ -114,14 +114,16 @@ RETURN
     SELECT 
         fe.full_filesystem_path,
         fe.is_directory,
-        fe.file_or_directory_name
+        fe.file_or_directory_name,
+		0 AS Existence_Check_Failed
     FROM sys.dm_os_enumerate_filesystem(@parent_dir, @base_name) fe
     WHERE @parent_dir <> ''    
     UNION ALL
     SELECT 
-        NULL AS full_filesystem_path,
-        NULL AS is_directory,
-        NULL AS file_or_directory_name
+        NULL	AS full_filesystem_path,
+        NULL	AS is_directory,
+        NULL	AS file_or_directory_name,
+		1		AS Existence_Check_Failed
     WHERE @parent_dir = ''
 );
 GO
@@ -207,7 +209,7 @@ BEGIN
 		full_filesystem_path nvarchar(256),
 		file_or_directory_name nvarchar(256) NOT NULL
 	)
-	IF @new_backups_parent_dir <> ''
+	IF select @new_backups_parent_dir
 		INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
 		SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
 		FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
