@@ -112,19 +112,22 @@ AS
 RETURN
 (
     SELECT 
-        fe.full_filesystem_path,
-        fe.is_directory,
-        fe.file_or_directory_name,
-		0 AS Existence_Check_Failed
-    FROM sys.dm_os_enumerate_filesystem(@parent_dir, @base_name) fe
-    WHERE @parent_dir <> ''    
-    UNION ALL
-    SELECT 
         NULL	AS full_filesystem_path,
         NULL	AS is_directory,
         NULL	AS file_or_directory_name,
-		1		AS Existence_Check_Failed
+		1		AS Existence_Check_Failed,
+		CONVERT(VARCHAR(500),'File/Directory "'+ @base_name + '" is not a valid OS or UNC path.')
+				AS Existence_Check_Status_Desc
     WHERE @parent_dir = ''
+    UNION ALL
+    SELECT 
+        fe.full_filesystem_path,
+        fe.is_directory,
+        fe.file_or_directory_name,
+		0		AS Existence_Check_Failed,
+		NULL	AS Existence_Check_Status_Desc
+    FROM sys.dm_os_enumerate_filesystem(@parent_dir, @base_name) fe
+    WHERE @parent_dir <> ''    
 );
 GO
 
@@ -209,13 +212,32 @@ BEGIN
 		full_filesystem_path nvarchar(256),
 		file_or_directory_name nvarchar(256) NOT NULL
 	)
-	IF select @new_backups_parent_dir
-		INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
-		SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
-		FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
-		WHERE is_directory = 0
-		GROUP BY file_or_directory_name
 
+	IF @new_backups_parent_dir <> ''
+	BEGIN
+		DECLARE @new_backups_parent_dir_status_desc VARCHAR(500)
+		DECLARE @new_backups_parent_dir_status_code TINYINT
+	
+		SELECT 
+			@new_backups_parent_dir_status_desc = Existence_Check_Status_Desc,
+			@new_backups_parent_dir_status_code = Existence_Check_Failed
+		FROM user_dm_os_file_exists(
+					dbo.ufn_PARENT_DIR(@new_backups_parent_dir),
+					dbo.udf_BASE_NAME(@new_backups_parent_dir)
+				)
+
+		IF @new_backups_parent_dir_status_desc IS NULL
+			RAISERROR('Specified @new_backups_parent_dir cannot be found.',16,1)
+		ELSE 
+			IF @new_backups_parent_dir_status_code = 1
+				RAISERROR(@new_backups_parent_dir_status_desc,16,1)
+			ELSE
+				INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
+				SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
+				FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
+				WHERE is_directory = 0
+				GROUP BY file_or_directory_name
+	END
 	ALTER TABLE #Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -994,7 +1016,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
-										 @new_backups_parent_dir = '',--'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\',
+										 @new_backups_parent_dir = 'dsafsedfsedfsd',--'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @check_backup_file_existance = 1,
 										 @Preparatory_Script_Before_Restore = '',
