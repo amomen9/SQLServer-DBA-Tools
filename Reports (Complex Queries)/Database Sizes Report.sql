@@ -8,6 +8,8 @@
 
 
 
+
+
 USE master;
 GO
 
@@ -170,18 +172,18 @@ Combined AS (
         0 AS RowSortFlag,
         create_date,
         DBName,
-        Overall_db_Size_GB,
-        Overall_db_UsedSpace_GB,
-        CONVERT(NVARCHAR(100), CONVERT(DECIMAL(18,2), Data_Size_GB_numeric)) AS Data_Size_GB,
-        Data_UsedSpace_GB,
-        Data_FreeSpace_GB,
-        [Data_UsedSpace%],
+        CONVERT(DECIMAL(10,2),ROUND(Overall_db_Size_GB,2)) Overall_db_Size_GB,
+        CONVERT(DECIMAL(10,2),ROUND(Overall_db_UsedSpace_GB,2)) Overall_db_UsedSpace_GB,
+		CAST(CONVERT(DECIMAL(10,2),ROUND(Data_Size_GB_numeric,2)) AS NVARCHAR(100)) AS Data_Size_GB,
+        CONVERT(DECIMAL(10,2),ROUND(Data_UsedSpace_GB,2)) Data_UsedSpace_GB,
+        CONVERT(DECIMAL(10,2),ROUND(Data_FreeSpace_GB,2)) Data_FreeSpace_GB,
+        CONVERT(DECIMAL(10,2),ROUND([Data_UsedSpace%],2)) [Data_UsedSpace%],
         [Data Spanned over Drives],
-        CONVERT(NVARCHAR(100), CONVERT(DECIMAL(18,2), Log_Size_GB_numeric)) AS Log_Size_GB,
-        Log_UsedSpace_GB,
-        Log_FreeSpace_GB,
+		CAST(CONVERT(DECIMAL(10,2),ROUND(Log_Size_GB_numeric,2)) AS NVARCHAR(100)) AS Log_Size_GB,
+        CONVERT(DECIMAL(10,2),ROUND(Log_UsedSpace_GB,2)) Log_UsedSpace_GB,
+        CONVERT(DECIMAL(10,2),ROUND(Log_FreeSpace_GB,2)) Log_FreeSpace_GB,
         [Log Spanned over Drives],
-        [Log_UsedSpace%],
+        CONVERT(DECIMAL(10,2),ROUND([Log_UsedSpace%],2)) [Log_UsedSpace%],
         log_reuse_wait_desc,
         [database state]
     FROM CoreData
@@ -194,19 +196,17 @@ Combined AS (
         NULL,
         NULL,
         NULL,
-        NULL,
-        CONVERT(NVARCHAR(100),
-            CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), t.TotalDataSizeGB)) + '/' +
-            CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), NULLIF(t.TotalDataDrivesCapGB,0)))
-        ) AS Data_Size_GB,
-        NULL,
+        NULL,        
+		CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), t.TotalDataSizeGB)) + '/' +
+			CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), NULLIF(t.TotalDataDrivesCapGB,0))) +
+			' (Data/Drive_Space)' AS [Data_Size_GB (Data/Drive_Space)],
         NULL,
         NULL,
         NULL,
-        CONVERT(NVARCHAR(100),
-            CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), t.TotalLogSizeGB)) + '/' +
-            CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), NULLIF(t.TotalLogDrivesCapGB,0)))
-        ) AS Log_Size_GB,
+        NULL,
+        CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), t.TotalLogSizeGB)) + '/' +
+            CONVERT(VARCHAR(32), CONVERT(DECIMAL(18,2), NULLIF(t.TotalLogDrivesCapGB,0))) +
+			' (Log/Drive_Space)' AS [Log_Size_GB (Log/Drive_Space)],
         NULL,
         NULL,
         NULL,
@@ -232,7 +232,9 @@ SELECT
     [Log_UsedSpace%],
     log_reuse_wait_desc,
     [database state]
-FROM Combined
-ORDER BY RowSortFlag, Data_FreeSpace_GB DESC;
+FROM Combined c
+ORDER BY c.DBName DESC;
 
 DROP TABLE IF EXISTS #sd;
+
+
