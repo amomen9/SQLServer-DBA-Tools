@@ -162,24 +162,3 @@ GO
 
 
 
-EXEC dbo.usp_build_one_db_restore_script
-    @DatabaseName = 'Archive99',
-    
-    @StopAt                             = NULL,
-    @WithReplace                        = 1,
-    @RestoreDBName                      = '',
-    @create_datafile_dirs               = 1,
-    @Restore_DataPath                   = '',
-    @Restore_LogPath                    = '',
-    @IncludeLogs                        = 1,
-    @IncludeDiffs                       = 1,
-    @Recovery                           = 1,
-    @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
-    @new_backups_parent_dir         	= '', --'\\fdbdrbkpdsk\DBDR\',
-	@check_backup_file_existance        = 0,
-    @Recover_Database_On_Error          = 1,
-    @Preparatory_Script_Before_Restore  = '',
-    @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
-    @Execute                            = 0,
-    @Verbose                            = 0,
-    @SQLCMD_Connect_Conn_String         = '';
