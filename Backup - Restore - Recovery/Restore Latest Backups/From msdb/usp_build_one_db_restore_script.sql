@@ -118,7 +118,7 @@ RETURN
 		1		AS Existence_Check_Failed,
 		CONVERT(VARCHAR(500),'File/Directory "'+ @base_name + '" is not a valid OS or UNC path.')
 				AS Existence_Check_Status_Desc
-    WHERE @parent_dir = ''
+    WHERE @parent_dir = '' OR @base_name = ''
     UNION ALL
     SELECT 
         fe.full_filesystem_path,
@@ -127,7 +127,7 @@ RETURN
 		0		AS Existence_Check_Failed,
 		NULL	AS Existence_Check_Status_Desc
     FROM sys.dm_os_enumerate_filesystem(@parent_dir, @base_name) fe
-    WHERE @parent_dir <> ''    
+    WHERE @parent_dir <> '' AND @base_name <> ''
 );
 GO
 
@@ -222,7 +222,7 @@ BEGIN
 			@new_backups_parent_dir_status_desc = Existence_Check_Status_Desc,
 			@new_backups_parent_dir_status_code = Existence_Check_Failed
 		FROM user_dm_os_file_exists(
-					dbo.ufn_PARENT_DIR(@new_backups_parent_dir),
+					dbo.udf_PARENT_DIR(@new_backups_parent_dir),
 					dbo.udf_BASE_NAME(@new_backups_parent_dir)
 				)
 
@@ -671,7 +671,7 @@ BEGIN
 					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')'+ CHAR(10) +
-		'SET @msg += CHAR(10) + ''DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB''' + CHAR(10) +
+		'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB''' + CHAR(10) +
 		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
