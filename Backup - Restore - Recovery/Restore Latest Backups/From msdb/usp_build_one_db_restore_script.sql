@@ -574,7 +574,7 @@ BEGIN
 				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds)' + CHAR(10) +
 				REPLICATE(CHAR(9),4) + 'SELECT		   ''LOG'', ' + CONVERT(VARCHAR(4),rc.StepNumber) + ', @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 		END +
-		CASE WHEN rc.StepNumber = @LastStep THEN CHAR(10) + N'--------------------------------------------------' + CHAR(10) ELSE N'' END
+		CASE WHEN rc.StepNumber = @LastStep THEN CHAR(10) + N'--------------------------------------------------' ELSE N'' END
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
 
@@ -630,7 +630,7 @@ BEGIN
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------
 	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
-		'BEGIN TRY' + CHAR(10);
+		'BEGIN TRY';
 	
 	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
@@ -1016,7 +1016,7 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
 										 @Recovery = 1,
 										 @Recover_Database_On_Error = 1,
-										 @new_backups_parent_dir = 'dsafsedfsedfsd',--'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\',
+										 @new_backups_parent_dir = '',--'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\',
 											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
 										 @check_backup_file_existance = 1,
 										 @Preparatory_Script_Before_Restore = '',
