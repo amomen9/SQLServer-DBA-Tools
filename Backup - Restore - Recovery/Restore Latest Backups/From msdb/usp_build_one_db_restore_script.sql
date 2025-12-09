@@ -39,28 +39,32 @@ WITH SCHEMABINDING
 AS
 BEGIN
     DECLARE @Result NVARCHAR(2000);
+    DECLARE @CleanPath NVARCHAR(2000);
+    
+    -- Strip trailing backslashes and forward slashes
+    SET @CleanPath = @Path;
+    WHILE RIGHT(@CleanPath, 1) IN ('\', '/')
+        SET @CleanPath = LEFT(@CleanPath, LEN(@CleanPath) - 1);
     
     -- Check if it's a URL (contains ://)
-    IF @Path LIKE '%://%'
+    IF @CleanPath LIKE '%://%'
     BEGIN
-        SET @Result = @Path;  -- Return whole URL
+        SET @Result = @Path;  -- Return original URL
     END
-    -- Windows path (contains backslash, prioritize backslash separator)
-    ELSE IF @Path LIKE '%\%'
+    -- Windows path (contains backslash)
+    ELSE IF @CleanPath LIKE '%\%'
     BEGIN
-        SET @Result = RIGHT(@Path, CHARINDEX('\', REVERSE(@Path)) - 1);
+        SET @Result = RIGHT(@CleanPath, CHARINDEX('\', REVERSE(@CleanPath)) - 1);
     END
-    -- Linux path (contains forward slash, no backslash)
-    -- Note: escaped backslashes (\\) in Linux paths are rare in SQL Server context,
-    -- but if present they're literal chars, not separators
-    ELSE IF @Path LIKE '%/%'
+    -- Linux path (contains forward slash)
+    ELSE IF @CleanPath LIKE '%/%'
     BEGIN
-        SET @Result = RIGHT(@Path, CHARINDEX('/', REVERSE(@Path)) - 1);
+        SET @Result = RIGHT(@CleanPath, CHARINDEX('/', REVERSE(@CleanPath)) - 1);
     END
-    -- No separators found (simple filename or empty)
+    -- No separators found
     ELSE
     BEGIN
-        SET @Result = @Path;
+        SET @Result = @CleanPath;
     END
     
     RETURN @Result;
@@ -73,23 +77,29 @@ WITH SCHEMABINDING
 AS
 BEGIN
     DECLARE @Result NVARCHAR(2000);
+    DECLARE @CleanPath NVARCHAR(2000);
+    
+    -- Strip trailing backslashes and forward slashes
+    SET @CleanPath = @Path;
+    WHILE RIGHT(@CleanPath, 1) IN ('\', '/')
+        SET @CleanPath = LEFT(@CleanPath, LEN(@CleanPath) - 1);
     
     -- Check if it's a URL (contains ://) → return empty string
-    IF @Path LIKE '%://%'
+    IF @CleanPath LIKE '%://%'
     BEGIN
         SET @Result = '';
     END
-    -- Windows path (contains backslash, prioritize backslash separator)
-    ELSE IF @Path LIKE '%\%'
+    -- Windows path (contains backslash)
+    ELSE IF @CleanPath LIKE '%\%'
     BEGIN
-        SET @Result = LEFT(@Path, LEN(@Path) - CHARINDEX('\', REVERSE(@Path)));
+        SET @Result = LEFT(@CleanPath, LEN(@CleanPath) - CHARINDEX('\', REVERSE(@CleanPath)));
     END
-    -- Linux path (contains forward slash, no backslash)
-    ELSE IF @Path LIKE '%/%'
+    -- Linux path (contains forward slash)
+    ELSE IF @CleanPath LIKE '%/%'
     BEGIN
-        SET @Result = LEFT(@Path, LEN(@Path) - CHARINDEX('/', REVERSE(@Path)));
+        SET @Result = LEFT(@CleanPath, LEN(@CleanPath) - CHARINDEX('/', REVERSE(@CleanPath)));
     END
-    -- No separators found (simple filename or empty) → return empty string
+    -- No separators found → return empty string
     ELSE
     BEGIN
         SET @Result = '';
@@ -181,6 +191,7 @@ BEGIN
 	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
+	DECLARE @msg NVARCHAR(4000)
 
 	------------------------------------------------------------
 	-- Parameter validation
@@ -215,29 +226,27 @@ BEGIN
 
 	IF @new_backups_parent_dir <> ''
 	BEGIN
-		DECLARE @new_backups_parent_dir_status_desc VARCHAR(500)
-		DECLARE @new_backups_parent_dir_status_code TINYINT
-	
-		SELECT 
-			@new_backups_parent_dir_status_desc = Existence_Check_Status_Desc,
-			@new_backups_parent_dir_status_code = Existence_Check_Failed
-		FROM user_dm_os_file_exists(
-					dbo.udf_PARENT_DIR(@new_backups_parent_dir),
-					dbo.udf_BASE_NAME(@new_backups_parent_dir)
-				)
+		DECLARE @new_backups_parent_dir_status TINYINT = (SELECT file_exists+file_is_a_directory FROM sys.dm_os_file_exists(@new_backups_parent_dir))
 
-		IF @new_backups_parent_dir_status_desc IS NULL
-			RAISERROR('Specified @new_backups_parent_dir cannot be found.',16,1)
-		ELSE 
-			IF @new_backups_parent_dir_status_code = 1
-				RAISERROR(@new_backups_parent_dir_status_desc,16,1)
-			ELSE
+		IF dbo.udf_PARENT_DIR(@new_backups_parent_dir) = '' OR dbo.udf_BASE_NAME(@new_backups_parent_dir) = ''
+		BEGIN
+			SET @msg = 'File/Directory "' + @new_backups_parent_dir + '" is not a valid OS or UNC path.'
+			RAISERROR(@msg,16,1)
+		END
+		ELSE
+			IF @new_backups_parent_dir_status IS NULL
+			BEGIN
+				SET @msg = 'Specified @new_backups_parent_dir='''+@new_backups_parent_dir+''' cannot be found or the Database Engine does not have necessary permissions.'
+				RAISERROR(@msg,16,1)
+			END
+			ELSE 			
 				INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
-				SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
-				FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
-				WHERE is_directory = 0
-				GROUP BY file_or_directory_name
+					SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
+					FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
+					WHERE is_directory = 0
+					GROUP BY file_or_directory_name
 	END
+
 	ALTER TABLE #Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
@@ -1027,3 +1036,6 @@ EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysnam
 --\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
 GO
 
+--SELECT dbo.udf_BASE_NAME('\\fdbdrbkpdsk\DBDR\'),dbo.udf_PARENT_DIR('\\fdbdrbkpdsk\DBDR\')
+
+--SELECT * FROM dbo.user_dm_os_file_exists('N\\fdbdrbkpdsk',N'DBDR')
