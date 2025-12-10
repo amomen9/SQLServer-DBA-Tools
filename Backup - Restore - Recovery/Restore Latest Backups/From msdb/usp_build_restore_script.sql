@@ -42,6 +42,15 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @StartUTC datetime2(3) = SYSDATETIME();
+    DECLARE @Iteration_Count INT = 0
+    DECLARE @Count INT = 0
+    DECLARE @Drop_BIT BIT = 0
+    SELECT @Iteration_Count = COUNT(*)
+    FROM sys.databases
+    WHERE database_id > 4                       -- exclude system DBs
+        AND state = 0                             -- ONLINE
+        AND source_database_id IS NULL            -- not a snapshot
+        AND name NOT LIKE 'ReportServerTempDB'    -- (optional filters)
 
     IF OBJECT_ID('tempdb..#Results') IS NOT NULL DROP TABLE #Results;
     CREATE TABLE #Results
@@ -71,26 +80,10 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         DECLARE @ExecStart datetime2(3) = SYSDATETIME();
+
+        IF @Iteration_Count <= (SELECT COUNT(*) FROM #Results) + 1
+            SET @Drop_BIT = 1
         BEGIN TRY
-PRINT CONVERT(NVARCHAR(4000),@DatabaseName) + ' '
-PRINT CONVERT(NVARCHAR(4000),@RestoreDBName) + ' '
-PRINT CONVERT(NVARCHAR(4000),@create_datafile_dirs) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Restore_DataPath) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Restore_LogPath) + ' '
-PRINT CONVERT(NVARCHAR(4000),@StopAt) + ' '
-PRINT CONVERT(NVARCHAR(4000),@WithReplace) + ' '
-PRINT CONVERT(NVARCHAR(4000),@IncludeLogs) + ' '
-PRINT CONVERT(NVARCHAR(4000),@IncludeDiffs) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Recovery) + ' '
-PRINT CONVERT(NVARCHAR(4000),@RestoreUpTo_TIMESTAMP) + ' '
-PRINT CONVERT(NVARCHAR(4000),@new_backups_parent_dir) + ' '
-PRINT CONVERT(NVARCHAR(4000),@check_backup_file_existance) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Recover_Database_On_Error) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Preparatory_Script_Before_Restore) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Complementary_Script_After_Restore) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Execute) + ' '
-PRINT CONVERT(NVARCHAR(4000),@Verbose) + ' '
-PRINT CONVERT(NVARCHAR(4000),@SQLCMD_Connect_Conn_String) + ' '            
             EXEC dbo.usp_build_one_db_restore_script
                     @DatabaseName                       = @DatabaseName,
                     @RestoreDBName                      = @RestoreDBName,
@@ -110,7 +103,9 @@ PRINT CONVERT(NVARCHAR(4000),@SQLCMD_Connect_Conn_String) + ' '
                     @Complementary_Script_After_Restore = @Complementary_Script_After_Restore,
                     @Execute                            = @Execute,
                     @Verbose                            = @Verbose,
-                    @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String
+                    @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String,
+                    @Drop_Disk_Table                    = @Drop_BIT
+
 
             INSERT INTO #Results(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
             VALUES (@DatabaseName, 'SUCCESS', NULL, @ExecStart, SYSDATETIME());
@@ -149,7 +144,7 @@ EXEC dbo.usp_build_restore_script
     @IncludeDiffs                       = 1,
     @Recovery                           = 1,
     @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
-    @new_backups_parent_dir         	= '', --'\\fdbdrbkpdsk\DBDR\',
+    @new_backups_parent_dir         	= 'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\Backup Mirror', --'\\fdbdrbkpdsk\DBDR\',
 	@check_backup_file_existance        = 0,
     @Recover_Database_On_Error          = 1,
     @Preparatory_Script_Before_Restore  = '',
