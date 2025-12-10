@@ -219,11 +219,14 @@ BEGIN
 	-- Get backup dump file list (The path different than the server's backup destination, if specified)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..##usp_build_one_db_restore_script$Backup_Files') IS NULL
+	BEGIN
 		CREATE TABLE ##usp_build_one_db_restore_script$Backup_Files 
 		(
 			full_filesystem_path NVARCHAR(256),
 			file_or_directory_name NVARCHAR(256) NOT NULL
 		);
+		ALTER TABLE ##usp_build_one_db_restore_script$Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
+	END
 	IF OBJECT_ID('tempdb..##Backup_Path_List') IS NULL
 		CREATE TABLE ##Backup_Path_List 
 		(
@@ -253,11 +256,11 @@ BEGIN
 					FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
 					WHERE is_directory = 0
 					GROUP BY file_or_directory_name
+
 		INSERT ##Backup_Path_List
 			SELECT @DatabaseName, @new_backups_parent_dir
 	END
-
-	ALTER TABLE ##usp_build_one_db_restore_script$Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
+	
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
 	------------------------------------------------------------
