@@ -295,7 +295,7 @@ BEGIN
 		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
 		'
 		GROUP BY b.backup_set_id, b.database_name, b.backup_start_date, b.backup_finish_date,
-					b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn, b.physical_device_name
+					b.first_lsn, b.last_lsn, b.checkpoint_lsn, b.database_backup_lsn
 		ORDER BY b.backup_finish_date DESC;
 	'
 	INSERT INTO #Full ([backup_set_id], [database_name], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [checkpoint_lsn], [database_backup_lsn], [Devices])
@@ -366,7 +366,7 @@ BEGIN
 		-- dm_os_file_exists does not work for the line above, thus dm_os_enumerate_filesystem is used instead.
 		'
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-				 b.first_lsn, b.last_lsn, b.differential_base_lsn, b.physical_device_name
+				 b.first_lsn, b.last_lsn, b.differential_base_lsn
 		ORDER BY b.backup_finish_date DESC;
 	'
 	INSERT INTO #Diff ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [differential_base_lsn], [Devices])
@@ -416,7 +416,7 @@ BEGIN
 			  AND b.backup_start_date < COALESCE('+ISNULL(''''+CONVERT(VARCHAR(100),@RestoreUpTo_TIMESTAMP,121)+'''','NULL')+', b.backup_start_date)
 		) b
 		GROUP BY b.backup_set_id, b.backup_start_date, b.backup_finish_date,
-				 b.first_lsn, b.last_lsn, b.database_backup_lsn, b.physical_device_name
+				 b.first_lsn, b.last_lsn, b.database_backup_lsn
 		ORDER BY b.first_lsn;
 	'
 	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
