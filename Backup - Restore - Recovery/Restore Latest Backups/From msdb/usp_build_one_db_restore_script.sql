@@ -162,7 +162,8 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@Complementary_Script_After_Restore	NVARCHAR(MAX) = NULL,
 		@Execute							BIT	= 0,
 		@Verbose							BIT = 1,
-		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL
+		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL,
+		@Drop_Disk_Table					BIT = 0
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -215,15 +216,22 @@ BEGIN
 	SET @Script += '----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10);
 
 	------------------------------------------------------------
-	-- Get backup dump file list
+	-- Get backup dump file list (The path different than the server's backup destination, if specified)
 	------------------------------------------------------------
-	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Backup_Files;
-	CREATE TABLE #Backup_Files 
-	(
-		full_filesystem_path nvarchar(256),
-		file_or_directory_name nvarchar(256) NOT NULL
-	)
+	IF OBJECT_ID('tempdb..##usp_build_one_db_restore_script$Backup_Files') IS NULL
+		CREATE TABLE ##usp_build_one_db_restore_script$Backup_Files 
+		(
+			full_filesystem_path NVARCHAR(256),
+			file_or_directory_name NVARCHAR(256) NOT NULL
+		);
+	IF OBJECT_ID('tempdb..##Backup_Path_List') IS NULL
+		CREATE TABLE ##Backup_Path_List 
+		(
+			Database_Name sysname,
+			Backup_Path NVARCHAR(256)
+		);
 
+	
 	IF @new_backups_parent_dir <> ''
 	BEGIN
 		DECLARE @new_backups_parent_dir_status TINYINT = (SELECT file_exists+file_is_a_directory FROM sys.dm_os_file_exists(@new_backups_parent_dir))
@@ -239,20 +247,22 @@ BEGIN
 				SET @msg = 'Specified @new_backups_parent_dir='''+@new_backups_parent_dir+''' cannot be found or the Database Engine does not have necessary permissions.'
 				RAISERROR(@msg,16,1)
 			END
-			ELSE 			
-				INSERT INTO #Backup_Files (full_filesystem_path, file_or_directory_name)
+			ELSE IF NOT EXISTS (SELECT * FROM ##Backup_Path_List WHERE @new_backups_parent_dir LIKE Backup_Path+'%')			
+				INSERT INTO ##usp_build_one_db_restore_script$Backup_Files (full_filesystem_path, file_or_directory_name)
 					SELECT MIN(full_filesystem_path) full_filesystem_path, file_or_directory_name 
 					FROM dbo.user_dm_os_file_exists(@new_backups_parent_dir,'*') 
 					WHERE is_directory = 0
 					GROUP BY file_or_directory_name
+		INSERT ##Backup_Path_List
+			SELECT @DatabaseName, @new_backups_parent_dir
 	END
 
-	ALTER TABLE #Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
+	ALTER TABLE ##usp_build_one_db_restore_script$Backup_Files ADD CONSTRAINT PK_Temp_Backup_Files PRIMARY KEY(file_or_directory_name);
 	------------------------------------------------------------
 	-- FULL backup (latest non copy_only)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Full;
-	CREATE TABLE #Full ( [backup_set_id] int, [database_name] nvarchar(128), [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [checkpoint_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
+		CREATE TABLE #Full ( [backup_set_id] int, [database_name] nvarchar(128), [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [checkpoint_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
 	SET @SQL =
 	'
 		SELECT TOP (1)
@@ -282,7 +292,7 @@ BEGIN
 				, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir		
 			FROM msdb.dbo.backupset b
 			JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-			'+IIF(@new_backups_parent_dir='','','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+			'+IIF(@new_backups_parent_dir='','','JOIN ##usp_build_one_db_restore_script$Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
 			'
 			WHERE b.database_name = '''+@DatabaseName+'''
 			  AND b.[type] = ''D''
@@ -351,7 +361,7 @@ BEGIN
 			FROM msdb.dbo.backupset b
 			JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
 			CROSS JOIN #Full f
-			'+IIF(@new_backups_parent_dir='','','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+			'+IIF(@new_backups_parent_dir='','','JOIN ##usp_build_one_db_restore_script$Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
 			'
 			WHERE b.database_name = '''+@DatabaseName+'''
 			  AND b.[type] = ''I''
@@ -405,7 +415,7 @@ BEGIN
 				, dbo.udf_PARENT_DIR(mf.physical_device_name) parent_dir		
 			FROM msdb.dbo.backupset b
 			JOIN msdb.dbo.backupmediafamily mf ON b.media_set_id = mf.media_set_id
-			'+IIF(@new_backups_parent_dir='','','JOIN #Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
+			'+IIF(@new_backups_parent_dir='','','JOIN ##usp_build_one_db_restore_script$Backup_Files bf ON dbo.udf_BASE_NAME(mf.physical_device_name) = bf.file_or_directory_name')+
 			'
 			WHERE b.database_name = '''+@DatabaseName+'''
 			  AND b.[type] = ''L''
@@ -422,6 +432,12 @@ BEGIN
 	INSERT INTO #Logs ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [database_backup_lsn], [Devices])
 	EXEC(@SQL)
 
+	--------------- Drop the table ##usp_build_one_db_restore_script$Backup_Files if necessary ---------------
+	IF @Drop_Disk_Table = 1
+	BEGIN
+		DROP TABLE ##usp_build_one_db_restore_script$Backup_Files
+		DROP TABLE ##Backup_Path_List
+	END
 	------------------------------------------------------------
 	-- Validate log chain (basic gaps)
 	------------------------------------------------------------
