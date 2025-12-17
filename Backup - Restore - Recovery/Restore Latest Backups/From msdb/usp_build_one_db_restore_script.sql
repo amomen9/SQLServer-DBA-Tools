@@ -153,6 +153,7 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@IncludeLogs						BIT	= 1,
 		@IncludeDiffs						BIT = 1,
 		@Recovery							BIT = 0,
+		@STATS								VARCHAR(3) = '25',
 		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,
 		@new_backups_parent_dir			NVARCHAR(4000) = NULL,
 		@check_backup_file_existance		BIT = 0,				-- Check if the backup file exists on disk at @new_backups_parent_dir or
@@ -206,6 +207,7 @@ BEGIN
 	IF ISNULL(@RestoreDBName,'') = '' SET @RestoreDBName = @DatabaseName
 	SET @check_backup_file_existance = ISNULL(@check_backup_file_existance,0)
 	SET @new_backups_parent_dir = ISNULL(@new_backups_parent_dir, '')
+	IF @STATS = '' SET @STATS = NULL
 
 	------------------------------------------------------------
 	-- Header
@@ -558,7 +560,7 @@ BEGIN
 		CASE rc.BackupType
 			WHEN 'FULL' THEN
 				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' + @MoveClauses + CHAR(10) +
-				N'STATS = 5' + @ReplaceClause + 
+				ISNULL(N'STATS = '+@STATS,'') + @ReplaceClause + 
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
@@ -572,7 +574,7 @@ BEGIN
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
 					ELSE N''
 				 END) + CHAR(10) +
-				N'STATS = 5' +
+				ISNULL(N'STATS = '+@STATS,'') +
 				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
@@ -586,7 +588,7 @@ BEGIN
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
 					ELSE N''
 				 END) + CHAR(10) +
-				N'STATS = 5' +
+				ISNULL(N'STATS = '+@STATS,'') +
 				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
 				--- Calculating overall logs restore duration:
 				'--- Calculating restore duration:' + CHAR(10) +
