@@ -155,7 +155,7 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@Recovery							BIT = 0,
 		@STATS								VARCHAR(3) = '25',
 		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,
-		@new_backups_parent_dir			NVARCHAR(4000) = NULL,
+		@new_backups_parent_dir				NVARCHAR(4000) = NULL,
 		@check_backup_file_existance		BIT = 0,				-- Check if the backup file exists on disk at @new_backups_parent_dir or
 																	-- the original file backup path if @new_backups_parent_dir is empty or null
 		@Recover_Database_On_Error			BIT = 0,
@@ -164,7 +164,9 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@Execute							BIT	= 0,
 		@Verbose							BIT = 1,
 		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL,
-		@Drop_Disk_Table					BIT = 0
+		@Last_Parent_Procedure_Iteration	BIT = 0,
+		@First_Parent_Procedure_Iteration	BIT = 0,
+		@Procedure_Called_by_Parent			BIT = 0
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -448,7 +450,7 @@ BEGIN
 	EXEC(@SQL)
 
 	--------------- Drop the table ##usp_build_one_db_restore_script$Backup_Files if necessary ---------------
-	IF @Drop_Disk_Table = 1
+	IF @Last_Parent_Procedure_Iteration = 1
 	BEGIN
 		DROP TABLE ##usp_build_one_db_restore_script$Backup_Files
 		DROP TABLE ##Backup_Path_List
@@ -666,9 +668,9 @@ BEGIN
 	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
-			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NULL ' +
-			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + 
-			'ELSE TRUNCATE TABLE BackupTimes;' + CHAR(10) +
+			IIF(@First_Parent_Procedure_Iteration = 1,'DROP TABLE IF EXISTS #BackupTimes; ' +
+			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10),
+			'') +
 			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10) +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
 			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
@@ -691,8 +693,8 @@ BEGIN
 					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')' + 
-		'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB''' + 
-		'RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
+		'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB'' ' + 
+		'RAISERROR(@msg,0,1) WITH NOWAIT;'+IIF(@Last_Parent_Procedure_Iteration = 1,' DROP TABLE #BackupTimes','') + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
@@ -1023,6 +1025,8 @@ BEGIN
 	--SELECT @Script AS FullScript_Plain;
 	INSERT ##Total_Output (Output)
 	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+	IF @Procedure_Called_by_Parent = 0
+		SELECT * FROM ##Total_Output
 
 END
 GO
