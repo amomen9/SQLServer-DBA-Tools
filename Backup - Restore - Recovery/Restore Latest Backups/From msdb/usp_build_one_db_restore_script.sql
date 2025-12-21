@@ -666,8 +666,9 @@ BEGIN
 	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
-			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NOT NULL DROP TABLE #BackupTimes; ' +
-			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10) +
+			'IF OBJECT_ID(''tempdb..#BackupTimes'') IS NULL ' +
+			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + 
+			'ELSE TRUNCATE TABLE BackupTimes;' + CHAR(10) +
 			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10) +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
 			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
