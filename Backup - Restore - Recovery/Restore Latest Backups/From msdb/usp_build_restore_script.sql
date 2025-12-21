@@ -252,7 +252,7 @@ BEGIN
     END
 
     -- Display results summary
-    SELECT * FROM #Total_Execution_Report_per_DB ORDER BY ErrorMessage;
+    SELECT * FROM #Total_Execution_Report_per_DB ORDER BY RowId;
 
 END;
 GO
