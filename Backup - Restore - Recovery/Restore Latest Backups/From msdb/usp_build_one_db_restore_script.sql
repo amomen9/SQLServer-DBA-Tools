@@ -210,6 +210,17 @@ BEGIN
 	IF @STATS = '' SET @STATS = NULL
 
 	------------------------------------------------------------
+	-- Create Global Output Results Table
+	------------------------------------------------------------
+
+	IF OBJECT_ID('tempdb..##Total_Output') IS NULL
+    CREATE TABLE ##Total_Output
+    (
+        Output_Id INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
+        Output NVARCHAR(MAX)
+    );
+
+	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
 	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
@@ -338,7 +349,6 @@ BEGIN
 	-- DIFF (latest tied to that FULL)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Diff') IS NOT NULL DROP TABLE #Diff;
-
 	CREATE TABLE #Diff ( [backup_set_id] int, [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [differential_base_lsn] decimal(25,0), [Devices] nvarchar(4000) )
 	SET @SQL =
 	'
@@ -1010,6 +1020,7 @@ BEGIN
 	-- Expose both aggregated versions
 	------------------------------------------------------------
 	--SELECT @Script AS FullScript_Plain;
+	INSERT ##Total_Output (Output)
 	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 
 END
