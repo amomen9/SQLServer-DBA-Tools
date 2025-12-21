@@ -196,6 +196,7 @@ BEGIN
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
 	DECLARE @msg NVARCHAR(4000)
+	DECLARE @Failure_Mark BIT = 0
 
 	------------------------------------------------------------
 	-- Parameter validation
@@ -330,9 +331,12 @@ BEGIN
 	EXEC(@SQL)
 
 	IF NOT EXISTS (SELECT 1 FROM #Full)
+		SET @Failure_Mark = 1
+	
+	IF @Failure_Mark = 1
 	BEGIN
 		RAISERROR('No FULL backup found for %s.',16,1,@DatabaseName);
-		RETURN;
+		RETURN 1;
 	END
 
 	------------------------------------------------------------
@@ -668,10 +672,9 @@ BEGIN
 	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
-			IIF(@First_Parent_Procedure_Iteration = 1,'DROP TABLE IF EXISTS #BackupTimes; ' +
-			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10),
-			'') +
-			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10) +
+			IIF(@First_Parent_Procedure_Iteration = 1 OR @Procedure_Called_by_Parent = 0,'DROP TABLE IF EXISTS #BackupTimes; ' +
+			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10) +
+			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10),'') +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
 			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
@@ -694,7 +697,7 @@ BEGIN
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')' + 
 		'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB'' ' + 
-		'RAISERROR(@msg,0,1) WITH NOWAIT;'+IIF(@Last_Parent_Procedure_Iteration = 1,' DROP TABLE #BackupTimes','') + CHAR(10) +
+		'RAISERROR(@msg,0,1) WITH NOWAIT;' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
@@ -1023,8 +1026,10 @@ BEGIN
 	-- Expose both aggregated versions
 	------------------------------------------------------------
 	--SELECT @Script AS FullScript_Plain;
-	INSERT ##Total_Output (Output)
-	SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+	IF @Failure_Mark = 0
+		INSERT ##Total_Output (Output)
+		SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+	
 	IF @Procedure_Called_by_Parent = 0
 		SELECT * FROM ##Total_Output
 
