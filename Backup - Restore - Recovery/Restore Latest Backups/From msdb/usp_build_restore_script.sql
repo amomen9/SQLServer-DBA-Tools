@@ -47,7 +47,8 @@ BEGIN
     DECLARE @StartUTC datetime2(3) = SYSDATETIME();
     DECLARE @Iteration_Count INT = 0
     DECLARE @Count INT = 0
-    DECLARE @Drop_BIT BIT = 0
+    DECLARE @Last_Procedure_Iteration BIT = 0
+    DECLARE @First_Procedure_Iteration BIT = 1
 
     IF @DB_Name_Pattern IS NULL SET @DB_Name_Pattern = '';
 
@@ -191,9 +192,10 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         DECLARE @ExecStart datetime2(3) = SYSDATETIME();
-
-        IF @Iteration_Count <= (SELECT COUNT(*) FROM #Total_Execution_Report_per_DB) + 1
-            SET @Drop_BIT = 1
+        IF @Count <> 0 SET @First_Procedure_Iteration = 0
+        SET @Count+=0
+        IF @Iteration_Count <= @Count
+            SET @Last_Procedure_Iteration = 1
         BEGIN TRY
 
             EXEC dbo.usp_build_one_db_restore_script
@@ -216,7 +218,9 @@ BEGIN
                     @Execute                            = @Execute,
                     @Verbose                            = @Verbose,
                     @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String,
-                    @Drop_Disk_Table                    = @Drop_BIT
+                    @Last_Parent_Procedure_Iteration    = @Last_Procedure_Iteration,
+                    @First_Parent_Procedure_Iteration   = @First_Procedure_Iteration,
+                    @Procedure_Called_by_Parent         = 1
 
 
             INSERT INTO #Total_Execution_Report_per_DB(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
