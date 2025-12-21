@@ -192,8 +192,10 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         DECLARE @ExecStart datetime2(3) = SYSDATETIME();
+
         IF @Count <> 0 SET @First_Procedure_Iteration = 0
-        SET @Count+=0
+        SET @Count+=1
+        --SELECT @Iteration_Count, @Count
         IF @Iteration_Count <= @Count
             SET @Last_Procedure_Iteration = 1
         BEGIN TRY
@@ -250,14 +252,14 @@ BEGIN
     END
 
     -- Display results summary
-    SELECT * FROM #Total_Execution_Report_per_DB ORDER BY RowId;
+    SELECT * FROM #Total_Execution_Report_per_DB ORDER BY ErrorMessage;
 
 END;
 GO
 
 -- Sample execution (values from usp_build_one_db_restore_script sample)
 EXEC dbo.usp_build_restore_script
-    @DB_Name_Pattern                    = '',
+    @DB_Name_Pattern                    = '',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
     @StopAt                             = NULL,
     @WithReplace                        = 1,
     @RestoreDBName                      = '',
