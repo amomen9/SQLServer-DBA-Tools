@@ -166,7 +166,7 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL,
 		@Last_Parent_Procedure_Iteration	BIT = 0,
 		@First_Parent_Procedure_Iteration	BIT = 0,
-		@Procedure_Called_by_Parent			BIT = 0
+		@ResultSet_is_for_single_Database	BIT = 1
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -672,7 +672,7 @@ BEGIN
 	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
-			IIF(@First_Parent_Procedure_Iteration = 1 OR @Procedure_Called_by_Parent = 0,'DROP TABLE IF EXISTS #BackupTimes; ' +
+			IIF(@First_Parent_Procedure_Iteration = 1 OR @ResultSet_is_for_single_Database = 1,'DROP TABLE IF EXISTS #BackupTimes; ' +
 			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10) +
 			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10),'') +
 			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
@@ -697,7 +697,7 @@ BEGIN
 					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
 					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')' + 
 		'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB'' ' + 
-		'RAISERROR(@msg,0,1) WITH NOWAIT;' + CHAR(10) +
+		'RAISERROR(@msg,0,1) WITH NOWAIT; TRUNCATE TABLE #BackupTimes;' + CHAR(10) +
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
@@ -1030,8 +1030,11 @@ BEGIN
 		INSERT ##Total_Output (Output)
 		SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 	
-	IF @Procedure_Called_by_Parent = 0
+	IF @ResultSet_is_for_single_Database = 1
+	BEGIN
 		SELECT * FROM ##Total_Output
+		DROP TABLE ##Total_Output
+	END
 
 END
 GO
