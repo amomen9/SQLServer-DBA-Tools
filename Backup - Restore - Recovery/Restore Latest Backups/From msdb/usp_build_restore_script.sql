@@ -38,7 +38,8 @@ CREATE OR ALTER PROC dbo.usp_build_restore_script
         @Complementary_Script_After_Restore NVARCHAR(MAX)   = NULL,    -- Script to execute after restore script
         @Execute                            BIT             = 0,       -- 1 = execute the produced script
         @Verbose                            BIT             = 1,       -- If executing and @Verbose = 1 the produced script will also be printed
-        @SQLCMD_Connect_Conn_String         NVARCHAR(MAX)   = NULL
+        @SQLCMD_Connect_Conn_String         NVARCHAR(MAX)   = NULL,
+        @Separate_Results_Per_Database      BIT             = 0
 )  -- <-- required (fixes "Incorrect syntax near the keyword 'AS'")
 AS
 BEGIN
@@ -195,9 +196,9 @@ BEGIN
 
         IF @Count <> 0 SET @First_Procedure_Iteration = 0
         SET @Count+=1
-        --SELECT @Iteration_Count, @Count
         IF @Iteration_Count <= @Count
             SET @Last_Procedure_Iteration = 1
+        --SELECT @Iteration_Count, @Count, @Last_Procedure_Iteration
         BEGIN TRY
 
             EXEC dbo.usp_build_one_db_restore_script
@@ -220,9 +221,9 @@ BEGIN
                     @Execute                            = @Execute,
                     @Verbose                            = @Verbose,
                     @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String,
-                    @Last_Parent_Procedure_Iteration    = @Last_Procedure_Iteration,
                     @First_Parent_Procedure_Iteration   = @First_Procedure_Iteration,
-                    @Procedure_Called_by_Parent         = 1
+                    @Last_Parent_Procedure_Iteration    = @Last_Procedure_Iteration,
+                    @ResultSet_is_for_single_Database   = @Separate_Results_Per_Database
 
 
             INSERT INTO #Total_Execution_Report_per_DB(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
@@ -247,7 +248,8 @@ BEGIN
     -- Display Output (guarded)
     IF OBJECT_ID('tempdb..##Total_Output') IS NOT NULL
     BEGIN
-        SELECT * FROM ##Total_Output;
+        IF @Separate_Results_Per_Database = 0
+            SELECT * FROM ##Total_Output;
         DROP TABLE ##Total_Output;
     END
 
@@ -277,7 +279,8 @@ EXEC dbo.usp_build_restore_script
     @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
     @Execute                            = 0,
     @Verbose                            = 0,
-    @SQLCMD_Connect_Conn_String         = '';
+    @SQLCMD_Connect_Conn_String         = '',
+    @Separate_Results_Per_Database      = 1;
 GO
 
 
