@@ -229,10 +229,10 @@ BEGIN
 	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 
 	-- Also start header in @Script
-	SET @Script += '----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10);
-
+	SET @SQLCMD_Script += '--- Script creation time: ['+CONVERT(NVARCHAR(30),CONVERT(DATETIME2(0),GETDATE()),121)+'] ---' + REPLICATE(CHAR(10),2) +
+		'----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 	------------------------------------------------------------
-	-- Get backup dump file list (The path different than the server's backup destination, if specified)
+	-- Get backup dump file list, if @new_backups_parent_dir is specified (The path different than the original server's backup destination, if specified)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..##usp_build_one_db_restore_script$Backup_Files') IS NULL
 	BEGIN
@@ -335,6 +335,11 @@ BEGIN
 	
 	IF @Failure_Mark = 1
 	BEGIN
+		IF @Last_Parent_Procedure_Iteration = 1 AND @ResultSet_is_for_single_Database = 0
+		BEGIN
+			SELECT * FROM ##Total_Output ORDER BY Output_Id
+			DROP TABLE ##Total_Output
+		END
 		RAISERROR('No FULL backup found for %s.',16,1,@DatabaseName);
 		RETURN 1;
 	END
@@ -1027,13 +1032,15 @@ BEGIN
 	------------------------------------------------------------
 	--SELECT @Script AS FullScript_Plain;
 	IF @Failure_Mark = 0
-		INSERT ##Total_Output (Output)
-		SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
-	
-	IF @ResultSet_is_for_single_Database = 1
 	BEGIN
-		SELECT * FROM ##Total_Output
-		DROP TABLE ##Total_Output
+		IF @ResultSet_is_for_single_Database = 1
+		BEGIN
+			SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+			DROP TABLE ##Total_Output
+		END
+		ELSE
+			INSERT ##Total_Output (Output)
+			SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);	
 	END
 
 END
