@@ -12,7 +12,11 @@ SET NOCOUNT ON;
 USE msdb;
 GO
 
-
+/* ====================================================================================
+   Helper: Split a multi-line NVARCHAR(MAX) into ordered rows (keeps empty lines).
+   - Used to build SQLCMD-friendly output with proper line breaks and indentation.
+   - Empty lines are preserved intentionally (do not add WHERE filter).
+==================================================================================== */
 CREATE OR ALTER FUNCTION dbo.fn_SplitStringByLine
 (
     @Query nvarchar(max)
@@ -33,6 +37,13 @@ RETURN
 );
 GO
 
+/* ====================================================================================
+   Helpers: Basic path parsing for Windows/UNC/Linux-like strings.
+   - udf_BASE_NAME: returns last segment (file/dir name).
+   - udf_PARENT_DIR: returns parent directory (or empty string if not applicable / URL).
+   Notes:
+   - For URLs (contains ://), udf_PARENT_DIR returns '' to force "invalid path" handling.
+==================================================================================== */
 CREATE OR ALTER FUNCTION dbo.udf_BASE_NAME(@Path NVARCHAR(2000))
 RETURNS NVARCHAR(2000)
 WITH SCHEMABINDING
@@ -148,28 +159,36 @@ CREATE OR ALTER PROC usp_build_one_db_restore_script
 		@create_datafile_dirs				BIT = 1,
 		@Restore_DataPath					NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
 		@Restore_LogPath					NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
-		@StopAt								DATETIME = NULL,
+		@StopAt								DATETIME = NULL,          -- Point-in-time (applied only to final DIFF/LOG step as appropriate).
 		@WithReplace						BIT	= 0,
 		@IncludeLogs						BIT	= 1,
 		@IncludeDiffs						BIT = 1,
-		@Recovery							BIT = 0,
-		@STATS								VARCHAR(3) = '25',
-		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,
-		@new_backups_parent_dir				NVARCHAR(4000) = NULL,
-		@check_backup_file_existance		BIT = 0,				-- Check if the backup file exists on disk at @new_backups_parent_dir or
-																	-- the original file backup path if @new_backups_parent_dir is empty or null
-		@Recover_Database_On_Error			BIT = 0,
+		@Recovery							BIT = 0,                  -- If 1: final restore step uses RECOVERY; else NORECOVERY.
+		@STATS								VARCHAR(3) = '25',         -- RESTORE ... WITH STATS = n (NULL/empty disables).
+		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,        -- Exclude backups with backup_start_date >= this upper bound.
+		@new_backups_parent_dir				NVARCHAR(4000) = NULL,      -- If set: remap by base file name under this folder.
+		@check_backup_file_existance		BIT = 0,                   -- If 1: validate candidate backup files exist (see backup query logic).
+		@Recover_Database_On_Error			BIT = 0,                   -- Generated script TRY/CATCH may attempt RECOVERY on failure.
 		@Preparatory_Script_Before_Restore	NVARCHAR(MAX) = NULL,
 		@Complementary_Script_After_Restore	NVARCHAR(MAX) = NULL,
-		@Execute							BIT	= 0,
-		@Verbose							BIT = 1,
+		@Execute							BIT	= 0,                   -- If 1: execute directory creation + emitted restore chain.
+		@Verbose							BIT = 1,                   -- If 1: prints informational output during script generation.
 		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL,
 		@Last_Parent_Procedure_Iteration	BIT = 0,
 		@First_Parent_Procedure_Iteration	BIT = 0,
 		@ResultSet_is_for_single_Database	BIT = 1
 AS
 BEGIN
-	SET NOCOUNT ON
+	SET NOCOUNT ON;
+
+    /* ---------------------------------------------------------------------------------
+       Output/aggregation design (important):
+       - When called in bulk by dbo.usp_build_restore_script, a GLOBAL temp table ##Total_Output
+         is used to aggregate per-DB script lines into a single final result set.
+       - If you run concurrent sessions, global temp tables can collide; prefer per-session
+         execution or refactor to session-scoped temp tables if concurrency is required.
+    --------------------------------------------------------------------------------- */
+
 	------------------------------------------------------------
 	-- Author tag
 	------------------------------------------------------------
@@ -232,7 +251,11 @@ BEGIN
 	SET @SQLCMD_Script += '--- Script creation time: ['+CONVERT(NVARCHAR(30),CONVERT(DATETIME2(0),GETDATE()),121)+'] ---' + REPLICATE(CHAR(10),2) +
 		'----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 	------------------------------------------------------------
-	-- Get backup dump file list, if @new_backups_parent_dir is specified (The path different than the original server's backup destination, if specified)
+	-- Get backup dump file list, if @new_backups_parent_dir is specified
+	-- Notes:
+	--  * If @new_backups_parent_dir is set, backup files are matched by BASE NAME only.
+	--  * This supports restoring on a different server where the original backup path differs.
+	--  * sys.dm_os_file_exists() can be unreliable for some UNC patterns; enumeration is used.
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..##usp_build_one_db_restore_script$Backup_Files') IS NULL
 	BEGIN
@@ -278,7 +301,11 @@ BEGIN
 	END
 	
 	------------------------------------------------------------
-	-- FULL backup (latest non copy_only)
+	-- FULL backup selection (latest non-copy_only)
+	-- Notes:
+	--  * Uses msdb backup history; requires that backup history is present and not purged.
+	--  * Applies @RestoreUpTo_TIMESTAMP as an upper bound on backup_start_date.
+	--  * If remapping via @new_backups_parent_dir, devices are derived from enumerated files.
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Full') IS NOT NULL DROP TABLE #Full;
 		CREATE TABLE #Full ( [backup_set_id] int, [database_name] nvarchar(128), [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [checkpoint_lsn] decimal(25,0), [database_backup_lsn] decimal(25,0), [Devices] nvarchar(4000) )
@@ -357,7 +384,7 @@ BEGIN
 	) d;
 
 	------------------------------------------------------------
-	-- DIFF (latest tied to that FULL)
+	-- DIFF selection (latest DIFF tied to selected FULL via checkpoint/diff base LSN)
 	------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#Diff') IS NOT NULL DROP TABLE #Diff;
 	CREATE TABLE #Diff ( [backup_set_id] int, [backup_start_date] datetime, [backup_finish_date] datetime, [first_lsn] decimal(25,0), [last_lsn] decimal(25,0), [differential_base_lsn] decimal(25,0), [Devices] nvarchar(4000) )
@@ -408,7 +435,10 @@ BEGIN
 	INSERT INTO #Diff ([backup_set_id], [backup_start_date], [backup_finish_date], [first_lsn], [last_lsn], [differential_base_lsn], [Devices])
 	EXEC(@SQL)
 	------------------------------------------------------------
-	-- LOG backups after base (Diff if exists else Full)
+	-- LOG selection (after base: DIFF if exists else FULL)
+	-- Notes:
+	--  * Basic continuity check is performed via LSN adjacency; warnings are emitted if broken.
+	--  * A "broken" chain does not automatically block script generation (caller decides).
 	------------------------------------------------------------
 	DECLARE @BaseLastLSN numeric(25,0), @BaseFinish datetime;
 	SELECT @BaseLastLSN = COALESCE((SELECT last_lsn FROM #Diff),(SELECT last_lsn FROM #Full));
