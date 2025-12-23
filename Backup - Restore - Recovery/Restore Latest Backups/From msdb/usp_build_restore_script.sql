@@ -36,7 +36,7 @@ CREATE OR ALTER PROC dbo.usp_build_restore_script
         @Preparatory_Script_Before_Restore  NVARCHAR(MAX)   = NULL,    -- Optional script emitted/executed before restore chain.
         @Complementary_Script_After_Restore NVARCHAR(MAX)   = NULL,    -- Optional script emitted/executed after restore chain.
         @Execute                            BIT             = 0,       -- If 1: execute emitted restore script (per DB).
-        @Verbose                            BIT             = 0,       -- CHANGED: default to 0 to avoid printing
+        @Verbose                            BIT             = 1,       -- If 1 and @Execute=1: prints emitted script as well.
         @SQLCMD_Connect_Conn_String         NVARCHAR(MAX)   = NULL,    -- If set: emitted script includes :connect for sqlcmd mode.
         @Separate_Results_Per_Database      BIT             = 0        -- If 1: each DB returns its own result set; else bulk-aggregated output.
 )
@@ -226,7 +226,7 @@ BEGIN
                     @Preparatory_Script_Before_Restore  = @Preparatory_Script_Before_Restore,
                     @Complementary_Script_After_Restore = @Complementary_Script_After_Restore,
                     @Execute                            = @Execute,
-                    @Verbose                            = 0, -- CHANGED: force no PRINT/verbose output from child
+                    @Verbose                            = @Verbose,
                     @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String,
                     @First_Parent_Procedure_Iteration   = @First_Procedure_Iteration,
                     @Last_Parent_Procedure_Iteration    = @Last_Procedure_Iteration,
@@ -252,6 +252,34 @@ BEGIN
     CLOSE dbs;
     DEALLOCATE dbs;
 
+    -------------------------------------------------------------------------
+    -- Emit aggregated output once at the very end (bulk mode only)
+    -------------------------------------------------------------------------
+    IF @Separate_Results_Per_Database = 0
+       AND OBJECT_ID('tempdb..##Total_Output') IS NOT NULL
+    BEGIN
+        DECLARE @OutLine NVARCHAR(MAX);
+
+        DECLARE out_cur CURSOR LOCAL FAST_FORWARD FOR
+            SELECT CAST([Output] AS NVARCHAR(MAX))
+            FROM ##Total_Output
+            ORDER BY Output_Id;
+
+        OPEN out_cur;
+        FETCH NEXT FROM out_cur INTO @OutLine;
+
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            -- PRINT truncates; RAISERROR(0) preserves longer text and can NOWAIT.
+            RAISERROR(N'%s', 0, 1, @OutLine) WITH NOWAIT;
+            FETCH NEXT FROM out_cur INTO @OutLine;
+        END
+
+        CLOSE out_cur;
+        DEALLOCATE out_cur;
+
+        DROP TABLE ##Total_Output;
+    END
 
     -- Display results summary
     SELECT * FROM #Total_Execution_Report_per_DB ORDER BY RowId;
@@ -264,29 +292,29 @@ GO
    - This is an example call for interactive testing.
    - In automation/CI/CD, keep sample calls commented out to avoid accidental execution.
 ------------------------------------------------------------------------------------ */
----- Sample execution (values from usp_build_one_db_restore_script sample)
---EXEC dbo.usp_build_restore_script
---    @DB_Name_Pattern                    = '-SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
---    @StopAt                             = NULL,
---    @WithReplace                        = 1,
---    @RestoreDBName                      = '',
---    @create_datafile_dirs               = 1,
---    @Restore_DataPath                   = '',
---    @Restore_LogPath                    = '',
---    @IncludeLogs                        = 1,
---    @IncludeDiffs                       = 1,
---    @Recovery                           = 1,
---    @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
---    @new_backups_parent_dir             = '', --'\\fdbdrbkpdsk\DBDR\',
---    @check_backup_file_existance        = 0,
---    @Recover_Database_On_Error          = 1,
---    @Preparatory_Script_Before_Restore  = '',
---    @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
---    @Execute                            = 0,
---    @Verbose                            = 0,
---    @SQLCMD_Connect_Conn_String         = '',
---    @Separate_Results_Per_Database      = 0;
---GO
+-- Sample execution (values from usp_build_one_db_restore_script sample)
+EXEC dbo.usp_build_restore_script
+    @DB_Name_Pattern                    = '-SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
+    @StopAt                             = NULL,
+    @WithReplace                        = 1,
+    @RestoreDBName                      = '',
+    @create_datafile_dirs               = 1,
+    @Restore_DataPath                   = '',
+    @Restore_LogPath                    = '',
+    @IncludeLogs                        = 1,
+    @IncludeDiffs                       = 1,
+    @Recovery                           = 1,
+    @RestoreUpTo_TIMESTAMP              = NULL, -- '2025-11-02 18:59:10.553',
+    @new_backups_parent_dir         	= '', --'\\fdbdrbkpdsk\DBDR\',
+	@check_backup_file_existance        = 0,
+    @Recover_Database_On_Error          = 1,
+    @Preparatory_Script_Before_Restore  = '',
+    @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
+    @Execute                            = 0,
+    @Verbose                            = 0,
+    @SQLCMD_Connect_Conn_String         = '',
+    @Separate_Results_Per_Database      = 0;
+GO
 
 
 
