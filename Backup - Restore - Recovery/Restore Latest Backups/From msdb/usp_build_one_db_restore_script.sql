@@ -219,9 +219,6 @@ BEGIN
 	------------------------------------------------------------
 	-- Parameter validation
 	------------------------------------------------------------
-
-	IF DB_ID(@DatabaseName) IS NULL AND @Verbose = 1
-		PRINT 'Note: Target DB does not currently exist (restore will create it).';
 	
 	IF @StopAt = '' SET @StopAt = NULL
 	IF @RestoreUpTo_TIMESTAMP = '' OR @RestoreUpTo_TIMESTAMP IS NULL SET @RestoreUpTo_TIMESTAMP = GETDATE()+1
@@ -238,17 +235,25 @@ BEGIN
     CREATE TABLE ##Total_Output
     (
         Output_Id INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
+		DatabaseName sysname NULL,       -- NEW
+		RestoreDBName sysname NULL,      -- NEW
         Output NVARCHAR(MAX)
     );
+
+	-- Backward-compatible upgrade (in case ##Total_Output already exists from older definition)
+	IF COL_LENGTH('tempdb..##Total_Output', 'DatabaseName') IS NULL
+		ALTER TABLE ##Total_Output ADD DatabaseName sysname NULL;
+
+	IF COL_LENGTH('tempdb..##Total_Output', 'RestoreDBName') IS NULL
+		ALTER TABLE ##Total_Output ADD RestoreDBName sysname NULL;
 
 	------------------------------------------------------------
 	-- Header
 	------------------------------------------------------------
-	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 
-	-- Also start header in @SQLCMD_Script
 	SET @SQLCMD_Script += '--- Script creation time: ['+CONVERT(NVARCHAR(30),CONVERT(DATETIME2(0),GETDATE()),121)+'] ---' + REPLICATE(CHAR(10),2) +
-		'----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
+		'----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------' + CHAR(10) +
+		IIF(DB_ID(@DatabaseName) IS NULL AND @Verbose = 1,'PRINT ''Note: Target DB does not currently exist (restore will create it).'';','');
 	------------------------------------------------------------
 	-- Get backup dump file list, if @new_backups_parent_dir is specified
 	-- Notes:
@@ -701,13 +706,20 @@ BEGIN
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
 	------------------------------------------------------------	
 	-- 3) TRY header + restore commands
-	DECLARE @HeaderBlock NVARCHAR(MAX) =
-			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
-			IIF(@First_Parent_Procedure_Iteration = 1 OR @ResultSet_is_for_single_Database = 1,'DROP TABLE IF EXISTS #BackupTimes; ' +
-			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10) +
-			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10),'') +
-			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2)			
-	
+	DECLARE @HeaderBlock NVARCHAR(MAX);
+
+	SET @HeaderBlock =
+			'----------------------------------------Restore statements begin------------------------------' + CHAR(10)
+		+	IIF(
+				@First_Parent_Procedure_Iteration = 1 OR @ResultSet_is_for_single_Database = 1,
+				'DROP TABLE IF EXISTS #BackupTimes; '
+			  + 'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10)
+			  + 'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10),
+				''
+			)
+		+	'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT'
+		+	REPLICATE(CHAR(10),2);
+
 	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
 		'BEGIN TRY';
 	SET @HeaderBlock += @TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
@@ -803,19 +815,18 @@ BEGIN
 			CHAR(10);
 	END
 
-	PRINT '--##############################################################--' + REPLICATE(CHAR(10),2);
-	SET @SQLCMD_Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
+	SET @SQLCMD_Script += '--############################ Database restore script end ##################################--' + REPLICATE(CHAR(10),2);
 
 	------------------------------------------------------------
-	-- Build @SQLCMD_Script to mirror SELECT dt.Script
+	-- @SQLCMD_Connect_Conn_String
 	------------------------------------------------------------
 	-- 0) :connect and one empty line
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
 		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
-		--SET @SQLCMD_Script += CHAR(10);  -- exactly one empty line
 	END
 
+	------------------------------------------------------------
 	-- 1) Preparatory section in SQLCMD script
 	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
 	BEGIN
@@ -958,6 +969,8 @@ BEGIN
 			CHAR(10);
 	END
 
+
+
 	-- 6) trailing GO / blanks
 	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
 	BEGIN
@@ -1068,32 +1081,39 @@ BEGIN
 			DROP TABLE ##Total_Output
 		END
 		ELSE
-			INSERT ##Total_Output (Output)
-			SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);	
+			INSERT ##Total_Output (DatabaseName, RestoreDBName, Output)
+			SELECT @DatabaseName, @RestoreDBName, LineText
+			FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+	END
+	IF @Last_Parent_Procedure_Iteration = 1
+	BEGIN
+		DROP TABLE ##Total_Output
 	END
 
 END
 GO
 
-EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'archive99',		-- sysname
-                                         @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
-										 @Restore_DataPath = '',			-- Uses original database path if not specified
-										 @Restore_LogPath = '',				-- Uses original database path if not specified
-										 @StopAt = '',						-- datetime
-                                         @WithReplace = 1,					-- bit
-										 @IncludeLogs = 1,
-										 @IncludeDiffs = 1,
-										 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
-										 @Recovery = 1,
-										 @Recover_Database_On_Error = 1,
-										 @new_backups_parent_dir = '',--'D:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\',
-											--'REPLACE(Devices,''R:'',''\\''+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))',
-										 @check_backup_file_existance = 1,
-										 @Preparatory_Script_Before_Restore = '',
-										 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
-										 @Verbose = 0,
-										 @SQLCMD_Connect_Conn_String = ''
---\\fdbdrbkpdsk\DBDR\FAlgoDB\TapeBackups\FAlgoDBCLU0$FAlgoDBAVG						 
+-- Prevent accidental execution during deployment. Flip to 1 to run as a template.
+IF 1 = 0
+BEGIN
+	EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
+											 @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
+											 @Restore_DataPath = '',			-- Uses original database path if not specified
+											 @Restore_LogPath = '',				-- Uses original database path if not specified
+											 @StopAt = '',						-- datetime
+											 @WithReplace = 1,					-- bit
+											 @IncludeLogs = 1,
+											 @IncludeDiffs = 1,
+											 --@RestoreUpTo_TIMESTAMP = '2025-11-02 18:59:10.553',
+											 @Recovery = 1,
+											 @Recover_Database_On_Error = 1,
+											 @new_backups_parent_dir = '',
+											 @check_backup_file_existance = 1,
+											 @Preparatory_Script_Before_Restore = '',
+											 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
+											 @Verbose = 0,
+											 @SQLCMD_Connect_Conn_String = '';
+END
 GO
 
 --SELECT dbo.udf_BASE_NAME('\\fdbdrbkpdsk\DBDR\'),dbo.udf_PARENT_DIR('\\fdbdrbkpdsk\DBDR\')
