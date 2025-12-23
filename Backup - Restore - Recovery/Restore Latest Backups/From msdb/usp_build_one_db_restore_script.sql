@@ -210,8 +210,7 @@ BEGIN
 	DECLARE @MoveClauses NVARCHAR(MAX);
     DECLARE @create_directories NVARCHAR(MAX);
 	DECLARE @SQL NVARCHAR(MAX);
-	DECLARE @Script NVARCHAR(MAX) = N'';         -- plain script (already used)
-	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';  -- mirrors dt.Script result set
+	DECLARE @SQLCMD_Script NVARCHAR(MAX) = N'';         -- plain script (already used)
 	DECLARE @tmpLine NVARCHAR(MAX);
 	DECLARE @ord INT;
 	DECLARE @msg NVARCHAR(4000)
@@ -247,7 +246,7 @@ BEGIN
 	------------------------------------------------------------
 	PRINT '----------- ' + 'Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 
-	-- Also start header in @Script
+	-- Also start header in @SQLCMD_Script
 	SET @SQLCMD_Script += '--- Script creation time: ['+CONVERT(NVARCHAR(30),CONVERT(DATETIME2(0),GETDATE()),121)+'] ---' + REPLICATE(CHAR(10),2) +
 		'----------- Database: ' + @DatabaseName + ' --> ' + @RestoreDBName + ' ---------------------------------';
 	------------------------------------------------------------
@@ -669,8 +668,8 @@ BEGIN
 		PRINT '-- Log chain LSN continuity: ' + CASE WHEN @LogCount = 0 THEN 'N/A (no logs)'
 												WHEN @LogsChainValid = 1 THEN 'VALID' ELSE 'BROKEN' END;
 
-		-- Mirror the verbose info into @Script as well
-		SET @Script += '-- ```RESTORE CHAIN BUILDER```' + CHAR(10)
+		-- Mirror the verbose info into @SQLCMD_Script as well
+		SET @SQLCMD_Script += '-- ```RESTORE CHAIN BUILDER```' + CHAR(10)
 					+  '-- Full: ' + @FullInfo + CHAR(10)
 					+  '-- Diff: ' + CASE WHEN @HasDiff = 1 THEN @DiffInfo ELSE '(none);' END + CHAR(10)
 					+  '-- Log backups: ' + CAST(@LogCount AS varchar(12)) + CHAR(10)
@@ -686,32 +685,32 @@ BEGIN
 	BEGIN
 		PRINT 'WARNING: Log chain appears broken (gap detected).';
 		PRINT '------------------------------------------------------------------';
-		SET @Script += 'WARNING: Log chain appears broken (gap detected).' + CHAR(10)
+		SET @SQLCMD_Script += 'WARNING: Log chain appears broken (gap detected).' + CHAR(10)
 					+  '------------------------------------------------------------------' + CHAR(10);
 	END
 
 	IF @StopAt IS NOT NULL
 	BEGIN
 		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
-		SET @Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
+		SET @SQLCMD_Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
 	END
 
 
 	------------------------------------------------------------
 	-- Add TRY-CATCH statements to the restore statements
 	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
-	------------------------------------------------------------
-	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
-		'BEGIN TRY';
-	
+	------------------------------------------------------------	
 	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX) =
 			'----------------------------------------Restore statements begin------------------------------' + CHAR(10) +
 			IIF(@First_Parent_Procedure_Iteration = 1 OR @ResultSet_is_for_single_Database = 1,'DROP TABLE IF EXISTS #BackupTimes; ' +
 			'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10) +
 			'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' + CHAR(10),'') +
-			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2) +
-			@TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
+			'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT' + REPLICATE(CHAR(10),2)			
+	
+	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
+		'BEGIN TRY';
+	SET @HeaderBlock += @TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
 
 	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
 		'END TRY' + CHAR(10) +
@@ -744,13 +743,13 @@ BEGIN
 		BEGIN
 			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.';
 			PRINT '';
-			SET @Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
+			SET @SQLCMD_Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
 		END
 		ELSE 
 		BEGIN
 			PRINT @create_directories;
 			PRINT '';  -- one empty line after last xp_create_subdir
-			SET @Script += @create_directories + CHAR(10) + CHAR(10);
+			SET @SQLCMD_Script += @create_directories + CHAR(10) + CHAR(10);
 			IF @Execute = 1 EXEC(@create_directories);
 		END
 
@@ -763,7 +762,7 @@ BEGIN
 		PRINT '----------------------------------------------------------------------------------------------';
 		PRINT '';  -- empty line
 
-		SET @Script += CHAR(10) +
+		SET @SQLCMD_Script += CHAR(10) +
 			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
 			@Preparatory_Script_Before_Restore + CHAR(10) +
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
@@ -773,7 +772,7 @@ BEGIN
 	-- restore body (plain script) – header now comes from TRY/CATCH, do NOT print the old line
 	-- REMOVE these two lines:
 	-- PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
-	-- SET @Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
+	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
 	-- keep only step lines and commands:
 	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
 	WHILE @i <= @max
@@ -781,12 +780,12 @@ BEGIN
 		SELECT @Cmd = RestoreCommand FROM #RestoreChain WHERE StepNumber = @i;
 		PRINT '-- Step ' + CAST(@i AS varchar(10));
 		PRINT @Cmd;
-		SET @Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
+		SET @SQLCMD_Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
 		SET @i += 1;
 	END
 	-- footer also comes from TRY/CATCH now, so DROP the old print:
 	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
-	-- SET @Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
+	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
 
 	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
@@ -797,7 +796,7 @@ BEGIN
 		PRINT '----------------------------------------------------------------------------------------------';
 		PRINT '';  -- empty line
 
-		SET @Script += CHAR(10) +
+		SET @SQLCMD_Script += CHAR(10) +
 			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
 			@Complementary_Script_After_Restore + CHAR(10) +
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
@@ -805,7 +804,7 @@ BEGIN
 	END
 
 	PRINT '--##############################################################--' + REPLICATE(CHAR(10),2);
-	SET @Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
+	SET @SQLCMD_Script += '--##############################################################--' + REPLICATE(CHAR(10),2);
 
 	------------------------------------------------------------
 	-- Build @SQLCMD_Script to mirror SELECT dt.Script
@@ -976,91 +975,91 @@ BEGIN
 	
 	IF @SQLCMD_Connect_Conn_String IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@SQLCMD_Connect_Conn_String', '''' + @SQLCMD_Connect_Conn_String + '''');
 	END
 	
 	IF @Complementary_Script_After_Restore IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Complementary_Script_After_Restore', '''' + REPLACE(@Complementary_Script_After_Restore, '''', '''''') + '''');
 	END
 	
 	IF @Preparatory_Script_Before_Restore IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Preparatory_Script_Before_Restore', '''' + REPLACE(@Preparatory_Script_Before_Restore, '''', '''''') + '''');
 	END
 	
 	IF @new_backups_parent_dir IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@new_backups_parent_dir', '''' + REPLACE(@new_backups_parent_dir, '''', '''''') + '''');
 	END
 	
 	IF @RestoreUpTo_TIMESTAMP IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreUpTo_TIMESTAMP', '''' + CONVERT(NVARCHAR(256), @RestoreUpTo_TIMESTAMP, 121) + '''');
 	END
 	
 	IF @StopAt IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@StopAt', '''' + CONVERT(NVARCHAR(256), @StopAt, 121) + '''');
 	END
 	
 	IF @Restore_LogPath IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_LogPath', '''' + @Restore_LogPath + '''');
 	END
 	
 	IF @Restore_DataPath IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''')
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''')
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Restore_DataPath', '''' + @Restore_DataPath + '''');
 	END
 	
 	IF @RestoreDBName IS NOT NULL
 	BEGIN
-		SELECT @Script = REPLACE(@Script, '@RestoreDBName', @RestoreDBName)
+		SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', @RestoreDBName)
 			, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@RestoreDBName', @RestoreDBName);
 	END
 	
 	-- @DatabaseName is never NULL, always replace
-	SELECT @Script = REPLACE(@Script, '@DatabaseName', @DatabaseName)
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', @DatabaseName)
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@DatabaseName', @DatabaseName);
 	
 	-- Bit parameters: cast to varchar (always replace, bits cannot be NULL)
-	SELECT @Script = REPLACE(@Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recover_Database_On_Error', CAST(@Recover_Database_On_Error AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@create_datafile_dirs', CAST(@create_datafile_dirs AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeDiffs', CAST(@IncludeDiffs AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@IncludeLogs', CAST(@IncludeLogs AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@WithReplace', CAST(@WithReplace AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Recovery', CAST(@Recovery AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Verbose', CAST(@Verbose AS VARCHAR(1)));
 	
-	SELECT @Script = REPLACE(@Script, '@Execute', CAST(@Execute AS VARCHAR(1)))
+	SELECT @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Execute', CAST(@Execute AS VARCHAR(1)))
 		, @SQLCMD_Script = REPLACE(@SQLCMD_Script, '@Execute', CAST(@Execute AS VARCHAR(1)));
 
 	------------------------------------------------------------
-	-- Expose both aggregated versions
+	-- Give the resutls to the output
 	------------------------------------------------------------
-	--SELECT @Script AS FullScript_Plain;
+	--SELECT @SQLCMD_Script AS FullScript_Plain;
 	IF @Failure_Mark = 0
 	BEGIN
 		IF @ResultSet_is_for_single_Database = 1
