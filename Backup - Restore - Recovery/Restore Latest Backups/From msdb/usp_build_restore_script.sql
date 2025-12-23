@@ -16,34 +16,38 @@ GO
 CREATE OR ALTER PROC dbo.usp_build_restore_script
 (
         -- Original parameters
-        @DB_Name_Pattern                    NVARCHAR(MAX)   = N'',     -- comma-delimited patterns/tokens; see below
-        @StopAt                             DATETIME        = NULL,    -- Point-in-time inside last DIFF/LOG
-        @WithReplace                        BIT             = 0,       -- Include REPLACE on RESTORE DATABASE
-        
+        @DB_Name_Pattern                    NVARCHAR(MAX)   = N'',     -- Comma-delimited tokens/patterns; see detailed syntax below.
+        @StopAt                             DATETIME        = NULL,    -- Point-in-time recovery (applies to last DIFF/LOG restore if used).
+        @WithReplace                        BIT             = 0,       -- Include REPLACE option on RESTORE DATABASE.
+
         -- Additional parameters (defaults match usp_build_one_db_restore_script)
-        @RestoreDBName                      SYSNAME         = NULL,    -- Destination database name (NULL = same as source)
-        @create_datafile_dirs               BIT             = 1,       -- Create original parent directories of the database files in target
-        @Restore_DataPath                   NVARCHAR(1000)  = NULL,    -- Custom restore path for data files
-        @Restore_LogPath                    NVARCHAR(1000)  = NULL,    -- Custom restore path for log files
-        @IncludeLogs                        BIT             = 1,       -- Include log backups
-        @IncludeDiffs                       BIT             = 1,       -- Include differential backups
-        @Recovery                           BIT             = 0,       -- Specify whether to eventually recover the database or not
-        @RestoreUpTo_TIMESTAMP              DATETIME2(3)    = NULL,    -- Backup files started after this TIMESTAMP will be excluded
-        @new_backups_parent_dir             NVARCHAR(4000)  = NULL,    -- T-SQL formula to be executed on the backup files full path
-                                                                       -- Example: REPLACE(Devices,'R:\','\\'+CONVERT(NVARCHAR(256),SERVERPROPERTY(''MachineName'')))
-		@check_backup_file_existance		BIT = 0,				   -- Check if the backup file exists on disk at @new_backups_parent_dir or
-																	   -- the original file backup path if @new_backups_parent_dir is empty or null
-        @Recover_Database_On_Error          BIT             = 0,       -- If 1, recover the database on error; if 0, leave in restoring state
-        @Preparatory_Script_Before_Restore  NVARCHAR(MAX)   = NULL,    -- Script to execute before restore script
-        @Complementary_Script_After_Restore NVARCHAR(MAX)   = NULL,    -- Script to execute after restore script
-        @Execute                            BIT             = 0,       -- 1 = execute the produced script
-        @Verbose                            BIT             = 1,       -- If executing and @Verbose = 1 the produced script will also be printed
-        @SQLCMD_Connect_Conn_String         NVARCHAR(MAX)   = NULL,
-        @Separate_Results_Per_Database      BIT             = 0
-)  -- <-- required (fixes "Incorrect syntax near the keyword 'AS'")
+        @RestoreDBName                      SYSNAME         = NULL,    -- Destination database name (NULL = same as source per DB).
+        @create_datafile_dirs               BIT             = 1,       -- If 1: emit (and optionally execute) xp_create_subdir statements.
+        @Restore_DataPath                   NVARCHAR(1000)  = NULL,    -- Override restore folder for data files (NULL/empty = keep original).
+        @Restore_LogPath                    NVARCHAR(1000)  = NULL,    -- Override restore folder for log files  (NULL/empty = keep original).
+        @IncludeLogs                        BIT             = 1,       -- If 1: include log chain restores (if available).
+        @IncludeDiffs                       BIT             = 1,       -- If 1: include latest DIFF tied to chosen FULL (if available).
+        @Recovery                           BIT             = 0,       -- If 1: final step uses RECOVERY, else leaves DB in NORECOVERY.
+        @RestoreUpTo_TIMESTAMP              DATETIME2(3)    = NULL,    -- Exclude backups with backup_start_date >= this (acts like "upper bound").
+        @new_backups_parent_dir             NVARCHAR(4000)  = NULL,    -- If set: map backup files by base name under this directory.
+                                                                       -- Example formula (in caller): REPLACE(Devices,'R:\','\\'+CONVERT(...))
+		@check_backup_file_existance		BIT = 0,				   -- If 1: validate backup files exist on disk (original or remapped path).
+        @Recover_Database_On_Error          BIT             = 0,       -- If 1: TRY/CATCH in generated script will attempt RECOVERY on failures.
+        @Preparatory_Script_Before_Restore  NVARCHAR(MAX)   = NULL,    -- Optional script emitted/executed before restore chain.
+        @Complementary_Script_After_Restore NVARCHAR(MAX)   = NULL,    -- Optional script emitted/executed after restore chain.
+        @Execute                            BIT             = 0,       -- If 1: execute emitted restore script (per DB).
+        @Verbose                            BIT             = 1,       -- If 1 and @Execute=1: prints emitted script as well.
+        @SQLCMD_Connect_Conn_String         NVARCHAR(MAX)   = NULL,    -- If set: emitted script includes :connect for sqlcmd mode.
+        @Separate_Results_Per_Database      BIT             = 0        -- If 1: each DB returns its own result set; else bulk-aggregated output.
+)
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    -- Notes:
+    --  * This procedure iterates databases based on @DB_Name_Pattern and calls dbo.usp_build_one_db_restore_script per DB.
+    --  * tempdb is always excluded (cannot be restored from backup history like user DBs).
+    --  * Failures are captured per database in #Total_Execution_Report_per_DB; iteration continues by default.
 
     DECLARE @StartUTC datetime2(3) = SYSDATETIME();
     DECLARE @Iteration_Count INT = 0
@@ -168,7 +172,10 @@ BEGIN
 
     SELECT @Iteration_Count = COUNT(*) FROM #DBsToProcess;
 
-    /* Required: this temp table is referenced later (COUNT/INSERT). */
+    /* Execution summary:
+       - SUCCESS/FAILED is recorded per DB.
+       - ErrorMessage captures ERROR_MESSAGE() from the CATCH block (per-DB failure).
+       - This is only an execution/iteration report; restore-chain details are emitted by the child procedure. */
     IF OBJECT_ID('tempdb..#Total_Execution_Report_per_DB') IS NOT NULL DROP TABLE #Total_Execution_Report_per_DB;
     CREATE TABLE #Total_Execution_Report_per_DB
     (
@@ -200,7 +207,7 @@ BEGIN
             SET @Last_Procedure_Iteration = 1
         --SELECT @Iteration_Count, @Count, @Last_Procedure_Iteration
         BEGIN TRY
-
+            -- Child procedure is responsible for building the restore chain and returning/aggregating the generated script.
             EXEC dbo.usp_build_one_db_restore_script
                     @DatabaseName                       = @DatabaseName,
                     @RestoreDBName                      = @RestoreDBName,
@@ -223,18 +230,18 @@ BEGIN
                     @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String,
                     @First_Parent_Procedure_Iteration   = @First_Procedure_Iteration,
                     @Last_Parent_Procedure_Iteration    = @Last_Procedure_Iteration,
-                    @ResultSet_is_for_single_Database   = @Separate_Results_Per_Database
-
+                    @ResultSet_is_for_single_Database   = @Separate_Results_Per_Database;
 
             INSERT INTO #Total_Execution_Report_per_DB(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
             VALUES (@DatabaseName, 'SUCCESS', NULL, @ExecStart, SYSDATETIME());
-
         END TRY
         BEGIN CATCH
+            -- Continue-on-error behavior:
+            --  - This procedure records failure and proceeds to next database.
+            --  - To stop on first failure, switch to THROW (see commented lines).
             INSERT INTO #Total_Execution_Report_per_DB(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
             VALUES (@DatabaseName, 'FAILED', ERROR_MESSAGE(), @ExecStart, SYSDATETIME());
 
-            -- Optionally continue; to abort on first failure, uncomment:
             -- CLOSE dbs; DEALLOCATE dbs;
             -- THROW;
         END CATCH;
@@ -252,6 +259,11 @@ BEGIN
 END;
 GO
 
+/* ------------------------------------------------------------------------------------
+   SAMPLE EXECUTION
+   - This is an example call for interactive testing.
+   - In automation/CI/CD, keep sample calls commented out to avoid accidental execution.
+------------------------------------------------------------------------------------ */
 -- Sample execution (values from usp_build_one_db_restore_script sample)
 EXEC dbo.usp_build_restore_script
     @DB_Name_Pattern                    = '-SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
