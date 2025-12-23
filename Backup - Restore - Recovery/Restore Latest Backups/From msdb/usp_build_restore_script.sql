@@ -245,13 +245,6 @@ BEGIN
     CLOSE dbs;
     DEALLOCATE dbs;
 
-    -- Display Output (guarded)
-    IF OBJECT_ID('tempdb..##Total_Output') IS NOT NULL
-    BEGIN
-        IF @Separate_Results_Per_Database = 0
-            SELECT * FROM ##Total_Output;
-        DROP TABLE ##Total_Output;
-    END
 
     -- Display results summary
     SELECT * FROM #Total_Execution_Report_per_DB ORDER BY RowId;
@@ -261,7 +254,7 @@ GO
 
 -- Sample execution (values from usp_build_one_db_restore_script sample)
 EXEC dbo.usp_build_restore_script
-    @DB_Name_Pattern                    = '',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
+    @DB_Name_Pattern                    = '-SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
     @StopAt                             = NULL,
     @WithReplace                        = 1,
     @RestoreDBName                      = '',
@@ -280,7 +273,7 @@ EXEC dbo.usp_build_restore_script
     @Execute                            = 0,
     @Verbose                            = 0,
     @SQLCMD_Connect_Conn_String         = '',
-    @Separate_Results_Per_Database      = 1;
+    @Separate_Results_Per_Database      = 0;
 GO
 
 
