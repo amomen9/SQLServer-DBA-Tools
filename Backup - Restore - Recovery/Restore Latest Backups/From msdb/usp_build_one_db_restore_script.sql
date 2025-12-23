@@ -696,7 +696,6 @@ BEGIN
 
 	IF @StopAt IS NOT NULL
 	BEGIN
-		PRINT 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121);
 		SET @SQLCMD_Script += 'STOPAT requested: ' + CONVERT(varchar(23), @StopAt, 121) + CHAR(10);
 	END
 
@@ -747,150 +746,47 @@ BEGIN
 		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
-	-- Giving the script in the STDOUT (PRINT)
+	-- Further developing the script
 	------------------------------------------------------------
-	-- xp_create_subdir section
-	IF @create_datafile_dirs = 1
-		IF @create_directories IS NULL 
-		BEGIN
-			PRINT '--** Database does not exist on the instance, thus create directories statements were skipped.';
-			PRINT '';
-			SET @SQLCMD_Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10);
-		END
-		ELSE 
-		BEGIN
-			PRINT @create_directories;
-			PRINT '';  -- one empty line after last xp_create_subdir
-			SET @SQLCMD_Script += @create_directories + CHAR(10) + CHAR(10);
-			IF @Execute = 1 EXEC(@create_directories);
-		END
+	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
+		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
 
-	-- Preparatory script section (printed/plain)
-	IF @Preparatory_Script_Before_Restore IS NOT NULL AND LEN(@Preparatory_Script_Before_Restore) > 0
-	BEGIN
-		PRINT '';  -- empty line
-		PRINT '------------------------------------Preparatory Script Before Restore-------------------------';
-		PRINT @Preparatory_Script_Before_Restore;
-		PRINT '----------------------------------------------------------------------------------------------';
-		PRINT '';  -- empty line
+	IF @create_directories IS NOT NULL AND @create_directories <> N''	
+	SET @SQLCMD_Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10)
+		+ @create_directories + CHAR(10);  -- one empty line after last xp_create_subdir
 
+	------------------------------------------------------------
+	-- 1) Preparatory section in SQLCMD script
+	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
 		SET @SQLCMD_Script += CHAR(10) +
 			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10) +
 			@Preparatory_Script_Before_Restore + CHAR(10) +
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
-			CHAR(10);
-	END
+			REPLICATE(CHAR(10),2);
 
-	-- restore body (plain script) – header now comes from TRY/CATCH, do NOT print the old line
-	-- REMOVE these two lines:
-	-- PRINT REPLICATE('-',40)+'Restore statements begin'+REPLICATE('-',30)
-	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements begin' + REPLICATE('-',30) + CHAR(10);
-	-- keep only step lines and commands:
-	DECLARE @i int = 1, @max int = (SELECT MAX(StepNumber) FROM #RestoreChain), @Cmd nvarchar(max);
-	WHILE @i <= @max
-	BEGIN
-		SELECT @Cmd = RestoreCommand FROM #RestoreChain WHERE StepNumber = @i;
-		PRINT '-- Step ' + CAST(@i AS varchar(10));
-		PRINT @Cmd;
-		SET @SQLCMD_Script += '-- Step ' + CAST(@i AS varchar(10)) + CHAR(10) + ISNULL(@Cmd,N'') + CHAR(10);
-		SET @i += 1;
-	END
+
+
 	-- footer also comes from TRY/CATCH now, so DROP the old print:
 	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
 	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
 
 	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
-	BEGIN
-		PRINT '';  -- empty line
-		PRINT '-----------------------------------Complementary Script After Restore-----------------------';
-		PRINT @Complementary_Script_After_Restore;
-		PRINT '----------------------------------------------------------------------------------------------';
-		PRINT '';  -- empty line
-
 		SET @SQLCMD_Script += CHAR(10) +
 			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
 			@Complementary_Script_After_Restore + CHAR(10) +
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
 			CHAR(10);
-	END
 
 	SET @SQLCMD_Script += '--############################ Database restore script end ##################################--' + REPLICATE(CHAR(10),2);
 
-	------------------------------------------------------------
-	-- @SQLCMD_Connect_Conn_String
-	------------------------------------------------------------
-	-- 0) :connect and one empty line
-	IF ISNULL(@SQLCMD_Connect_Conn_String,'') <> ''
-	BEGIN
-		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
-	END
 
-	------------------------------------------------------------
-	-- 1) Preparatory section in SQLCMD script
-	IF @Preparatory_Script_Before_Restore IS NOT NULL AND @Preparatory_Script_Before_Restore <> N''
-	BEGIN
-		SET @SQLCMD_Script += CHAR(10) +
-			'------------------------------------Preparatory Script Before Restore-------------------------' + CHAR(10);
+	
+	SELECT @create_directories
+	SELECT @HeaderBlock		--**
+	SELECT @SQLCMD_Script
+	SET @SQLCMD_Script += @HeaderBlock
 
-		DECLARE curBefore CURSOR LOCAL FAST_FORWARD FOR
-			SELECT LineText, ordinal
-			FROM dbo.fn_SplitStringByLine(@Preparatory_Script_Before_Restore)
-			ORDER BY ordinal;
-
-		OPEN curBefore;
-		FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
-		WHILE @@FETCH_STATUS = 0
-		BEGIN
-			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-			FETCH NEXT FROM curBefore INTO @tmpLine, @ord;
-		END
-		CLOSE curBefore;
-		DEALLOCATE curBefore;
-
-		SET @SQLCMD_Script +=
-			'----------------------------------------------------------------------------------------------' + CHAR(10) +
-			CHAR(10);
-	END
-
-	-- 2) Blank line + xp_create_subdir + blank line
-	SET @SQLCMD_Script += CHAR(10);
-
-	IF @create_directories IS NOT NULL AND @create_directories <> N''
-	BEGIN
-		DECLARE curDirs CURSOR LOCAL FAST_FORWARD FOR
-			SELECT LineText, ordinal
-			FROM dbo.fn_SplitStringByLine(@create_directories)
-			ORDER BY ordinal;
-
-		OPEN curDirs;
-		FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
-		WHILE @@FETCH_STATUS = 0
-		BEGIN
-			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-			FETCH NEXT FROM curDirs INTO @tmpLine, @ord;
-		END
-		CLOSE curDirs;
-		DEALLOCATE curDirs;
-
-		SET @SQLCMD_Script += CHAR(10);  -- one empty line after last xp_create_subdir
-	END
-
-
-	DECLARE curHead CURSOR LOCAL FAST_FORWARD FOR
-		SELECT LineText, ordinal
-		FROM dbo.fn_SplitStringByLine(@HeaderBlock)
-		ORDER BY ordinal;
-
-	OPEN curHead;
-	FETCH NEXT FROM curHead INTO @tmpLine, @ord;
-	WHILE @@FETCH_STATUS = 0
-	BEGIN
-		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-		FETCH NEXT FROM curHead INTO @tmpLine, @ord;
-	END
-	CLOSE curHead;
-	DEALLOCATE curHead;
 
 	-- per-step commands
 	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
@@ -903,25 +799,11 @@ BEGIN
 		SELECT @RestoreCmd = RestoreCommand
 		FROM #RestoreChain
 		WHERE StepNumber = @Step;
-
-		IF @RestoreCmd IS NOT NULL
-		BEGIN
-			DECLARE curCmd CURSOR LOCAL FAST_FORWARD FOR
-				SELECT LineText, ordinal
-				FROM dbo.fn_SplitStringByLine(@RestoreCmd)
-				ORDER BY ordinal;
-
-			OPEN curCmd;
-			FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
-			WHILE @@FETCH_STATUS = 0
-			BEGIN
-				SET @SQLCMD_Script += REPLICATE(CHAR(9),4) + ISNULL(@tmpLine,'') + CHAR(10);
-				FETCH NEXT FROM curCmd INTO @tmpLine, @ord;
-			END
-			CLOSE curCmd;
-			DEALLOCATE curCmd;
-		END
-
+		
+		SET @SQLCMD_Script += (
+								SELECT REPLICATE(CHAR(9),4) + REPLACE(RestoreCommand,CHAR(10),CHAR(10)+REPLICATE(CHAR(9),4))
+								FROM #RestoreChain
+							)
 		SET @Step += 1;
 	END
 
@@ -1090,8 +972,8 @@ END
 GO
 
 -- Prevent accidental execution during deployment. Flip to 1 to run as a template.
-IF 1 = 0
-BEGIN
+--IF 1 = 0
+
 	EXEC dbo.usp_build_one_db_restore_script @DatabaseName = 'master',		-- sysname
 											 @RestoreDBName = '@DatabaseName',	-- Use to restore DatabaseName_2
 											 @Restore_DataPath = '',			-- Uses original database path if not specified
@@ -1109,7 +991,7 @@ BEGIN
 											 @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE [@RestoreDBName]',
 											 @Verbose = 0,
 											 @SQLCMD_Connect_Conn_String = '';
-END
+
 GO
 
 --SELECT dbo.udf_BASE_NAME('\\fdbdrbkpdsk\DBDR\'),dbo.udf_PARENT_DIR('\\fdbdrbkpdsk\DBDR\')
