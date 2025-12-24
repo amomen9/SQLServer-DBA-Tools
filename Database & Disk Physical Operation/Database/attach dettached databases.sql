@@ -10,6 +10,12 @@
 
 SET NOCOUNT ON;
 
+----------- Parameter -------------------------------------------------------
+-- Define your search path for mdf files here. If not specified, the instance default data path will be used
+DECLARE @Search_Path NVARCHAR(256) 
+-----------------------------------------------------------------------------
+
+
 -- Drop leftover temp tables from prior runs
 DROP TABLE IF EXISTS #DataFilePaths;
 DROP TABLE IF EXISTS #DBDetails;
@@ -44,10 +50,16 @@ CREATE TABLE #DBDetails
     [value]      AS CONVERT(SYSNAME, value_sqlv)
 );
 
--- Cursor enumerates *.mdf files under specified root path
+IF (ISNULL(@Search_Path,'')='') SET @Search_Path = CONVERT(NVARCHAR(256),SERVERPROPERTY('InstanceDefaultDataPath'))
+-- Cursor enumerates *.mdf files under specified root path. Define arbitrary root path per
+-- your needs
 DECLARE Attacher CURSOR FAST_FORWARD FOR
     SELECT full_filesystem_path
-    FROM sys.dm_os_enumerate_filesystem(N'M:\SQLData', N'*.mdf');
+    FROM  
+    sys.dm_os_enumerate_filesystem(@Search_Path, N'*.mdf') fs
+    LEFT JOIN sys.master_files mf
+    ON mf.physical_name = fs.full_filesystem_path
+    WHERE mf.database_id IS NULL AND fs.file_or_directory_name NOT IN ('model_msdbdata.mdf','model_replicatedmaster.mdf','mssqlsystemresource.mdf')
 
 OPEN Attacher;
 
