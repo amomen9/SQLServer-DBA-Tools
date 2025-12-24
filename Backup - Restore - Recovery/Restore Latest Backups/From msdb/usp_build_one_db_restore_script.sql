@@ -650,7 +650,7 @@ BEGIN
 				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
 				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT		   ''LOG'', ' + CONVERT(VARCHAR(4),rc.StepNumber) + ', @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
 		END +
-		CASE WHEN rc.StepNumber = @LastStep THEN CHAR(10) + N'--------------------------------------------------' ELSE N'' END
+		CASE WHEN rc.StepNumber = @LastStep THEN CHAR(10) + N'---------------- Last restore step reached ----------------------------------' ELSE N'' END
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
 
@@ -752,8 +752,7 @@ BEGIN
 		SET @SQLCMD_Script += ':connect ' + @SQLCMD_Connect_Conn_String + CHAR(10);
 
 	IF @create_directories IS NOT NULL AND @create_directories <> N''	
-	SET @SQLCMD_Script += '--** Database does not exist on the instance, thus create directories statements were skipped.' + CHAR(10) + CHAR(10)
-		+ @create_directories + CHAR(10);  -- one empty line after last xp_create_subdir
+	SET @SQLCMD_Script += @create_directories + REPLICATE(CHAR(10),2);  -- one empty line after last xp_create_subdir
 
 	------------------------------------------------------------
 	-- 1) Preparatory section in SQLCMD script
@@ -764,27 +763,6 @@ BEGIN
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
 			REPLICATE(CHAR(10),2);
 
-
-
-	-- footer also comes from TRY/CATCH now, so DROP the old print:
-	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
-	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
-
-	-- Complementary script section (printed/plain)
-	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
-		SET @SQLCMD_Script += CHAR(10) +
-			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
-			@Complementary_Script_After_Restore + CHAR(10) +
-			'----------------------------------------------------------------------------------------------' + CHAR(10) +
-			CHAR(10);
-
-	SET @SQLCMD_Script += '--############################ Database restore script end ##################################--' + REPLICATE(CHAR(10),2);
-
-
-	
-	SELECT @create_directories
-	SELECT @HeaderBlock		--**
-	SELECT @SQLCMD_Script
 	SET @SQLCMD_Script += @HeaderBlock
 
 
@@ -807,49 +785,25 @@ BEGIN
 		SET @Step += 1;
 	END
 
+	-- footer also comes from TRY/CATCH now, so DROP the old print:
+	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
+	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
+
+
 	-- 4) footer + TRY_CATCH_TAIL (includes END CATCH + restore-footer)
-	DECLARE @FooterBlock NVARCHAR(MAX) = @TRY_CATCH_TAIL;
+	DECLARE @FooterBlock NVARCHAR(MAX) = CHAR(10)+@TRY_CATCH_TAIL;
 
-	DECLARE curFoot CURSOR LOCAL FAST_FORWARD FOR
-		SELECT LineText, ordinal
-		FROM dbo.fn_SplitStringByLine(@FooterBlock)
-		ORDER BY ordinal;
+	SET @SQLCMD_Script += @FooterBlock
 
-	OPEN curFoot;
-	FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
-	WHILE @@FETCH_STATUS = 0
-	BEGIN
-		SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-		FETCH NEXT FROM curFoot INTO @tmpLine, @ord;
-	END
-	CLOSE curFoot;
-	DEALLOCATE curFoot;
-
-	-- 5) Complementary section in SQLCMD script
-	IF @Complementary_Script_After_Restore IS NOT NULL AND @Complementary_Script_After_Restore <> N''
-	BEGIN
+	-- Complementary script section (printed/plain)
+	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
 		SET @SQLCMD_Script += CHAR(10) +
-			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10);
-
-		DECLARE curAfter CURSOR LOCAL FAST_FORWARD FOR
-			SELECT LineText, ordinal
-			FROM dbo.fn_SplitStringByLine(@Complementary_Script_After_Restore)
-			ORDER BY ordinal;
-
-		OPEN curAfter;
-		FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
-		WHILE @@FETCH_STATUS = 0
-		BEGIN
-			SET @SQLCMD_Script += ISNULL(@tmpLine,'') + CHAR(10);
-			FETCH NEXT FROM curAfter INTO @tmpLine, @ord;
-		END
-		CLOSE curAfter;
-		DEALLOCATE curAfter;
-
-		SET @SQLCMD_Script +=
+			'-----------------------------------Complementary Script After Restore-----------------------' + CHAR(10) +
+			@Complementary_Script_After_Restore + CHAR(10) +
 			'----------------------------------------------------------------------------------------------' + CHAR(10) +
 			CHAR(10);
-	END
+
+	SET @SQLCMD_Script += '--############################ Database restore script end ##################################--' + REPLICATE(CHAR(10),2);
 
 
 	-- 6) trailing GO / blanks
