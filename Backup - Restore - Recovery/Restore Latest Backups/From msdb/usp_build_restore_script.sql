@@ -140,8 +140,8 @@ BEGIN
     SELECT d.name
     FROM sys.databases AS d
     WHERE
-        d.state = 0
-        AND d.source_database_id IS NULL
+        d.state = 0 AND
+        d.source_database_id IS NULL
         AND d.name <> N'tempdb'                 -- always exclude (not restorable)
         AND d.name NOT LIKE N'ReportServerTempDB' -- keep existing optional exclusion
         AND
