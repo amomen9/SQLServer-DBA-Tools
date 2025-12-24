@@ -768,22 +768,21 @@ BEGIN
 
 	-- per-step commands
 	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
-	WHILE @Step <= @MaxStep
-	BEGIN
-		SET @SQLCMD_Script += REPLICATE(CHAR(9),4)+'------------------- Step ' + CAST(@Step AS varchar(10)) + '/' + CONVERT(VARCHAR(4),@MaxStep) + ' -------------------' + CHAR(10);
-		SET @SQLCMD_Script += REPLICATE(CHAR(9),4)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10);
+	DECLARE @RestoreCmd NVARCHAR(MAX);
+	
+	
+	DECLARE RetoreStepConcaterCUR CURSOR FAST_FORWARD LOCAL FOR SELECT StepNumber, RestoreCommand FROM #RestoreChain ORDER BY StepNumber OPEN RetoreStepConcaterCUR
+		FETCH NEXT FROM RetoreStepConcaterCUR INTO @Step, @RestoreCmd
+		WHILE @@FETCH_STATUS=0
+		BEGIN
+			SET @SQLCMD_Script += CHAR(10) +
+				REPLICATE(CHAR(9),4)+'------------------- Step ' + CAST(@Step AS varchar(10)) + '/' + CONVERT(VARCHAR(4),@MaxStep) + ' -------------------' + CHAR(10) +
+				REPLICATE(CHAR(9),4)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10) +	
+				REPLICATE(CHAR(9),4) + REPLACE(@RestoreCmd,CHAR(10),CHAR(10)+REPLICATE(CHAR(9),4))
 
-		DECLARE @RestoreCmd NVARCHAR(MAX);
-		SELECT @RestoreCmd = RestoreCommand
-		FROM #RestoreChain
-		WHERE StepNumber = @Step;
-		
-		SET @SQLCMD_Script += (
-								SELECT REPLICATE(CHAR(9),4) + REPLACE(RestoreCommand,CHAR(10),CHAR(10)+REPLICATE(CHAR(9),4))
-								FROM #RestoreChain
-							)
-		SET @Step += 1;
-	END
+			FETCH NEXT FROM RetoreStepConcaterCUR INTO @Step, @RestoreCmd
+		END
+	CLOSE RetoreStepConcaterCUR DEALLOCATE RetoreStepConcaterCUR
 
 	-- footer also comes from TRY/CATCH now, so DROP the old print:
 	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
@@ -909,7 +908,7 @@ BEGIN
 	BEGIN
 		IF @ResultSet_is_for_single_Database = 1
 		BEGIN
-			SELECT LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
+			SELECT @DatabaseName DatabaseName, @RestoreDBName RestoreDBName, LineText Script FROM dbo.fn_SplitStringByLine(@SQLCMD_Script);
 			DROP TABLE ##Total_Output
 		END
 		ELSE
@@ -921,6 +920,7 @@ BEGIN
 	BEGIN
 		DROP TABLE ##Total_Output
 	END
+
 
 END
 GO
