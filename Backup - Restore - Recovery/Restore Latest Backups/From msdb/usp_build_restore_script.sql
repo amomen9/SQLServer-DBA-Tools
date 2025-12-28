@@ -296,7 +296,7 @@ GO
 EXEC dbo.usp_build_restore_script
     @DB_Name_Pattern                    = '-SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
     @StopAt                             = NULL,
-    @WithReplace                        = 1,
+    @WithReplace                        = 0,
     @RestoreDBName                      = '@DatabaseName',
     @create_datafile_dirs               = 1,
     @Restore_DataPath                   = '',
