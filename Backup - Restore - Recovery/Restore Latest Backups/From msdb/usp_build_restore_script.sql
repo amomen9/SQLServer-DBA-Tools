@@ -294,7 +294,7 @@ GO
 ------------------------------------------------------------------------------------ */
 -- Sample execution (values from usp_build_one_db_restore_script sample)
 EXEC dbo.usp_build_restore_script
-    @DB_Name_Pattern                    = 'Archive99, -SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
+    @DB_Name_Pattern                    = 'MofidV3, -SYSTEM_DATABASES',--'-dbWarden_temp,-MofidV3,-NewDB,-Uni',
     @StopAt                             = NULL,
     @WithReplace                        = 0,
     @RestoreDBName                      = '@DatabaseName',
