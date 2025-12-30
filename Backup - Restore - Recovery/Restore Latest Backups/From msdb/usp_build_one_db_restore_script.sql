@@ -25,15 +25,23 @@ RETURNS TABLE
 AS
 RETURN
 (
-    SELECT
-        LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) AS LineText,
-        ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS ordinal
-    FROM (
-        SELECT CAST('<r><x>' + REPLACE(REPLACE(@Query, CHAR(13), ''), CHAR(10), '</x><x>') + '</x></r>' AS xml)
-    ) AS d(XmlData)
-    CROSS APPLY d.XmlData.nodes('/r/x') AS T(N)
-    -- WHERE LTRIM(RTRIM(T.N.value('.', 'nvarchar(max)'))) <> ''
-	-- keep empties: Keep the "WHERE" clause commented out
+	-- XML-based splitting breaks when @Query contains '<' or '>' (e.g. @@ERROR<>0).
+	-- Use JSON parsing instead:
+	--  1) Normalize CRLF → LF
+	--  2) STRING_ESCAPE(...,'json') turns LF into the two-character sequence \n
+	--  3) Replace \n with '","' to form a JSON array of lines (preserves empty/trailing lines)
+	SELECT
+		LTRIM(RTRIM(j.[value])) AS LineText,
+		j.[key] + 1 AS ordinal
+	FROM OPENJSON(
+		N'["'
+		+ REPLACE(
+			STRING_ESCAPE(REPLACE(COALESCE(@Query, N''), CHAR(13), N''), 'json'),
+			N'\n',
+			N'","'
+		)
+		+ N'"]'
+	) AS j
 );
 GO
 
@@ -565,10 +573,10 @@ BEGIN
 	IF OBJECT_ID('tempdb..#DiskClauses') IS NOT NULL DROP TABLE #DiskClauses;
 	SELECT rc.StepNumber,
 		   Disks = STUFF((
-			   SELECT ', DISK = N''' + LTRIM(RTRIM(value)) + ''''
+			   SELECT (', DISK = N''' + LTRIM(RTRIM(value)) + '''') AS [text()]
 			   FROM string_split(rc.Devices, ',')
 			   ORDER BY value
-			   FOR XML PATH(''), TYPE).value('.','nvarchar(max)'),1,2,'')
+			   FOR XML PATH(''), TYPE).value('text()[1]','nvarchar(max)'),1,2,'')
 	INTO #DiskClauses
 	FROM #RestoreChain rc;
 
@@ -577,7 +585,7 @@ BEGIN
 	------------------------------------------------------------
 	SELECT @MoveClauses =
 		STUFF((
-			SELECT CHAR(10) + REPLICATE(CHAR(9),4) + 'MOVE N''' + mf.name + ''' TO N''' +
+			SELECT (CHAR(10) + REPLICATE(CHAR(9),4) + 'MOVE N''' + mf.name + ''' TO N''' +
 				   CASE
 					   WHEN mf.type_desc = 'LOG' AND ISNULL(@Restore_LogPath,'') <> '' THEN
 						   @Restore_LogPath +
@@ -588,11 +596,11 @@ BEGIN
 						   CASE WHEN RIGHT(@Restore_DataPath,1) IN ('\','/') THEN '' ELSE '\' END +
 						   RIGHT(mf.physical_name, CHARINDEX('\', REVERSE(mf.physical_name)) - 1)
 					   ELSE mf.physical_name
-				   END + ''','
+				   END + ''',') AS [text()]
 			FROM sys.master_files AS mf
 			WHERE mf.database_id = DB_ID(@DatabaseName)
 			ORDER BY mf.type, mf.file_id
-			FOR XML PATH(''), TYPE).value('.','nvarchar(max)')
+			FOR XML PATH(''), TYPE).value('text()[1]','nvarchar(max)')
 		,1,1,'');
 
 
@@ -614,27 +622,19 @@ BEGIN
 	SET RestoreCommand =
 		CASE rc.BackupType
 			WHEN 'FULL' THEN
-				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' + @MoveClauses + CHAR(10) +
+				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N'WITH ' + @MoveClauses + CHAR(10) +
 				ISNULL(N'STATS = '+@STATS,'') + @ReplaceClause + 
-				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
-				--- Calculating restore duration:
-				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE(); RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT		   ''FULL'',   1,   @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
+				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10)
 
 			WHEN 'DIFF' THEN
-				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
+				N'RESTORE DATABASE [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N'WITH ' +
 				(CASE 
 					WHEN rc.StepNumber = @LastStep AND @StopAt IS NOT NULL AND @HasLogs = 0
 						THEN N'STOPAT = ''' + CONVERT(varchar(23), @StopAt, 121) + N''', '
 					ELSE N''
 				 END) + CHAR(10) +
 				ISNULL(N'STATS = '+@STATS,'') +
-				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
-				--- Calculating restore duration:
-				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE(); RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT		   ''DIFF'',   2,   @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
+				CASE WHEN rc.StepNumber = @LastStep AND @HasLogs = 0 AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10)
 			
 			WHEN 'LOG' THEN
 				N'RESTORE LOG [' + @RestoreDBName + N'] FROM ' + dc.Disks + CHAR(10) + N' WITH ' +
@@ -644,13 +644,9 @@ BEGIN
 					ELSE N''
 				 END) + CHAR(10) +
 				ISNULL(N'STATS = '+@STATS,'') +
-				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + REPLICATE(CHAR(10),2) +
-				--- Calculating overall logs restore duration:
-				'--- Calculating restore duration:' + CHAR(10) +
-				'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (Log). Log No: #'+CONVERT(VARCHAR(4),rc.StepNumber-1-@HasDiff)+'. Logs Restoring Cumulative Elapsed: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; RAISERROR(@msg,0,1) WITH NOWAIT' + CHAR(10) +
-				'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT		   ''LOG'', ' + CONVERT(VARCHAR(4),rc.StepNumber) + ', @Reused_hours, @Reused_minutes, @Reused_seconds' + CHAR(10)
+				CASE WHEN rc.StepNumber = @LastStep AND @Recovery = 1 THEN N', RECOVERY;' ELSE N', NORECOVERY;' END + CHAR(10)
 		END +
-		CASE WHEN rc.StepNumber = @LastStep THEN CHAR(10) + N'---------------- Last restore step reached ----------------------------------' ELSE N'' END
+		N''
 	FROM #RestoreChain rc
 	JOIN #DiskClauses dc ON dc.StepNumber = rc.StepNumber;
 
@@ -701,10 +697,8 @@ BEGIN
 
 
 	------------------------------------------------------------
-	-- Add TRY-CATCH statements to the restore statements
-	--  (restore-header BEFORE BEGIN TRY, restore-footer AFTER END CATCH)
+	-- Restore script blocks (per-step @@ERROR handling)
 	------------------------------------------------------------	
-	-- 3) TRY header + restore commands
 	DECLARE @HeaderBlock NVARCHAR(MAX);
 
 	SET @HeaderBlock =
@@ -715,35 +709,9 @@ BEGIN
 			  + 'CREATE TABLE #BackupTimes(BackupType varchar(4) NOT NULL, StepNo INT, hours VARCHAR(3), minutes VARCHAR(2), seconds VARCHAR(2));' + CHAR(10),
 				''
 			)
-		+   'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);' +
-		+	'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT'
+		+   'DECLARE @StepNo INT, @msg NVARCHAR(2000), @Initial_TimeStamp DATETIME2(3) = GETDATE(), @Reused_TimeStamp DATETIME2(3) = GETDATE(), @Overall_seconds VARCHAR(2), @Overall_minutes VARCHAR(2), @Overall_hours VARCHAR(3), @Reused_seconds VARCHAR(2), @Reused_minutes VARCHAR(2), @Reused_hours VARCHAR(3);'
+		+ 	'SET @msg = ''Start restore procedure at: ''+CONVERT(VARCHAR(25),@Reused_TimeStamp,121); RAISERROR(@msg,0,1) WITH NOWAIT'
 		+	REPLICATE(CHAR(10),2);
-
-	DECLARE @TRY_CATCH_HEAD NVARCHAR(MAX) =
-		'BEGIN TRY';
-	SET @HeaderBlock += @TRY_CATCH_HEAD;  -- includes restore-header + BEGIN TRY
-
-	DECLARE @TRY_CATCH_TAIL NVARCHAR(MAX) =
-		'END TRY' + CHAR(10) +
-		'BEGIN CATCH' + CHAR(10) +
-		REPLICATE(CHAR(9),4) + 'SET @msg = ERROR_MESSAGE(); RAISERROR(@msg,16,1); ' +
-		IIF(@Recover_Database_On_Error = 1,
-			REPLICATE(CHAR(9),4) + 'SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''.''+IIF(@StepNo>1,'' Database will be recovered.'','''')' + CHAR(10),		
-			REPLICATE(CHAR(9),4) + 'SET @msg = ''Restore failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''. Restore finished for the database.'' RAISERROR(@msg,16,1) ' + CHAR(10)
-		) +
-		IIF(@Recover_Database_On_Error = 1,
-		REPLICATE(CHAR(9),4) + 'IF (@StepNo > 1)' + REPLICATE(CHAR(9),1) + 'RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + ' WITH RECOVERY' + CHAR(10),
-		'') +
-		'END CATCH' + REPLICATE(CHAR(10),2) +
-		'SET @Overall_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())%60),2); SET @Overall_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/60%60),2); SET @Overall_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/3600),2);' + 
-		'SET @msg=''Restore Summary:''+CHAR(10)+''DB Name: ''+''['+@RestoreDBName+']'''+
-					'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
-					'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
-					'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
-					'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')' + 
-		'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB'' ' + 
-		'RAISERROR(@msg,0,1) WITH NOWAIT; TRUNCATE TABLE #BackupTimes;' + CHAR(10) +
-		'----------------------------------------Restore statements end--------------------------------';
 
 	------------------------------------------------------------
 	-- Further developing the script
@@ -769,30 +737,89 @@ BEGIN
 	-- per-step commands
 	DECLARE @Step INT = 1, @MaxStep INT = (SELECT MAX(StepNumber) FROM #RestoreChain);
 	DECLARE @RestoreCmd NVARCHAR(MAX);
+	DECLARE @BackupType varchar(10);
+	DECLARE @LogNo int;
+	DECLARE @StepSuccessMsgCode nvarchar(max);
+	DECLARE @StepInsertCode nvarchar(max);
+	DECLARE @StepLastSummaryCode nvarchar(max);
+	DECLARE @StepIfElseBlock nvarchar(max);
 	
-	
-	DECLARE RetoreStepConcaterCUR CURSOR FAST_FORWARD LOCAL FOR SELECT StepNumber, RestoreCommand FROM #RestoreChain ORDER BY StepNumber OPEN RetoreStepConcaterCUR
-		FETCH NEXT FROM RetoreStepConcaterCUR INTO @Step, @RestoreCmd
+	DECLARE RetoreStepConcaterCUR CURSOR FAST_FORWARD LOCAL FOR
+		SELECT StepNumber, BackupType, RestoreCommand
+		FROM #RestoreChain
+		ORDER BY StepNumber
+	OPEN RetoreStepConcaterCUR
+		FETCH NEXT FROM RetoreStepConcaterCUR INTO @Step, @BackupType, @RestoreCmd
 		WHILE @@FETCH_STATUS=0
 		BEGIN
+			SET @LogNo = @Step - 1 - @HasDiff;
+			SET @StepLastSummaryCode = N'';
+
+			IF @BackupType = 'FULL'
+			BEGIN
+				SET @StepSuccessMsgCode =
+					N'--- Calculating restore duration:' + CHAR(10) +
+					N'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (FULL Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE(); RAISERROR(@msg,0,1) WITH NOWAIT';
+				SET @StepInsertCode = N'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT     ''FULL'',   ' + CONVERT(varchar(12),@Step) + N',   @Reused_hours, @Reused_minutes, @Reused_seconds';
+			END
+			ELSE IF @BackupType = 'DIFF'
+			BEGIN
+				SET @StepSuccessMsgCode =
+					N'--- Calculating restore duration:' + CHAR(10) +
+					N'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (DIFF Backup). Elapsed time: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; SET @Reused_TimeStamp = GETDATE(); RAISERROR(@msg,0,1) WITH NOWAIT';
+				SET @StepInsertCode = N'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT     ''DIFF'',   ' + CONVERT(varchar(12),@Step) + N',   @Reused_hours, @Reused_minutes, @Reused_seconds';
+			END
+			ELSE
+			BEGIN
+				SET @StepSuccessMsgCode =
+					N'--- Calculating restore duration:' + CHAR(10) +
+					N'SET @Reused_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())%60),2); SET @Reused_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/60),2); SET @Reused_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Reused_TimeStamp,GETDATE())/3600),2); SET @msg = ''--- Restore finished (Log). Log No: #' + CONVERT(varchar(12),@LogNo) + N'. Logs Restoring Cumulative Elapsed: ['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']''; RAISERROR(@msg,0,1) WITH NOWAIT';
+				SET @StepInsertCode = N'INSERT #BackupTimes (BackupType, StepNo, hours, minutes, seconds) SELECT     ''LOG'',   ' + CONVERT(varchar(12),@Step) + N',   @Reused_hours, @Reused_minutes, @Reused_seconds';
+			END
+
+			IF @Step = @MaxStep
+			BEGIN
+				SET @StepLastSummaryCode =
+					N'SET @Overall_seconds = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())%60),2); SET @Overall_minutes = RIGHT(''0''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/60%60),2); SET @Overall_hours = RIGHT(''00''+CONVERT(VARCHAR(100),DATEDIFF_BIG(SECOND,@Initial_TimeStamp,GETDATE())/3600),2);' +
+					N'SET @msg=''Restore Summary:''+CHAR(10)+''DB Name: ''+''['+@RestoreDBName+']'''+
+					N'+ISNULL(CHAR(10)+''FULL    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''FULL''),'''')'+
+					N'+ISNULL(CHAR(10)+''DIFF    Duration: ''+(SELECT ''['' + hours+'':''+minutes+'':''+seconds+'']'' FROM #BackupTimes WHERE BackupType=''DIFF''),'''')'+
+					N'+ISNULL(CHAR(10)+''LOG     Duration: ''+(SELECT TOP 1 ''['' + @Reused_hours+'':''+@Reused_minutes+'':''+@Reused_seconds+'']'' FROM #BackupTimes WHERE BackupType=''LOG''),'''')'+
+					N'+ISNULL(CHAR(10)+''Overall Duration: ''+(SELECT TOP 1 ''['' + @Overall_hours+'':''+@Overall_minutes+'':''+@Overall_seconds+'']''    FROM #BackupTimes),'''')' +
+					N'SET @msg += CHAR(10) + ''Restored DB Size: '' + CONVERT(VARCHAR(20), CAST((SELECT SUM(CAST(size AS BIGINT)) * 8.0 / 1024 / 1024 FROM sys.master_files WHERE database_id = DB_ID(''' + @RestoreDBName + ''')) AS DECIMAL(18,2))) + '' GB'' ' +
+					N'RAISERROR(@msg,0,1) WITH NOWAIT; TRUNCATE TABLE #BackupTimes;';
+			END
+
+			SET @StepIfElseBlock =
+				CHAR(10) + REPLICATE(CHAR(9),4) + N'IF @@ERROR<>0' + CHAR(10) +
+				REPLICATE(CHAR(9),4) + N'BEGIN' + CHAR(10) +
+				REPLICATE(CHAR(9),8) + N'SET @msg = ''Restore Database ' + QUOTENAME(@RestoreDBName) + N' failed at step ''+CONVERT(VARCHAR(5),@StepNo)+''.''+IIF(@StepNo>1,'' Database will be recovered.'','''')' + CHAR(10) +
+				REPLICATE(CHAR(9),8) + N'RAISERROR(@msg,16,1) WITH NOWAIT' + CHAR(10) +
+				IIF(@Recover_Database_On_Error = 1,
+					REPLICATE(CHAR(9),8) + N'IF (@StepNo > 1) RESTORE DATABASE ' + QUOTENAME(@RestoreDBName) + N' WITH RECOVERY' + CHAR(10),
+					N''
+				) +
+				REPLICATE(CHAR(9),4) + N'END' + CHAR(10) +
+				REPLICATE(CHAR(9),4) + N'ELSE' + CHAR(10) +
+				REPLICATE(CHAR(9),4) + N'BEGIN' + CHAR(10) +
+				REPLICATE(CHAR(9),8) + REPLACE(@StepSuccessMsgCode, CHAR(10), CHAR(10) + REPLICATE(CHAR(9),8)) + CHAR(10) +
+				REPLICATE(CHAR(9),8) + @StepInsertCode + CHAR(10) +
+				IIF(@StepLastSummaryCode <> N'', REPLICATE(CHAR(9),8) + REPLACE(@StepLastSummaryCode, CHAR(10), CHAR(10) + REPLICATE(CHAR(9),8)) + CHAR(10), N'') +
+				REPLICATE(CHAR(9),4) + N'END';
+
 			SET @SQLCMD_Script += CHAR(10) +
 				REPLICATE(CHAR(9),4)+'------------------- Step ' + CAST(@Step AS varchar(10)) + '/' + CONVERT(VARCHAR(4),@MaxStep) + ' -------------------' + CHAR(10) +
 				REPLICATE(CHAR(9),4)+'SET @StepNo = '+CAST(@Step AS varchar(10)) + CHAR(10) +	
-				REPLICATE(CHAR(9),4) + REPLACE(@RestoreCmd,CHAR(10),CHAR(10)+REPLICATE(CHAR(9),4))
+				REPLICATE(CHAR(9),4) + REPLACE(@RestoreCmd,CHAR(10),CHAR(10)+REPLICATE(CHAR(9),4)) +
+				@StepIfElseBlock +
+				CASE WHEN @Step = @MaxStep THEN CHAR(10) + REPLICATE(CHAR(9),4) + N'---------------- Last restore step reached ----------------------------------' ELSE N'' END +
+				REPLICATE(CHAR(10),2)
 
-			FETCH NEXT FROM RetoreStepConcaterCUR INTO @Step, @RestoreCmd
+			FETCH NEXT FROM RetoreStepConcaterCUR INTO @Step, @BackupType, @RestoreCmd
 		END
 	CLOSE RetoreStepConcaterCUR DEALLOCATE RetoreStepConcaterCUR
 
-	-- footer also comes from TRY/CATCH now, so DROP the old print:
-	-- PRINT REPLICATE('-',40)+'Restore statements end'+REPLICATE('-',32)
-	-- SET @SQLCMD_Script += REPLICATE('-',40) + 'Restore statements end' + REPLICATE('-',32) + CHAR(10);
-
-
-	-- 4) footer + TRY_CATCH_TAIL (includes END CATCH + restore-footer)
-	DECLARE @FooterBlock NVARCHAR(MAX) = CHAR(10)+@TRY_CATCH_TAIL;
-
-	SET @SQLCMD_Script += @FooterBlock
+	SET @SQLCMD_Script += '----------------------------------------Restore statements end--------------------------------' + CHAR(10)
 
 	-- Complementary script section (printed/plain)
 	IF @Complementary_Script_After_Restore IS NOT NULL AND LEN(@Complementary_Script_After_Restore) > 0
