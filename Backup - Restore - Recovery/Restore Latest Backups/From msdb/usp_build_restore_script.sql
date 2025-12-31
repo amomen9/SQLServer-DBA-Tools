@@ -31,8 +31,9 @@ CREATE OR ALTER PROC dbo.usp_build_restore_script
         @RestoreUpTo_TIMESTAMP              DATETIME2(3)    = NULL,    -- Exclude backups with backup_start_date >= this (acts like "upper bound").
         @new_backups_parent_dir             NVARCHAR(4000)  = NULL,    -- If set: map backup files by base name under this directory.
                                                                        -- Example formula (in caller): REPLACE(Devices,'R:\','\\'+CONVERT(...))
-		@check_backup_file_existance		BIT = 0,				   -- If 1: validate backup files exist on disk (original or remapped path).
+		@check_backup_file_existance		BIT             = 0,				   -- If 1: validate backup files exist on disk (original or remapped path).
         @Recover_Database_On_Error          BIT             = 0,       -- If 1: TRY/CATCH in generated script will attempt RECOVERY on failures.
+        @Continue_Restore_to_Next_DB_On_Error          BIT             = 1,
         @Preparatory_Script_Before_Restore  NVARCHAR(MAX)   = NULL,    -- Optional script emitted/executed before restore chain.
         @Complementary_Script_After_Restore NVARCHAR(MAX)   = NULL,    -- Optional script emitted/executed after restore chain.
         @Execute                            BIT             = 0,       -- If 1: execute emitted restore script (per DB).
@@ -209,28 +210,29 @@ BEGIN
         BEGIN TRY
             -- Child procedure is responsible for building the restore chain and returning/aggregating the generated script.
             EXEC dbo.usp_build_one_db_restore_script
-                    @DatabaseName                       = @DatabaseName,
-                    @RestoreDBName                      = @RestoreDBName,
-                    @create_datafile_dirs               = @create_datafile_dirs,
-                    @Restore_DataPath                   = @Restore_DataPath,
-                    @Restore_LogPath                    = @Restore_LogPath,
-                    @StopAt                             = @StopAt,
-                    @WithReplace                        = @WithReplace,
-                    @IncludeLogs                        = @IncludeLogs,
-                    @IncludeDiffs                       = @IncludeDiffs,
-                    @Recovery                           = @Recovery,
-                    @RestoreUpTo_TIMESTAMP              = @RestoreUpTo_TIMESTAMP,
-                    @new_backups_parent_dir             = @new_backups_parent_dir,
-                    @check_backup_file_existance        = @check_backup_file_existance,
-                    @Recover_Database_On_Error          = @Recover_Database_On_Error,
-                    @Preparatory_Script_Before_Restore  = @Preparatory_Script_Before_Restore,
-                    @Complementary_Script_After_Restore = @Complementary_Script_After_Restore,
-                    @Execute                            = @Execute,
-                    @Verbose                            = @Verbose,
-                    @SQLCMD_Connect_Conn_String         = @SQLCMD_Connect_Conn_String,
-                    @First_Parent_Procedure_Iteration   = @First_Procedure_Iteration,
-                    @Last_Parent_Procedure_Iteration    = @Last_Procedure_Iteration,
-                    @ResultSet_is_for_single_Database   = @Separate_Results_Per_Database;
+                    @DatabaseName                         = @DatabaseName,
+                    @RestoreDBName                        = @RestoreDBName,
+                    @create_datafile_dirs                 = @create_datafile_dirs,
+                    @Restore_DataPath                     = @Restore_DataPath,
+                    @Restore_LogPath                      = @Restore_LogPath,
+                    @StopAt                               = @StopAt,
+                    @WithReplace                          = @WithReplace,
+                    @IncludeLogs                          = @IncludeLogs,
+                    @IncludeDiffs                         = @IncludeDiffs,
+                    @Recovery                             = @Recovery,
+                    @RestoreUpTo_TIMESTAMP                = @RestoreUpTo_TIMESTAMP,
+                    @new_backups_parent_dir               = @new_backups_parent_dir,
+                    @check_backup_file_existance          = @check_backup_file_existance,
+                    @Recover_Database_On_Error            = @Recover_Database_On_Error,
+                    @Continue_Restore_to_Next_DB_On_Error = @Continue_Restore_to_Next_DB_On_Error,
+                    @Preparatory_Script_Before_Restore    = @Preparatory_Script_Before_Restore,
+                    @Complementary_Script_After_Restore   = @Complementary_Script_After_Restore,
+                    @Execute                              = @Execute,
+                    @Verbose                              = @Verbose,
+                    @SQLCMD_Connect_Conn_String           = @SQLCMD_Connect_Conn_String,
+                    @First_Parent_Procedure_Iteration     = @First_Procedure_Iteration,
+                    @Last_Parent_Procedure_Iteration      = @Last_Procedure_Iteration,
+                    @ResultSet_is_for_single_Database     = @Separate_Results_Per_Database;
 
             INSERT INTO #Total_Execution_Report_per_DB(DatabaseName, Status, ErrorMessage, ExecutionStart, ExecutionEnd)
             VALUES (@DatabaseName, 'SUCCESS', NULL, @ExecStart, SYSDATETIME());
@@ -308,6 +310,7 @@ EXEC dbo.usp_build_restore_script
     @new_backups_parent_dir         	= '', --'\\fdbdrbkpdsk\DBDR\',
 	@check_backup_file_existance        = 0,
     @Recover_Database_On_Error          = 1,
+    @Continue_Restore_to_Next_DB_On_Error          = 1,
     @Preparatory_Script_Before_Restore  = '',
     @Complementary_Script_After_Restore = '--ALTER AVAILABILITY GROUP FAlgoDBAVG ADD DATABASE @RestoreDBName',
     @Execute                            = 0,

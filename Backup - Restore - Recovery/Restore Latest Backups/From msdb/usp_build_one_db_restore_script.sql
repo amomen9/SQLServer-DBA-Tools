@@ -162,29 +162,30 @@ GO
 
 
 CREATE OR ALTER PROC usp_build_one_db_restore_script
-		@DatabaseName						sysname,
-		@RestoreDBName						sysname = NULL,
-		@create_datafile_dirs				BIT = 1,
-		@Restore_DataPath					NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
-		@Restore_LogPath					NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
-		@StopAt								DATETIME = NULL,          -- Point-in-time (applied only to final DIFF/LOG step as appropriate).
-		@WithReplace						BIT	= 0,
-		@IncludeLogs						BIT	= 1,
-		@IncludeDiffs						BIT = 1,
-		@Recovery							BIT = 0,                  -- If 1: final restore step uses RECOVERY; else NORECOVERY.
-		@STATS								VARCHAR(3) = '25',         -- RESTORE ... WITH STATS = n (NULL/empty disables).
-		@RestoreUpTo_TIMESTAMP				DATETIME2(3) = NULL,        -- Exclude backups with backup_start_date >= this upper bound.
-		@new_backups_parent_dir				NVARCHAR(4000) = NULL,      -- If set: remap by base file name under this folder.
-		@check_backup_file_existance		BIT = 0,                   -- If 1: validate candidate backup files exist (see backup query logic).
-		@Recover_Database_On_Error			BIT = 0,                   -- Generated script TRY/CATCH may attempt RECOVERY on failure.
-		@Preparatory_Script_Before_Restore	NVARCHAR(MAX) = NULL,
-		@Complementary_Script_After_Restore	NVARCHAR(MAX) = NULL,
-		@Execute							BIT	= 0,                   -- If 1: execute directory creation + emitted restore chain.
-		@Verbose							BIT = 1,                   -- If 1: prints informational output during script generation.
-		@SQLCMD_Connect_Conn_String			NVARCHAR(MAX) = NULL,
-		@Last_Parent_Procedure_Iteration	BIT = 0,
-		@First_Parent_Procedure_Iteration	BIT = 0,
-		@ResultSet_is_for_single_Database	BIT = 1
+		@DatabaseName							sysname,
+		@RestoreDBName							sysname = NULL,
+		@create_datafile_dirs					BIT = 1,
+		@Restore_DataPath						NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
+		@Restore_LogPath						NVARCHAR(1000) = NULL,	-- Uses original database path if not specified
+		@StopAt									DATETIME = NULL,          -- Point-in-time (applied only to final DIFF/LOG step as appropriate).
+		@WithReplace							BIT	= 0,
+		@IncludeLogs							BIT	= 1,
+		@IncludeDiffs							BIT = 1,
+		@Recovery								BIT = 0,                  -- If 1: final restore step uses RECOVERY; else NORECOVERY.
+		@STATS									VARCHAR(3) = '25',         -- RESTORE ... WITH STATS = n (NULL/empty disables).
+		@RestoreUpTo_TIMESTAMP					DATETIME2(3) = NULL,        -- Exclude backups with backup_start_date >= this upper bound.
+		@new_backups_parent_dir					NVARCHAR(4000) = NULL,      -- If set: remap by base file name under this folder.
+		@check_backup_file_existance			BIT = 0,                   -- If 1: validate candidate backup files exist (see backup query logic).
+		@Recover_Database_On_Error				BIT = 0,                   -- Generated script TRY/CATCH may attempt RECOVERY on failure.
+		@Continue_Restore_to_Next_DB_On_Error	BIT = 1,
+		@Preparatory_Script_Before_Restore		NVARCHAR(MAX) = NULL,
+		@Complementary_Script_After_Restore		NVARCHAR(MAX) = NULL,
+		@Execute								BIT	= 0,                   -- If 1: execute directory creation + emitted restore chain.
+		@Verbose								BIT = 1,                   -- If 1: prints informational output during script generation.
+		@SQLCMD_Connect_Conn_String				NVARCHAR(MAX) = NULL,
+		@Last_Parent_Procedure_Iteration		BIT = 0,
+		@First_Parent_Procedure_Iteration		BIT = 0,
+		@ResultSet_is_for_single_Database		BIT = 1
 AS
 BEGIN
 	SET NOCOUNT ON;
